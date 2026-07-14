@@ -1,0 +1,12 @@
+.Rproj.user
+.Rhistory
+.Rdata
+.httr-oauth
+.DS_Store
+docs
+scratch/
+.claude/
+CLAUDE.md
+/doc/
+/Meta/
+.beads/

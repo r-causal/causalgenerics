@@ -1,0 +1,14 @@
+^causalgenerics\.Rproj$
+^\.Rproj\.user$
+^LICENSE\.md$
+^README\.Rmd$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.github$
+^\.claude$
+^scratch$
+^[.]?air[.]toml$
+^\.vscode$
+^cran-comments\.md$
+^\.beads$

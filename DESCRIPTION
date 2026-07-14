@@ -1,0 +1,23 @@
+Package: causalgenerics
+Title: Shared Generics for the R-Causal Ecosystem
+Version: 0.0.0.9000
+Authors@R:
+    person("Malcolm", "Barrett", , "malcolmbarrett@gmail.com", role = c("aut", "cre", "cph"),
+           comment = c(ORCID = "0000-0003-0299-5825"))
+Description: A near-zero-dependency home for the S3 generics shared across
+    the r-causal ecosystem, including 'propensity', 'halfmoon',
+    'positively', and 'balancing'. Owning the generic definitions in one
+    place lets those packages register methods without masking one another
+    when several are attached at once.
+License: MIT + file LICENSE
+URL: https://github.com/r-causal/causalgenerics,
+    https://r-causal.github.io/causalgenerics/
+BugReports: https://github.com/r-causal/causalgenerics/issues
+Depends:
+    R (>= 4.1.0)
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.0.0

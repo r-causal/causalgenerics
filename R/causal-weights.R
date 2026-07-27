@@ -10,11 +10,15 @@
 #' * `estimand<-()` sets the causal estimand.
 #'
 #' @details
-#' This package defines only the generics. The weight classes and their methods
-#' live in the packages that own them, such as `propensity`. `is_causal_wt()`
-#' defaults to `FALSE` so that any object that is not a recognized causal weight
-#' vector reports as much; `estimand()` and `estimand<-()` have no meaningful
-#' default and signal an error when no method is registered for the object.
+#' This package defines the generics and the abstract weight class they are
+#' written against. It supplies a method for each generic on `causal_wts`, so a
+#' concrete class built with [new_causal_wts()] inherits all three. The concrete
+#' classes themselves live in the packages that own them, such as `propensity`,
+#' as do methods for any object that is not a `causal_wts` vector.
+#' `is_causal_wt()` defaults to `FALSE` so that any object that is not a
+#' recognized causal weight vector reports as much; `estimand()` and
+#' `estimand<-()` have no meaningful default and signal an error when no method
+#' is registered for the object.
 #'
 #' @param x An object to inspect or modify. These generics dispatch on this
 #'   argument.
@@ -26,7 +30,8 @@
 #' estimand, typically a character string, or `NULL` when none is recorded.
 #' `estimand<-()` returns `x` with the estimand updated.
 #'
-#' @seealso The `propensity` package for methods.
+#' @seealso [new_causal_wts()] for the class these generics have methods for,
+#'   and the `propensity` package for concrete weight classes.
 #'
 #' @name causal-weights
 NULL

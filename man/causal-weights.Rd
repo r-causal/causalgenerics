@@ -37,12 +37,17 @@ vectors.
 }
 }
 \details{
-This package defines only the generics. The weight classes and their methods
-live in the packages that own them, such as \code{propensity}. \code{is_causal_wt()}
-defaults to \code{FALSE} so that any object that is not a recognized causal weight
-vector reports as much; \code{estimand()} and \verb{estimand<-()} have no meaningful
-default and signal an error when no method is registered for the object.
+This package defines the generics and the abstract weight class they are
+written against. It supplies a method for each generic on \code{causal_wts}, so a
+concrete class built with \code{\link[=new_causal_wts]{new_causal_wts()}} inherits all three. The concrete
+classes themselves live in the packages that own them, such as \code{propensity},
+as do methods for any object that is not a \code{causal_wts} vector.
+\code{is_causal_wt()} defaults to \code{FALSE} so that any object that is not a
+recognized causal weight vector reports as much; \code{estimand()} and
+\verb{estimand<-()} have no meaningful default and signal an error when no method
+is registered for the object.
 }
 \seealso{
-The \code{propensity} package for methods.
+\code{\link[=new_causal_wts]{new_causal_wts()}} for the class these generics have methods for,
+and the \code{propensity} package for concrete weight classes.
 }

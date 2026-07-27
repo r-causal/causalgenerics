@@ -12,3 +12,4 @@
 ^\.vscode$
 ^cran-comments\.md$
 ^\.beads$
+^\.git$

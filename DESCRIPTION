@@ -1,6 +1,6 @@
 Package: causalgenerics
 Title: Shared Generics for the R-Causal Ecosystem
-Version: 0.0.0.9000
+Version: 0.0.0.9001
 Authors@R:
     person("Malcolm", "Barrett", , "malcolmbarrett@gmail.com", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0000-0003-0299-5825"))
@@ -15,6 +15,8 @@ URL: https://github.com/r-causal/causalgenerics,
 BugReports: https://github.com/r-causal/causalgenerics/issues
 Depends:
     R (>= 4.1.0)
+Imports:
+    vctrs
 Suggests:
     testthat (>= 3.2.0),
     withr

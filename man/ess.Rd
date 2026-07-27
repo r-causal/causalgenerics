@@ -2,19 +2,26 @@
 % Please edit documentation in R/ess.R
 \name{ess}
 \alias{ess}
+\alias{ess.default}
 \title{Effective sample size}
 \usage{
 ess(x, ...)
+
+\method{ess}{default}(x, na.rm = FALSE, ...)
 }
 \arguments{
 \item{x}{An object to compute the effective sample size for, such as a
 weight vector or a fitted model. \code{ess()} dispatches on this argument.}
 
 \item{...}{Arguments passed to methods.}
+
+\item{na.rm}{Should missing weights be dropped before computing? Missing
+weights otherwise make the result \code{NA}.}
 }
 \value{
-A method-defined value. Weight-vector methods generally return a
-single number; fitted-model methods may return a tibble.
+The default method returns a single number. Other methods return
+whatever suits the object they are written for; a fitted-model method may
+return a tibble.
 }
 \description{
 \code{ess()} is the generic for the effective sample size, a summary of how much
@@ -23,14 +30,32 @@ weights vary substantially, the effective sample size can be much smaller
 than the number of observations.
 }
 \details{
-This package defines only the generic. Methods live in the packages that own
-the relevant objects. A method for a weight vector typically returns a single
-number, for example the Kish effective sample size
-\eqn{(\sum w)^2 / \sum w^2}, while a method for a fitted model may return a
-tibble with one row per group. The generic is intentionally minimal:
-method-specific arguments, such as whether to remove missing values, are
-passed through \code{...}.
+The default method computes the Kish effective sample size,
+\eqn{(\sum w)^2 / \sum w^2}, for any numeric vector. Every weight class in
+this ecosystem is a double underneath, and \code{is.numeric()} is \code{TRUE} for one,
+so the default is the whole implementation for weights and a concrete weight
+class needs no method of its own. Methods exist for objects that need
+something other than the Kish formula, such as a fitted model, where a method
+may summarize by group and return a tibble with one row per group.
+
+The default errors when \code{x} is not numeric, which includes \code{NULL}, rather than
+returning a value computed from nothing. Numeric input whose quotient is
+\code{0 / 0} still returns \code{NaN}, which covers a zero-length vector and weights
+that are all zero: both make the sum and the sum of squares zero, and neither
+has an effective sample size to report.
+
+The generic stays minimal, taking the object and \code{...}, so that a method
+declares whatever further arguments it needs. A fitted-model method, for
+example, takes the variable to group by that way.
+}
+\examples{
+# Equal weights carry as much information as an unweighted sample.
+ess(rep(0.5, 10))
+
+# Weights that vary carry much less.
+ess(c(rep(0.5, 9), 10))
 }
 \seealso{
-The \code{halfmoon} and \code{balancing} packages for methods.
+The \code{halfmoon} package for methods on the objects the default does
+not cover.
 }

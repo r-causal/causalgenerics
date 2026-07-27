@@ -8,12 +8,21 @@
   `estimand<-()`, so a concrete class inherits all three.
 
 * Added `causal_wts` methods for the read-only operations that name no metadata
-  field and so delegate to the underlying double: `vec_math()`, the `Summary`
-  group generic, `min()`, `max()`, `range()`, `median()`, `quantile()`,
+  field and so give the answer the underlying double would: `vec_math()`, the
+  `Summary` group generic, `min()`, `max()`, `range()`, `median()`, `quantile()`,
   `summary()`, `anyDuplicated()`, `diff()`, `[`, and the six comparison
-  operators. Each unwraps the weights and hands the work to the base or vctrs
-  implementation, which leaves the concrete class's own `vec_restore()` in
-  charge of the metadata wherever the result is still a weight vector.
+  operators. Most of them unwrap the weights and hand the work to the base or
+  vctrs implementation; `[` instead delegates to the next method, except when
+  the index is a matrix or an array. Either way, the concrete class's own
+  `vec_restore()` stays in charge of the metadata wherever the result is still a
+  weight vector.
+
+* Added `ess.default()`, which computes the Kish effective sample size for any
+  numeric vector. Weight vectors are numeric underneath, so a concrete weight
+  class inherits a working `ess()` without writing a method. The default rejects
+  input that is not numeric, including `NULL`, and returns `NaN` for numeric
+  input with no information to summarize, such as a zero-length vector or
+  weights that are all zero.
 
 * Added `causal_wts_ptype2()`, the coercion rule that a concrete weight class
   calls from its own `vec_ptype2()` method for two vectors of that class: they

@@ -7,29 +7,65 @@
 #' than the number of observations.
 #'
 #' @details
-#' This package defines only the generic. Methods live in the packages that own
-#' the relevant objects. A method for a weight vector typically returns a single
-#' number, for example the Kish effective sample size
-#' \eqn{(\sum w)^2 / \sum w^2}, while a method for a fitted model may return a
-#' tibble with one row per group. The generic is intentionally minimal:
-#' method-specific arguments, such as whether to remove missing values, are
-#' passed through `...`.
+#' The default method computes the Kish effective sample size,
+#' \eqn{(\sum w)^2 / \sum w^2}, for any numeric vector. Every weight class in
+#' this ecosystem is a double underneath, and `is.numeric()` is `TRUE` for one,
+#' so the default is the whole implementation for weights and a concrete weight
+#' class needs no method of its own. Methods exist for objects that need
+#' something other than the Kish formula, such as a fitted model, where a method
+#' may summarize by group and return a tibble with one row per group.
+#'
+#' The default errors when `x` is not numeric, which includes `NULL`, rather than
+#' returning a value computed from nothing. Numeric input whose quotient is
+#' `0 / 0` still returns `NaN`, which covers a zero-length vector and weights
+#' that are all zero: both make the sum and the sum of squares zero, and neither
+#' has an effective sample size to report.
+#'
+#' The generic stays minimal, taking the object and `...`, so that a method
+#' declares whatever further arguments it needs. A fitted-model method, for
+#' example, takes the variable to group by that way.
 #'
 #' @param x An object to compute the effective sample size for, such as a
 #'   weight vector or a fitted model. `ess()` dispatches on this argument.
+#' @param na.rm Should missing weights be dropped before computing? Missing
+#'   weights otherwise make the result `NA`.
 #' @param ... Arguments passed to methods.
 #'
-#' @return A method-defined value. Weight-vector methods generally return a
-#'   single number; fitted-model methods may return a tibble.
+#' @return The default method returns a single number. Other methods return
+#'   whatever suits the object they are written for; a fitted-model method may
+#'   return a tibble.
 #'
-#' @seealso The `halfmoon` and `balancing` packages for methods.
+#' @seealso The `halfmoon` package for methods on the objects the default does
+#'   not cover.
 #'
 #' @export
+#'
+#' @examples
+#' # Equal weights carry as much information as an unweighted sample.
+#' ess(rep(0.5, 10))
+#'
+#' # Weights that vary carry much less.
+#' ess(c(rep(0.5, 9), 10))
 ess <- function(x, ...) {
   UseMethod("ess")
 }
 
+#' @rdname ess
+#' @importFrom vctrs vec_data
 #' @export
-ess.default <- function(x, ...) {
-  stop_no_method("ess", x)
+ess.default <- function(x, na.rm = FALSE, ...) {
+  # `is.numeric()` rather than a test on the class vector, which would have to
+  # name every concrete weight class to admit the ones this default exists to
+  # serve. It also has to run before the unwrap: a factor stores integer level
+  # codes, so unwrapping first would compute a Kish value from them.
+  if (!is.numeric(x)) {
+    stop_invalid_argument("x", "be a numeric vector")
+  }
+
+  # Squaring the weight vector itself would route through `vec_arith()`, which
+  # the abstract layer deliberately does not supply, so a concrete class without
+  # its own method would error here. `vec_data()` rather than `as.numeric()`,
+  # which routes through `vec_cast()` and fails the same way.
+  wts <- vctrs::vec_data(x)
+  sum(wts, na.rm = na.rm)^2 / sum(wts^2, na.rm = na.rm)
 }

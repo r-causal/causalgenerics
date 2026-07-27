@@ -212,22 +212,25 @@ test_that("a bare subscript returns the weight vector unchanged", {
   # Reading `i` at all in the method would force the missing argument and error,
   # so this branch exists to be a no-op. The fixture carries metadata for the
   # same reason the subsetting one below does: unchanged means every attribute,
-  # not only the ones this package can name.
+  # not only the ones this package can name. One `expect_identical()` covers
+  # that here, since it compares the class vector and the whole attribute set
+  # along with the values.
   wts <- cg_probe_wts_meta()
 
   expect_identical(wts[], wts)
-  expect_s3_class(wts[], cg_probe_wts_class, exact = TRUE)
-  expect_metadata_preserved(wts[], wts)
 })
 
 test_that("ordinary subsetting keeps the class", {
   # Handing the subscript on to the `vctrs_vctr` method and building a fresh
   # weight vector around the sliced data both produce the right class vector and
   # the right values. The metadata is the only thing that tells the two apart,
-  # and every downstream package relies on all of it surviving a slice, not just
-  # the estimand: propensity's `psw` carries a stabilization flag that its own
-  # tests assert across a subset, and balancing's weights carry per-level
-  # indices.
+  # and a slice must carry all of it forward, not just the estimand: propensity's
+  # `psw` carries a stabilization flag that its own tests assert across a subset.
+  #
+  # Carried is all this asserts. A field such as balancing's per-level indices
+  # comes back holding indices into the pre-slice vector, which is wrong for the
+  # sliced one, and nothing here says otherwise. Reindexing a field the abstract
+  # layer cannot name belongs to the concrete class's own `vec_restore()`.
   wts <- cg_probe_wts_meta()
 
   expect_s3_class(wts[2:3], cg_probe_wts_class, exact = TRUE)

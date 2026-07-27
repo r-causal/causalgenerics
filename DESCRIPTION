@@ -16,6 +16,7 @@ BugReports: https://github.com/r-causal/causalgenerics/issues
 Depends:
     R (>= 4.1.0)
 Imports:
+    stats,
     vctrs
 Suggests:
     testthat (>= 3.2.0),

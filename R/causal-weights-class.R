@@ -46,10 +46,9 @@
 #' class(wts)
 #' estimand(wts)
 new_causal_wts <- function(x = double(), subclass, ...) {
-  # Checked before `x` so that the cheap scalar check runs first, matching the
-  # ordering the concrete constructors downstream use. A type and length check
-  # on its own would admit `NA_character_` and `""`, neither of which names a
-  # class anything can dispatch on.
+  # Checked before `x` so that the cheap scalar check runs first. A type and
+  # length check on its own would admit `NA_character_` and `""`, neither of
+  # which names a class anything can dispatch on.
   valid_subclass <- !missing(subclass) &&
     is.character(subclass) &&
     length(subclass) == 1L &&

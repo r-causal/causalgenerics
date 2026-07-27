@@ -11,6 +11,12 @@ test_that("ipw() dispatches on the weighting object", {
 })
 
 test_that("ipw() errors for an object with no registered method", {
+  # `ipw()` has no default method, so the failure comes from base R's dispatch.
+  # Pin that message: a bare `expect_error()` here would also be satisfied by a
+  # call that failed before it ever reached dispatch.
   x <- structure(list(), class = "cg_unregistered")
-  expect_error(dispatch_from_baseenv(ipw, x, outcome_mod = NULL))
+  expect_error(
+    dispatch_from_baseenv(ipw, x, outcome_mod = NULL),
+    "no applicable method for 'ipw'"
+  )
 })

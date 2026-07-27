@@ -17,7 +17,13 @@ test_that("local_s3_method() registers a method in the namespace method table", 
 })
 
 test_that("local_s3_method() removes the method when the scope that registered it exits", {
-  x <- structure(1, class = "cg_probe")
+  # A list payload rather than a number, because `ess.default()` computes the
+  # Kish effective sample size of anything numeric and so answers a `cg_probe`
+  # that no method covers instead of refusing it. A list is outside what the
+  # default accepts under any spelling of its input check, which keeps the
+  # missing-method half of this test about the method table rather than about
+  # the default's contract.
+  x <- structure(list(), class = "cg_probe")
 
   # `local_s3_method()` defers its cleanup to the frame it was called from, so
   # the registration happens inside a function this test can watch return. That
@@ -37,7 +43,7 @@ test_that("local_s3_method() removes the method when the scope that registered i
   )
   expect_error(
     dispatch_from_baseenv(ess, x),
-    class = "causalgenerics_no_method"
+    class = "causalgenerics_invalid_argument"
   )
 
   # `registerS3method()` overwrites, so this half cannot fail by reading a stale
@@ -116,6 +122,10 @@ test_that("local_s3_method() restores a method it replaced", {
   # class would raise base R's dispatch failure rather than this package's
   # condition, and every test of the default behavior would be asserting the
   # wrong thing.
+  #
+  # The fixture is a list so that the restored default is observable through a
+  # condition of this package's rather than through the effective sample size it
+  # would compute for anything numeric.
   x <- structure(list(), class = "cg_unregistered")
 
   replace_default <- function() {
@@ -132,7 +142,7 @@ test_that("local_s3_method() restores a method it replaced", {
   )
   expect_error(
     dispatch_from_baseenv(ess, x),
-    class = "causalgenerics_no_method"
+    class = "causalgenerics_invalid_argument"
   )
 })
 
@@ -141,14 +151,18 @@ test_that("dispatch_from_baseenv() cannot see a method defined in the test frame
   # called from, so the direct call below succeeds on nothing but a local
   # function. If the isolated call ever succeeds too, every dispatch assertion
   # in this suite has stopped proving that registration happened.
+  #
+  # The fixture is a list for the same reason as above: `ess.default()` answers
+  # anything numeric, so a number would make the isolated call return a value
+  # whether or not it found the frame-local method.
   ess.cg_probe <- function(x, ...) {
     "frame local"
   }
-  x <- structure(1, class = "cg_probe")
+  x <- structure(list(), class = "cg_probe")
 
   expect_identical(ess(x), "frame local")
   expect_error(
     dispatch_from_baseenv(ess, x),
-    class = "causalgenerics_no_method"
+    class = "causalgenerics_invalid_argument"
   )
 })

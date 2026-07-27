@@ -40,7 +40,7 @@ cg_coercion_ptype <- function(estimand = NULL) {
   )
 }
 
-# A downgrade callback that records how many times it ran.
+# A callback that records how many times it ran.
 #
 # `expect_warning()` proves a warning was signalled at least once, which is not
 # the claim. A caller sizes its own warning output on the promise that one
@@ -50,12 +50,14 @@ cg_coercion_ptype <- function(estimand = NULL) {
 # `return(on_downgrade())` produces the right warning and the right call count
 # and still hands the caller the wrong answer, so every assertion that uses this
 # checks the result as well.
-new_call_counter <- function(action = function() NULL) {
+#
+# The same counter stands in for the prototype in the laziness assertion, where
+# the count that matters is zero.
+new_call_counter <- function() {
   state <- new.env(parent = emptyenv())
   state$n <- 0L
   state$callback <- function() {
     state$n <- state$n + 1L
-    action()
     "the callback's return value"
   }
   state
@@ -192,20 +194,51 @@ test_that("the prototype is never evaluated on the downgrade path", {
   # `new_bw(estimand = estimand(x))`, and the downgrade path exists precisely
   # because that vector cannot be built. Lazy evaluation gives the helper this
   # for free, and any `force(ptype)` or use of the prototype in a message takes
-  # it away again, so it is worth an assertion that cannot pass by accident: a
-  # prototype that errors when touched.
+  # it away again, so it is worth an assertion that cannot pass by accident.
+  #
+  # The probe counts rather than errors. A prototype written as
+  # `stop("do not evaluate me")` catches only forcing whose error escapes, and an
+  # implementation that forces inside `tryCatch()` and swallows the failure has
+  # still evaluated the caller's constructor call. A count is answered by the
+  # act of evaluation itself, so it holds either way.
   counter <- new_call_counter()
+  probe <- new_call_counter()
 
   expect_identical(
     causal_wts_ptype2(
       cg_coercion_wts("ate"),
       cg_coercion_wts("att"),
-      stop("the prototype must not be evaluated"),
+      probe$callback(),
       on_downgrade = counter$callback
     ),
     double()
   )
   expect_identical(counter$n, 1L)
+  expect_identical(probe$n, 0L)
+})
+
+test_that("the prototype is returned untouched whatever it is", {
+  # The compatible path hands back the caller's prototype without inspecting it.
+  # Every other fixture here passes a weight vector, which leaves room for an
+  # implementation that validates the prototype, with `is_causal_wt(ptype)` or by
+  # comparing its estimand against `x`, and still passes the rest of the file.
+  # propensity uses this helper for the estimand check alone and then runs five
+  # more checks with their own bail-outs, so what it passes may be a sentinel
+  # marking the path rather than a prototype. An environment pins the rule twice
+  # over: it is not a vector, so anything that treats the prototype as one
+  # errors, and it is compared by reference, so only the argument itself can
+  # satisfy the assertion.
+  sentinel <- new.env(parent = emptyenv())
+
+  expect_identical(
+    causal_wts_ptype2(
+      cg_coercion_wts("ate"),
+      cg_coercion_wts("ate"),
+      sentinel,
+      on_downgrade = function() NULL
+    ),
+    sentinel
+  )
 })
 
 test_that("the helper signals nothing of its own on either path", {

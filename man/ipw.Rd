@@ -39,6 +39,14 @@ of its own. The field names and their order are a cross-package contract, so
 that an IPW estimate reads the same way whichever package produced it, and
 constructing through \code{\link[=new_ipw]{new_ipw()}} is also what gives a method the shared
 \code{print()} and \code{as.data.frame()} methods.
+
+The weighting argument was named \code{ps_mod} in propensity 0.1.0, where \code{ipw()}
+was a plain function rather than a generic. That spelling is deprecated in
+favor of \code{wt_mod}, which reads for a weighting object of any kind rather than
+only a propensity score model. \code{ps_mod} is not an argument of the generic,
+but a call that still names the argument that way warns once per session and
+then behaves in every respect as though the object had been passed as
+\code{wt_mod}, dispatch included. New code should use \code{wt_mod}.
 }
 \seealso{
 \code{\link[=new_ipw]{new_ipw()}}, the constructor every method returns through, and the

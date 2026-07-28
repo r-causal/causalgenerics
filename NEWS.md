@@ -1,5 +1,12 @@
 # causalgenerics 0.0.0.9001
 
+* The weighting argument of `ipw()` is now named `wt_mod`, which reads for a
+  weighting object of any kind rather than only a propensity score model. A call
+  that names it `ps_mod`, the spelling propensity 0.1.0 released, still works: it
+  warns once per session and then behaves in every respect as though the object
+  had been passed as `wt_mod`, dispatch included. `ps_mod` is not an argument of
+  the generic, and new code should use `wt_mod`.
+
 * Added `new_causal_wts()`, the low-level constructor for the abstract
   `causal_wts` weight class that concrete weight classes in the ecosystem are
   built on.

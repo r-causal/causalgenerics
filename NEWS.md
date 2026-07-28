@@ -5,7 +5,12 @@
   that names it `ps_mod`, the spelling propensity 0.1.0 released, still works: it
   warns once per session and then behaves in every respect as though the object
   had been passed as `wt_mod`, dispatch included. `ps_mod` is not an argument of
-  the generic, and new code should use `wt_mod`.
+  the generic, and new code should use `wt_mod`. Supplying both names in one call
+  is an error, since the two are one argument and a call that spells it twice has
+  not said which object the method should use. That covers a call naming only
+  `ps_mod` where a stray unnamed argument fills `wt_mod` positionally, which
+  would otherwise take over dispatch and run the method for the stray argument's
+  class.
 
 * Added `new_causal_wts()`, the low-level constructor for the abstract
   `causal_wts` weight class that concrete weight classes in the ecosystem are

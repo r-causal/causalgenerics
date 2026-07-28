@@ -47,6 +47,12 @@ only a propensity score model. \code{ps_mod} is not an argument of the generic,
 but a call that still names the argument that way warns once per session and
 then behaves in every respect as though the object had been passed as
 \code{wt_mod}, dispatch included. New code should use \code{wt_mod}.
+
+Supplying both names in one call is an error rather than a deprecation: they
+are one argument, and a call that spells it twice has not said which object
+the method should use. That covers a call naming only \code{ps_mod} where a stray
+unnamed argument fills \code{wt_mod} positionally, which would otherwise take over
+dispatch.
 }
 \seealso{
 \code{\link[=new_ipw]{new_ipw()}}, the constructor every method returns through, and the

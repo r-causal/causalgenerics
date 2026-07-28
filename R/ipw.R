@@ -29,6 +29,12 @@
 #' then behaves in every respect as though the object had been passed as
 #' `wt_mod`, dispatch included. New code should use `wt_mod`.
 #'
+#' Supplying both names in one call is an error rather than a deprecation: they
+#' are one argument, and a call that spells it twice has not said which object
+#' the method should use. That covers a call naming only `ps_mod` where a stray
+#' unnamed argument fills `wt_mod` positionally, which would otherwise take over
+#' dispatch.
+#'
 #' @param wt_mod The weighting object that produced the weights, for example a
 #'   fitted propensity score model. `ipw()` dispatches on this argument.
 #' @param outcome_mod A fitted weighted outcome model.
@@ -43,17 +49,36 @@
 #'
 #' @export
 ipw <- function(wt_mod, outcome_mod, ...) {
-  # The deprecated `ps_mod` spelling has to be repaired here, before dispatch,
-  # and repairing it means calling `ipw()` again with the object genuinely
-  # supplied as `wt_mod`. Assigning the object to `wt_mod` in this body and
-  # falling through to `UseMethod()` does not work: when the argument dispatch
-  # happens on is missing from the call, `UseMethod()` dispatches on the first
-  # argument of the call whatever that argument is named, and never consults the
-  # value assigned here. A caller who wrote `ipw(outcome_mod = o, ps_mod = w)`
-  # would then silently get the method for the outcome model's class. A method
-  # of its own cannot fix that either, since the re-entered call is what decides
-  # which method runs.
-  if (missing(wt_mod) && "ps_mod" %in% ...names()) {
+  # `ps_mod` is not an argument of the generic, so a call that names it lands in
+  # `...`. Reading the names rather than forcing `list(...)` keeps a call with
+  # nothing to repair from paying to evaluate its dots.
+  if ("ps_mod" %in% ...names()) {
+    # The two names are one argument, so a call carrying both has spelled that
+    # argument twice and there is no reading of it to repair. The check is on
+    # `wt_mod` rather than on the names in the call, because it also has to
+    # catch a call that names only `ps_mod` and then fills `wt_mod`
+    # positionally: `ipw(ps_mod = w, outcome_mod = o, x)` binds `x` to `wt_mod`,
+    # since a name matching no formal goes to `...` and leaves `wt_mod` for the
+    # first unnamed argument. That is the hazard the repair below exists for,
+    # reached by another route. Without this error `wt_mod` is not missing, the
+    # repair never runs, and dispatch happens on `x`.
+    if (!missing(wt_mod)) {
+      stop_invalid_argument(
+        "ps_mod",
+        "not be supplied together with `wt_mod`, which names the same argument"
+      )
+    }
+
+    # The deprecated `ps_mod` spelling has to be repaired here, before dispatch,
+    # and repairing it means calling `ipw()` again with the object genuinely
+    # supplied as `wt_mod`. Assigning the object to `wt_mod` in this body and
+    # falling through to `UseMethod()` does not work: when the argument dispatch
+    # happens on is missing from the call, `UseMethod()` dispatches on the first
+    # argument of the call whatever that argument is named, and never consults
+    # the value assigned here. A caller who wrote `ipw(outcome_mod = o,
+    # ps_mod = w)` would then silently get the method for the outcome model's
+    # class. A method of its own cannot fix that either, since the re-entered
+    # call is what decides which method runs.
     warn_ipw_ps_mod()
 
     dots <- list(...)

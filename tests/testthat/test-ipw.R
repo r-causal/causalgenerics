@@ -99,6 +99,68 @@ test_that("ipw() dispatches on `ps_mod` even when `outcome_mod` is named first",
   )
 })
 
+test_that("ipw() errors when the weighting object is named both ways", {
+  # The two spellings are one argument, so a call that uses both has said the
+  # same thing twice and there is no reading of it that is safe to guess at.
+  # Before this error the extra `ps_mod` rode through `...` to the method, which
+  # ignored it, and nothing anywhere said the argument had been spelled twice.
+  local_s3_method("ipw", "cg_weight", function(wt_mod, outcome_mod, ...) {
+    "weighting method"
+  })
+  local_ps_mod_warning_reset()
+
+  wt_mod <- structure(list(), class = "cg_weight")
+  other <- structure(list(), class = "cg_weight")
+
+  expect_error(
+    dispatch_from_baseenv(ipw, wt_mod = wt_mod, ps_mod = other),
+    class = "causalgenerics_invalid_argument_ps_mod"
+  )
+  # The general class as well, since the specific one alone would not show that
+  # a handler for any argument this package rejects catches it.
+  expect_error(
+    dispatch_from_baseenv(ipw, wt_mod = wt_mod, ps_mod = other),
+    class = "causalgenerics_invalid_argument"
+  )
+  # Both spellings are named, since the whole content of the error is that these
+  # two names are the same argument. Snapshotted for the wording and asserted
+  # here as well, since snapshots do not run on CRAN.
+  expect_error(
+    dispatch_from_baseenv(ipw, wt_mod = wt_mod, ps_mod = other),
+    "`ps_mod`.+`wt_mod`"
+  )
+  expect_snapshot(error = TRUE, ipw(wt_mod = wt_mod, ps_mod = other))
+})
+
+test_that("ipw() errors when an unnamed argument fills `wt_mod` beside `ps_mod`", {
+  # The same hazard the shim exists for, reached by a different route. An
+  # unnamed argument fills `wt_mod` positionally, so `wt_mod` is not missing,
+  # the shim never fires, and dispatch lands on the stray argument. Where the
+  # stray has an `ipw()` method of its own, as here, the wrong method runs, its
+  # answer comes back with no error, and no deprecation warning appears either.
+  local_s3_method("ipw", "cg_weight", function(wt_mod, outcome_mod, ...) {
+    "weighting method"
+  })
+  local_s3_method("ipw", "cg_stray", function(wt_mod, outcome_mod, ...) {
+    "stray method"
+  })
+  local_ps_mod_warning_reset()
+
+  wt_mod <- structure(list(), class = "cg_weight")
+  outcome_mod <- structure(list(), class = "cg_outcome")
+  stray <- structure(list(), class = "cg_stray")
+
+  expect_error(
+    dispatch_from_baseenv(
+      ipw,
+      ps_mod = wt_mod,
+      outcome_mod = outcome_mod,
+      stray
+    ),
+    class = "causalgenerics_invalid_argument_ps_mod"
+  )
+})
+
 test_that("ipw() dispatches once when it repairs the deprecated name", {
   # The re-entered call supplies `wt_mod`, so the shim cannot fire a second
   # time. Counting the method's runs is what shows that from the outside.

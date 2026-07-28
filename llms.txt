@@ -8,8 +8,24 @@ that attaching several r-causal packages at once produces no masking:
 each package contributes methods to a common generic instead of
 redefining the function.
 
-The package is modeled on the tidymodels generics package, which plays
-the same role for the modeling ecosystem.
+The package is modeled on the [generics](https://generics.r-lib.org)
+package, which provides commonly used S3 generics for the same reason:
+so that packages can share a definition instead of each defining their
+own.
+
+## Installation
+
+causalgenerics is not yet on CRAN. You can install the development
+version from [GitHub](https://github.com/r-causal/causalgenerics) with:
+
+``` r
+
+# install.packages("pak")
+pak::pak("r-causal/causalgenerics")
+```
+
+Most users will get causalgenerics as a dependency of another r-causal
+package rather than installing it directly.
 
 ## Generics
 

@@ -58,7 +58,16 @@
 <!-- badges: start -->
 
 <p>causalgenerics is the shared generics package for the r-causal ecosystem. It provides a near-zero-dependency home for the S3 generics that packages such as propensity, halfmoon, positively, and balancing register methods on. Owning the generic definitions in one place means that attaching several r-causal packages at once produces no masking: each package contributes methods to a common generic instead of redefining the function.</p>
-<p>The package is modeled on the tidymodels generics package, which plays the same role for the modeling ecosystem.</p>
+<p>The package is modeled on the <a href="https://generics.r-lib.org" class="external-link">generics</a> package, which provides commonly used S3 generics for the same reason: so that packages can share a definition instead of each defining their own.</p>
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
+<p>causalgenerics is not yet on CRAN. You can install the development version from <a href="https://github.com/r-causal/causalgenerics" class="external-link">GitHub</a> with:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"r-causal/causalgenerics"</span><span class="op">)</span></span></code></pre></div>
+<p>Most users will get causalgenerics as a dependency of another r-causal package rather than installing it directly.</p>
+</div>
 <div class="section level2">
 <h2 id="generics">Generics<a class="anchor" aria-label="anchor" href="#generics"></a>
 </h2>

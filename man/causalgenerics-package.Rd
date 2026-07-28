@@ -6,7 +6,7 @@
 \alias{causalgenerics-package}
 \title{causalgenerics: Shared Generics for the R-Causal Ecosystem}
 \description{
-A near-zero-dependency home for the S3 generics shared across the r-causal ecosystem, including 'propensity', 'halfmoon', 'positively', and 'balancing'. Owning the generic definitions in one place lets those packages register methods without masking one another when several are attached at once.
+A home for the S3 generics shared across the r-causal ecosystem, including 'propensity', 'halfmoon', 'positively', and 'balancing'. Owning the generic definitions in one place lets those packages register methods without masking one another when several are attached at once.
 }
 \seealso{
 Useful links:

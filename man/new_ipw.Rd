@@ -6,7 +6,7 @@
 \alias{as.data.frame.ipw}
 \title{Construct an inverse probability weighted result}
 \usage{
-new_ipw(estimand, ps_mod, outcome_mod, estimates, se_method, fit)
+new_ipw(estimand, wt_mod, outcome_mod, estimates, se_method, fit)
 
 \method{print}{ipw}(x, ...)
 
@@ -16,7 +16,7 @@ new_ipw(estimand, ps_mod, outcome_mod, estimates, se_method, fit)
 \item{estimand}{The causal estimand the method targeted, such as \code{"ate"} or
 \code{"att"}.}
 
-\item{ps_mod}{The weighting object: the fitted model that produced the
+\item{wt_mod}{The weighting object: the fitted model that produced the
 weights.}
 
 \item{outcome_mod}{The fitted weighted outcome model.}
@@ -46,7 +46,7 @@ statistics, and p-values remain on the log scale. Default is \code{FALSE}.}
 following six components, in this order.
 \describe{
 \item{\code{estimand}}{The causal estimand, such as \code{"ate"} or \code{"att"}.}
-\item{\code{ps_mod}}{The weighting object: the fitted model that produced the
+\item{\code{wt_mod}}{The weighting object: the fitted model that produced the
 weights.}
 \item{\code{outcome_mod}}{The fitted outcome model.}
 \item{\code{estimates}}{A data frame with one row per effect measure and the
@@ -111,7 +111,7 @@ estimates <- data.frame(
 
 res <- new_ipw(
   estimand = "ate",
-  ps_mod = glm(z ~ x, family = binomial(), data = dat),
+  wt_mod = glm(z ~ x, family = binomial(), data = dat),
   outcome_mod = glm(y ~ z, family = quasibinomial(), data = dat),
   estimates = estimates,
   se_method = "linearization",

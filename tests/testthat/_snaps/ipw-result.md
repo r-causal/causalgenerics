@@ -6,7 +6,7 @@
       Inverse Probability Weight Estimator
       Estimand: ATE 
       
-      Propensity Score Model:
+      Weight Estimator:
         Call: glm(formula = z ~ x, family = binomial(), data = dat) 
       
       Outcome Model:
@@ -28,7 +28,7 @@
       Inverse Probability Weight Estimator
       Estimand: ATE 
       
-      Propensity Score Model:
+      Weight Estimator:
         Call: glm(formula = z ~ x, family = binomial(), data = dat) 
       
       Outcome Model:
@@ -60,7 +60,7 @@
       Inverse Probability Weight Estimator
       Estimand: ATE 
       
-      Propensity Score Model:
+      Weight Estimator:
         Call: glm(formula = z ~ x, family = binomial(), data = dat) 
       
       Outcome Model:

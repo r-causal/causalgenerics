@@ -25,7 +25,7 @@
 #'
 #' @param estimand The causal estimand the method targeted, such as `"ate"` or
 #'   `"att"`.
-#' @param ps_mod The weighting object: the fitted model that produced the
+#' @param wt_mod The weighting object: the fitted model that produced the
 #'   weights.
 #' @param outcome_mod The fitted weighted outcome model.
 #' @param estimates A data frame of effect estimates, in the shape the return
@@ -38,7 +38,7 @@
 #'   following six components, in this order.
 #' \describe{
 #'   \item{`estimand`}{The causal estimand, such as `"ate"` or `"att"`.}
-#'   \item{`ps_mod`}{The weighting object: the fitted model that produced the
+#'   \item{`wt_mod`}{The weighting object: the fitted model that produced the
 #'     weights.}
 #'   \item{`outcome_mod`}{The fitted outcome model.}
 #'   \item{`estimates`}{A data frame with one row per effect measure and the
@@ -84,7 +84,7 @@
 #'
 #' res <- new_ipw(
 #'   estimand = "ate",
-#'   ps_mod = glm(z ~ x, family = binomial(), data = dat),
+#'   wt_mod = glm(z ~ x, family = binomial(), data = dat),
 #'   outcome_mod = glm(y ~ z, family = quasibinomial(), data = dat),
 #'   estimates = estimates,
 #'   se_method = "linearization",
@@ -95,11 +95,11 @@
 #'
 #' # The ratios on their natural scale.
 #' as.data.frame(res, exponentiate = TRUE)
-new_ipw <- function(estimand, ps_mod, outcome_mod, estimates, se_method, fit) {
+new_ipw <- function(estimand, wt_mod, outcome_mod, estimates, se_method, fit) {
   structure(
     list(
       estimand = estimand,
-      ps_mod = ps_mod,
+      wt_mod = wt_mod,
       outcome_mod = outcome_mod,
       estimates = estimates,
       se_method = se_method,
@@ -119,8 +119,8 @@ print.ipw <- function(x, ...) {
   cat("Inverse Probability Weight Estimator\n")
   cat("Estimand:", toupper(x$estimand), "\n\n")
 
-  cat("Propensity Score Model:\n")
-  cat("  Call:", format_model_call(x$ps_mod), "\n")
+  cat("Weight Estimator:\n")
+  cat("  Call:", format_model_call(x$wt_mod), "\n")
   cat("\n")
 
   cat("Outcome Model:\n")

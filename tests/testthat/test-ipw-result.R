@@ -81,7 +81,7 @@ ipw_result_data <- function() {
 ipw_result_models <- function() {
   dat <- ipw_result_data()
   list(
-    ps_mod = glm(z ~ x, family = binomial(), data = dat),
+    wt_mod = glm(z ~ x, family = binomial(), data = dat),
     outcome_mod = glm(y ~ z, family = quasibinomial(), data = dat)
   )
 }
@@ -92,7 +92,7 @@ ipw_result <- function(estimates) {
   mods <- ipw_result_models()
   new_ipw(
     estimand = "ate",
-    ps_mod = mods$ps_mod,
+    wt_mod = mods$wt_mod,
     outcome_mod = mods$outcome_mod,
     estimates = estimates,
     se_method = "mestimation",
@@ -108,7 +108,7 @@ test_that("new_ipw() builds the documented six-field list", {
 
   res <- new_ipw(
     estimand = "ate",
-    ps_mod = "a propensity score model",
+    wt_mod = "a propensity score model",
     outcome_mod = "an outcome model",
     estimates = estimates,
     se_method = "mestimation",
@@ -119,11 +119,11 @@ test_that("new_ipw() builds the documented six-field list", {
   expect_s3_class(res, "ipw", exact = TRUE)
   expect_identical(
     names(res),
-    c("estimand", "ps_mod", "outcome_mod", "estimates", "se_method", "fit")
+    c("estimand", "wt_mod", "outcome_mod", "estimates", "se_method", "fit")
   )
 
   expect_identical(res$estimand, "ate")
-  expect_identical(res$ps_mod, "a propensity score model")
+  expect_identical(res$wt_mod, "a propensity score model")
   expect_identical(res$outcome_mod, "an outcome model")
   expect_identical(res$estimates, estimates)
   expect_identical(res$se_method, "mestimation")
@@ -136,7 +136,7 @@ test_that("new_ipw() keeps a NULL fit as a named field", {
   # that dropped it would have five elements rather than six.
   res <- new_ipw(
     estimand = "att",
-    ps_mod = NULL,
+    wt_mod = NULL,
     outcome_mod = NULL,
     estimates = binary_estimates(),
     se_method = "linearization",
@@ -146,7 +146,7 @@ test_that("new_ipw() keeps a NULL fit as a named field", {
   expect_length(res, 6L)
   expect_identical(
     names(res),
-    c("estimand", "ps_mod", "outcome_mod", "estimates", "se_method", "fit")
+    c("estimand", "wt_mod", "outcome_mod", "estimates", "se_method", "fit")
   )
   expect_null(res$fit)
   expect_identical(res$se_method, "linearization")
@@ -157,10 +157,10 @@ test_that("new_ipw() takes its arguments in the documented order", {
   # order is part of the contract and not just the field order.
   estimates <- binary_estimates()
 
-  positional <- new_ipw("ate", "ps", "outcome", estimates, "mestimation", "fit")
+  positional <- new_ipw("ate", "wt", "outcome", estimates, "mestimation", "fit")
   named <- new_ipw(
     estimand = "ate",
-    ps_mod = "ps",
+    wt_mod = "wt",
     outcome_mod = "outcome",
     estimates = estimates,
     se_method = "mestimation",
@@ -205,14 +205,14 @@ test_that("print() summarizes a binary-exposure result", {
   expect_match(out, "^Inverse Probability Weight Estimator$", all = FALSE)
   # The estimand is reported in upper case, so `ate` reads as ATE.
   expect_match(out, "^Estimand: ATE\\s*$", all = FALSE)
-  # The propensity score model is reported first, and each `Call:` line belongs
-  # to the heading above it. The two fixtures differ in both formula and family,
-  # which is what makes the two lines tell each other apart.
-  ps_heading <- heading_index(out, "Propensity Score Model:")
+  # The weight estimator is reported first, and each `Call:` line belongs to the
+  # heading above it. The two fixtures differ in both formula and family, which
+  # is what makes the two lines tell each other apart.
+  wt_heading <- heading_index(out, "Weight Estimator:")
   outcome_heading <- heading_index(out, "Outcome Model:")
 
-  expect_lt(ps_heading, outcome_heading)
-  expect_match(out[ps_heading + 1L], "glm(formula = z ~ x", fixed = TRUE)
+  expect_lt(wt_heading, outcome_heading)
+  expect_match(out[wt_heading + 1L], "glm(formula = z ~ x", fixed = TRUE)
   expect_match(out[outcome_heading + 1L], "glm(formula = y ~ z", fixed = TRUE)
 
   expect_match(out, "^Estimates:$", all = FALSE)
@@ -335,7 +335,7 @@ test_that("format_model_call() falls back for an object that cannot be subset", 
 test_that("print() shows the class label for a model with no accessible call", {
   res <- new_ipw(
     estimand = "ate",
-    ps_mod = structure(1:3, class = "cg_unsubsettable"),
+    wt_mod = structure(1:3, class = "cg_unsubsettable"),
     outcome_mod = structure(list(), class = "cg_no_call"),
     estimates = binary_estimates(),
     se_method = "mestimation",
@@ -344,10 +344,10 @@ test_that("print() shows the class label for a model with no accessible call", {
 
   out <- capture.output(print(res))
 
-  ps_heading <- heading_index(out, "Propensity Score Model:")
+  wt_heading <- heading_index(out, "Weight Estimator:")
   outcome_heading <- heading_index(out, "Outcome Model:")
 
-  expect_match(out[ps_heading + 1L], "Call: <cg_unsubsettable>", fixed = TRUE)
+  expect_match(out[wt_heading + 1L], "Call: <cg_unsubsettable>", fixed = TRUE)
   expect_match(out[outcome_heading + 1L], "Call: <cg_no_call>", fixed = TRUE)
 })
 

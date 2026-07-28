@@ -1,11 +1,11 @@
 test_that("ipw() dispatches on the weighting object", {
-  local_s3_method("ipw", "cg_weight", function(ps_mod, outcome_mod, ...) {
+  local_s3_method("ipw", "cg_weight", function(wt_mod, outcome_mod, ...) {
     "dispatched"
   })
 
-  ps_mod <- structure(list(), class = "cg_weight")
+  wt_mod <- structure(list(), class = "cg_weight")
   expect_identical(
-    dispatch_from_baseenv(ipw, ps_mod, outcome_mod = NULL),
+    dispatch_from_baseenv(ipw, wt_mod, outcome_mod = NULL),
     "dispatched"
   )
 })

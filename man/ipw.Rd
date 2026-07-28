@@ -4,10 +4,10 @@
 \alias{ipw}
 \title{Inverse probability weighted estimation}
 \usage{
-ipw(ps_mod, outcome_mod, ...)
+ipw(wt_mod, outcome_mod, ...)
 }
 \arguments{
-\item{ps_mod}{The weighting object that produced the weights, for example a
+\item{wt_mod}{The weighting object that produced the weights, for example a
 fitted propensity score model. \code{ipw()} dispatches on this argument.}
 
 \item{outcome_mod}{A fitted weighted outcome model.}
@@ -30,7 +30,7 @@ estimation process.
 This package defines the generic and the shared result class its methods
 return. The methods themselves live in the packages that own the relevant
 model classes, such as \code{propensity} for propensity score models and
-\code{balancing} for balancing weight fits. Dispatch is on \code{ps_mod}, the weighting
+\code{balancing} for balancing weight fits. Dispatch is on \code{wt_mod}, the weighting
 object; each method documents the outcome model classes and further arguments
 it accepts.
 

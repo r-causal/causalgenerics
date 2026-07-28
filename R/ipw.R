@@ -11,7 +11,7 @@
 #' This package defines the generic and the shared result class its methods
 #' return. The methods themselves live in the packages that own the relevant
 #' model classes, such as `propensity` for propensity score models and
-#' `balancing` for balancing weight fits. Dispatch is on `ps_mod`, the weighting
+#' `balancing` for balancing weight fits. Dispatch is on `wt_mod`, the weighting
 #' object; each method documents the outcome model classes and further arguments
 #' it accepts.
 #'
@@ -21,7 +21,7 @@
 #' constructing through [new_ipw()] is also what gives a method the shared
 #' `print()` and `as.data.frame()` methods.
 #'
-#' @param ps_mod The weighting object that produced the weights, for example a
+#' @param wt_mod The weighting object that produced the weights, for example a
 #'   fitted propensity score model. `ipw()` dispatches on this argument.
 #' @param outcome_mod A fitted weighted outcome model.
 #' @param ... Arguments passed to methods.
@@ -34,6 +34,6 @@
 #'   `propensity` and `balancing` packages for methods.
 #'
 #' @export
-ipw <- function(ps_mod, outcome_mod, ...) {
+ipw <- function(wt_mod, outcome_mod, ...) {
   UseMethod("ipw")
 }

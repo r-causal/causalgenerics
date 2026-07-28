@@ -30,6 +30,16 @@
   is a plain double. The condition signalled on the downgrade path stays with
   the caller.
 
+* Added `new_ipw()`, the low-level constructor for the object every `ipw()`
+  method returns, together with `print()` and `as.data.frame()` methods for the
+  `ipw` class. The field names and their order are now a cross-package contract,
+  so an IPW estimate reads the same way whichever package produced it and a
+  package supplying an `ipw()` method inherits both methods rather than writing
+  its own. `as.data.frame()` gains an `exponentiate` argument that moves the
+  `log(rr)` and `log(or)` rows to their natural scale, exponentiating the point
+  estimate and the confidence limits only. Standard errors, z statistics, and
+  p-values stay on the log scale, where the inference is done.
+
 # causalgenerics 0.0.0.9000
 
 * Initial release with the shared generics `ipw()`, `ess()`, `is_causal_wt()`, `estimand()`, and `estimand<-()`.

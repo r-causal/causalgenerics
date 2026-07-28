@@ -15,8 +15,9 @@ fitted propensity score model. \code{ipw()} dispatches on this argument.}
 \item{...}{Arguments passed to methods.}
 }
 \value{
-A method-defined object holding causal effect estimates and their
-standard errors.
+An object of class \code{ipw}, holding the causal effect estimates and
+their standard errors alongside the models they came from. See \code{\link[=new_ipw]{new_ipw()}}
+for the components and their order.
 }
 \description{
 \code{ipw()} is the generic for bring-your-own-model inverse probability weighted
@@ -26,12 +27,20 @@ effect estimates with standard errors that account for the two-step
 estimation process.
 }
 \details{
-This package defines only the generic. Methods live in the packages that own
-the relevant model classes, such as \code{propensity} for propensity score models
-and \code{balancing} for balancing weight fits. Dispatch is on \code{ps_mod}, the
-weighting object; each method documents the outcome model classes and further
-arguments it accepts.
+This package defines the generic and the shared result class its methods
+return. The methods themselves live in the packages that own the relevant
+model classes, such as \code{propensity} for propensity score models and
+\code{balancing} for balancing weight fits. Dispatch is on \code{ps_mod}, the weighting
+object; each method documents the outcome model classes and further arguments
+it accepts.
+
+A method builds its return value with \code{\link[=new_ipw]{new_ipw()}} rather than a result object
+of its own. The field names and their order are a cross-package contract, so
+that an IPW estimate reads the same way whichever package produced it, and
+constructing through \code{\link[=new_ipw]{new_ipw()}} is also what gives a method the shared
+\code{print()} and \code{as.data.frame()} methods.
 }
 \seealso{
-The \code{propensity} and \code{balancing} packages for methods.
+\code{\link[=new_ipw]{new_ipw()}}, the constructor every method returns through, and the
+\code{propensity} and \code{balancing} packages for methods.
 }

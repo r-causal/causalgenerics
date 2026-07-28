@@ -11,9 +11,10 @@
 #' \eqn{(\sum w)^2 / \sum w^2}, for any numeric vector. Every weight class in
 #' this ecosystem is a double underneath, and `is.numeric()` is `TRUE` for one,
 #' so the default is the whole implementation for weights and a concrete weight
-#' class needs no method of its own. Methods exist for objects that need
-#' something other than the Kish formula, such as a fitted model, where a method
-#' may summarize by group and return a tibble with one row per group.
+#' class needs no method of its own. A method would be worth registering only for
+#' an object that needs something other than the Kish formula, such as a fitted
+#' model, where it might summarize by group and return a tibble with one row per
+#' group.
 #'
 #' The default errors when `x` is not numeric, which includes `NULL`, rather than
 #' returning a value computed from nothing. Numeric input whose quotient is
@@ -35,8 +36,10 @@
 #'   whatever suits the object they are written for; a fitted-model method may
 #'   return a tibble.
 #'
-#' @seealso The `halfmoon` package for methods on the objects the default does
-#'   not cover.
+#' @seealso `halfmoon::check_ess()`, which reports the effective sample size of
+#'   one or more weighting columns in a data frame, optionally by exposure group.
+#'   It is an ordinary function rather than an `ess()` method, so it does not go
+#'   through this generic.
 #'
 #' @export
 #'

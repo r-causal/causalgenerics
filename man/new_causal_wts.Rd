@@ -38,12 +38,44 @@ those fields. A field passed as \code{NULL} leaves its attribute absent rather t
 recording a \code{NULL}, which is what lets a concrete constructor default its
 metadata to \code{NULL} and pass it straight through.
 
-The abstract layer stops at construction and the metadata accessors. A
-concrete class still owns its own \code{vec_ptype2()}, \code{vec_cast()},
-\code{vec_ptype_abbr()}, \code{vec_restore()}, and \code{vec_arith()} methods: vctrs resolves
-the first three on \code{class(x)[[1]]} alone and so never finds a \code{causal_wts}
-method, and the last two have to reconcile metadata that this package knows
-nothing about.
+The abstract layer reaches well past construction. A concrete class inherits
+the metadata accessors \code{\link[=is_causal_wt]{is_causal_wt()}}, \code{\link[=estimand]{estimand()}}, and \code{\link[=estimand<-]{estimand<-()}},
+and it inherits every read-only operation that names no metadata field and so
+gives the answer the underlying double would: \code{vec_math()}, the \code{Summary}
+group generic, \code{min()}, \code{max()}, \code{range()}, \code{median()}, \code{quantile()},
+\code{summary()}, \code{anyDuplicated()}, \code{diff()}, \code{[}, and the six comparison
+operators. \code{\link[=ess]{ess()}} arrives as well, through a default that computes the Kish
+effective sample size for any numeric vector.
+
+Do not write any of those again for a concrete class. A method registered on
+the subclass takes precedence over the shared one, and the comparison
+operators in particular do more than delegate: they short-circuit
+\code{vec_equal()} and \code{vec_compare()}, which would otherwise route an expression
+such as \code{weights > 0} through the concrete class's own \code{vec_ptype2()} method
+and signal whatever that method signals on a downgrade, once per call.
+\code{glm.fit()} evaluates comparisons of that shape repeatedly inside
+\code{profile.glm()}, so a single profiled confidence interval on a weighted fit
+would emit the same warning a hundred times over.
+
+What a concrete class does still own is its \code{vec_ptype2()}, \code{vec_cast()},
+\code{vec_ptype_abbr()}, \code{vec_ptype_full()}, \code{vec_restore()}, and \code{vec_arith()}
+methods, for three distinct reasons.
+
+\code{vec_ptype2()} and \code{vec_cast()} cannot be inherited at all. vctrs resolves
+them through \code{s3_method_specific()}, which keys on \code{class(x)[[1]]} and never
+walks the rest of the class vector, so a \code{causal_wts} method is never found.
+
+\code{vec_ptype_abbr()} and \code{vec_ptype_full()} are likewise not reached from the
+abstract class. A concrete class that omits either one falls back to the vctrs
+default and prints a bare class name where the estimand should appear.
+
+\code{vec_restore()} and \code{vec_arith()} do dispatch through \code{causal_wts}, but they
+still have to be written for the concrete class, because they reconcile
+metadata that this package knows nothing about. An abstract \code{vec_restore()}
+that copies attributes wholesale errors on named weights and re-attaches
+index-typed metadata at the wrong length after slicing, and an abstract
+\code{vec_arith()} would silently legalize arithmetic between two different
+concrete weight classes.
 }
 \examples{
 wts <- new_causal_wts(c(1.2, 0.8), subclass = "my_wts", estimand = "ate")
@@ -52,5 +84,6 @@ estimand(wts)
 }
 \seealso{
 \code{\link[=estimand]{estimand()}} and \code{\link[=is_causal_wt]{is_causal_wt()}}, the accessors this class supplies
-methods for.
+methods for, and \code{\link[=causal_wts_ptype2]{causal_wts_ptype2()}}, the coercion rule a concrete class
+calls from its own \code{vec_ptype2()} method.
 }

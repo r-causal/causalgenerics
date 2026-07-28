@@ -132,14 +132,26 @@ test_that("ipw() errors when the weighting object is named both ways", {
   expect_snapshot(error = TRUE, ipw(wt_mod = wt_mod, ps_mod = other))
 })
 
-test_that("ipw() errors when an unnamed argument fills `wt_mod` beside `ps_mod`", {
-  # The same hazard the shim exists for, reached by a different route. An
-  # unnamed argument fills `wt_mod` positionally, so `wt_mod` is not missing,
-  # the shim never fires, and dispatch lands on the stray argument. Where the
-  # stray has an `ipw()` method of its own, as here, the wrong method runs, its
-  # answer comes back with no error, and no deprecation warning appears either.
+test_that("ipw() matches a `ps_mod` call against the 0.1.0 formals", {
+  # The forms that make the deprecation's promise true or false. Under the 0.1.0
+  # formals `(ps_mod, outcome_mod, ...)`, an unnamed argument beside a named
+  # `ps_mod` was the outcome model, and that call form is on CRAN. Read against
+  # the current formals it fills `wt_mod` instead, where it takes over dispatch;
+  # since outcome models are `glm`s and propensity registers its weighting
+  # method for `glm`, that dispatch succeeds and answers with the wrong numbers.
+  #
+  # Methods are registered for the outcome and stray classes as well, so a call
+  # that dispatched on either would return that method's answer rather than fail
+  # for want of one.
   local_s3_method("ipw", "cg_weight", function(wt_mod, outcome_mod, ...) {
-    "weighting method"
+    list(
+      weighting = class(wt_mod),
+      outcome = if (missing(outcome_mod)) "<missing>" else class(outcome_mod),
+      dots = list(...)
+    )
+  })
+  local_s3_method("ipw", "cg_outcome", function(wt_mod, outcome_mod, ...) {
+    "outcome method"
   })
   local_s3_method("ipw", "cg_stray", function(wt_mod, outcome_mod, ...) {
     "stray method"
@@ -150,21 +162,76 @@ test_that("ipw() errors when an unnamed argument fills `wt_mod` beside `ps_mod`"
   outcome_mod <- structure(list(), class = "cg_outcome")
   stray <- structure(list(), class = "cg_stray")
 
-  expect_error(
-    dispatch_from_baseenv(
-      ipw,
-      ps_mod = wt_mod,
-      outcome_mod = outcome_mod,
-      stray
-    ),
-    class = "causalgenerics_invalid_argument_ps_mod"
+  # `suppressWarnings()` rather than `expect_warning()`, which returns the
+  # condition rather than the value under test. The warning has tests of its own
+  # below.
+  matched <- function(...) suppressWarnings(dispatch_from_baseenv(ipw, ...))
+
+  # The unnamed argument is the outcome model, whichever side of `ps_mod` it
+  # falls on.
+  expect_identical(
+    matched(ps_mod = wt_mod, outcome_mod),
+    list(weighting = "cg_weight", outcome = "cg_outcome", dots = list())
+  )
+  expect_identical(
+    matched(outcome_mod, ps_mod = wt_mod),
+    list(weighting = "cg_weight", outcome = "cg_outcome", dots = list())
+  )
+
+  # Only the first unnamed argument is the outcome model. Once both formals are
+  # taken, by name or by position, the rest go to `...` as they did in 0.1.0.
+  expect_identical(
+    matched(ps_mod = wt_mod, outcome_mod, stray),
+    list(weighting = "cg_weight", outcome = "cg_outcome", dots = list(stray))
+  )
+  expect_identical(
+    matched(ps_mod = wt_mod, outcome_mod = outcome_mod, stray),
+    list(weighting = "cg_weight", outcome = "cg_outcome", dots = list(stray))
+  )
+
+  # And with nothing to fill it, `outcome_mod` is still missing rather than
+  # filled from `...`.
+  expect_identical(
+    matched(ps_mod = wt_mod, conf_level = 0.9),
+    list(
+      weighting = "cg_weight",
+      outcome = "<missing>",
+      dots = list(conf_level = 0.9)
+    )
+  )
+})
+
+test_that("ipw() repairs a `ps_mod` call forwarded through `...`", {
+  # A wrapper that forwards its dots reaches the generic as `ipw(...)`. Its one
+  # argument name is `...`, so a repair that rewrote argument names in the call
+  # would find nothing to rewrite and re-evaluate the same call forever. A
+  # repair that spliced the forwarded arguments in with `match.call()` would
+  # substitute their expressions and then evaluate them in the wrapper's frame,
+  # where the names below do not exist. Re-entering through the 0.1.0 formals
+  # leaves the promises where they are, which is what this asserts: the objects
+  # arrive, and they arrive in the slots 0.1.0 put them in.
+  local_s3_method("ipw", "cg_weight", function(wt_mod, outcome_mod, ...) {
+    list(weighting = class(wt_mod), outcome = class(outcome_mod))
+  })
+  local_ps_mod_warning_reset()
+
+  forward <- function(...) ipw(...)
+  caller <- function() {
+    caller_weighting <- structure(list(), class = "cg_weight")
+    caller_outcome <- structure(list(), class = "cg_outcome")
+    forward(ps_mod = caller_weighting, caller_outcome)
+  }
+
+  expect_identical(
+    suppressWarnings(caller()),
+    list(weighting = "cg_weight", outcome = "cg_outcome")
   )
 })
 
 test_that("ipw() errors when `ps_mod` is supplied twice", {
   # Two objects under the one name, and nothing in the call to say which of them
   # to weight by. 0.1.0 rejected it outright, since the second object matched a
-  # formal the first had taken. Before this check the repair read the first,
+  # formal the first had taken. Before this check the shim read the first,
   # dropped the second, and warned as though the call had been unambiguous.
   local_s3_method("ipw", "cg_weight", function(wt_mod, outcome_mod, ...) {
     "weighting method"
@@ -201,6 +268,25 @@ test_that("ipw() errors when `ps_mod` is supplied twice", {
     error = TRUE,
     # jarl-ignore duplicated_arguments: the duplicated name is the call under test
     ipw(ps_mod = wt_mod, ps_mod = other, outcome_mod = outcome_mod)
+  )
+})
+
+test_that("ipw() errors when `wt_mod` is spelled partially beside `ps_mod`", {
+  # R matches a named argument partially against the formals that precede `...`,
+  # so `wt` supplies `wt_mod` exactly as the full spelling does and the call is
+  # the same ambiguity. A check that compared names for equality would miss it
+  # and then hand two `wt_mod` arguments to the re-entered call.
+  local_s3_method("ipw", "cg_weight", function(wt_mod, outcome_mod, ...) {
+    "weighting method"
+  })
+  local_ps_mod_warning_reset()
+
+  wt_mod <- structure(list(), class = "cg_weight")
+  other <- structure(list(), class = "cg_weight")
+
+  expect_error(
+    dispatch_from_baseenv(ipw, wt = wt_mod, ps_mod = other),
+    class = "causalgenerics_invalid_argument_ps_mod"
   )
 })
 

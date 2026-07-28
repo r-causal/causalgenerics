@@ -1,0 +1,25 @@
+url: https://r-causal.github.io/causalgenerics/
+
+template:
+  bootstrap: 5
+  math-rendering: mathjax
+
+reference:
+- title: Generics
+  desc: >
+    The S3 generics the r-causal ecosystem shares. Packages register methods on
+    these rather than defining their own, so attaching several at once produces
+    no masking.
+  contents:
+  - ipw
+  - ess
+  - causal-weights
+- title: Shared classes
+  desc: >
+    Constructors and helpers for the classes those generics return. Method
+    authors build on these instead of writing a result or weight class of their
+    own.
+  contents:
+  - new_ipw
+  - new_causal_wts
+  - causal_wts_ptype2

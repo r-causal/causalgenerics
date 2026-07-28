@@ -161,6 +161,49 @@ test_that("ipw() errors when an unnamed argument fills `wt_mod` beside `ps_mod`"
   )
 })
 
+test_that("ipw() errors when `ps_mod` is supplied twice", {
+  # Two objects under the one name, and nothing in the call to say which of them
+  # to weight by. 0.1.0 rejected it outright, since the second object matched a
+  # formal the first had taken. Before this check the repair read the first,
+  # dropped the second, and warned as though the call had been unambiguous.
+  local_s3_method("ipw", "cg_weight", function(wt_mod, outcome_mod, ...) {
+    "weighting method"
+  })
+  local_s3_method("ipw", "cg_other", function(wt_mod, outcome_mod, ...) {
+    "other method"
+  })
+  local_ps_mod_warning_reset()
+
+  wt_mod <- structure(list(), class = "cg_weight")
+  other <- structure(list(), class = "cg_other")
+  outcome_mod <- structure(list(), class = "cg_outcome")
+
+  supplied_twice <- function() {
+    # jarl-ignore duplicated_arguments: the duplicated name is the call under test
+    dispatch_from_baseenv(
+      ipw,
+      ps_mod = wt_mod,
+      ps_mod = other,
+      outcome_mod = outcome_mod
+    )
+  }
+
+  expect_error(
+    supplied_twice(),
+    class = "causalgenerics_invalid_argument_ps_mod"
+  )
+  # The general class as well, since the specific one alone would not show that
+  # a handler for any argument this package rejects catches it.
+  expect_error(supplied_twice(), class = "causalgenerics_invalid_argument")
+  # Asserted here as well as snapshotted, since snapshots do not run on CRAN.
+  expect_error(supplied_twice(), "`ps_mod` must be supplied at most once")
+  expect_snapshot(
+    error = TRUE,
+    # jarl-ignore duplicated_arguments: the duplicated name is the call under test
+    ipw(ps_mod = wt_mod, ps_mod = other, outcome_mod = outcome_mod)
+  )
+})
+
 test_that("ipw() dispatches once when it repairs the deprecated name", {
   # The re-entered call supplies `wt_mod`, so the shim cannot fire a second
   # time. Counting the method's runs is what shows that from the outside.

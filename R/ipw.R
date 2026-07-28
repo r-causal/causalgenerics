@@ -29,8 +29,9 @@
 #' then behaves in every respect as though the object had been passed as
 #' `wt_mod`, dispatch included. New code should use `wt_mod`.
 #'
-#' Supplying both names in one call is an error rather than a deprecation: they
-#' are one argument, and a call that spells it twice has not said which object
+#' Supplying both names in one call is an error rather than a deprecation, as is
+#' naming `ps_mod` twice: they are one argument, and a call that spells it twice
+#' has not said which object
 #' the method should use. That covers a call naming only `ps_mod` where a stray
 #' unnamed argument fills `wt_mod` positionally, which would otherwise take over
 #' dispatch.
@@ -53,6 +54,13 @@ ipw <- function(wt_mod, outcome_mod, ...) {
   # `...`. Reading the names rather than forcing `list(...)` keeps a call with
   # nothing to repair from paying to evaluate its dots.
   if ("ps_mod" %in% ...names()) {
+    # Two objects under the one name, and nothing in the call to say which of
+    # them the method should weight by. 0.1.0 rejected this too, where the
+    # second object matched a formal the first had already taken.
+    if (sum(...names() == "ps_mod") > 1L) {
+      stop_invalid_argument("ps_mod", "be supplied at most once")
+    }
+
     # The two names are one argument, so a call carrying both has spelled that
     # argument twice and there is no reading of it to repair. The check is on
     # `wt_mod` rather than on the names in the call, because it also has to

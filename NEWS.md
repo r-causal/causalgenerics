@@ -1,19 +1,5 @@
 # causalgenerics 0.0.0.9001
 
-* The weighting argument of `ipw()` is now named `wt_mod`, which reads for a
-  weighting object of any kind rather than only a propensity score model. A call
-  that names it `ps_mod`, the spelling propensity 0.1.0 released, still works: it
-  warns once per session and then behaves in every respect as though the object
-  had been passed as `wt_mod`, dispatch included. Because the name a call gives
-  one argument decides where its other arguments land, such a call is matched
-  against the 0.1.0 formals before it is routed into the current ones, so every
-  argument around `ps_mod` stays where 0.1.0 put it and `ipw(ps_mod = model,
-  fit)` still reads `fit` as the outcome model. `ps_mod` is not an argument of
-  the generic, and new code should use `wt_mod`. Naming the weighting argument
-  both ways in one call is an error, as is naming `ps_mod` twice, since the two
-  names are one argument and a call that spells it twice has not said which
-  object the method should use.
-
 * Added `new_causal_wts()`, the low-level constructor for the abstract
   `causal_wts` weight class that concrete weight classes in the ecosystem are
   built on.

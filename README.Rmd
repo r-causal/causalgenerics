@@ -1,0 +1,53 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# causalgenerics
+
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/r-causal/causalgenerics/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/r-causal/causalgenerics/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
+causalgenerics is the shared generics package for the r-causal ecosystem. It provides a near-zero-dependency home for the S3 generics that packages such as propensity, halfmoon, positively, and balancing register methods on. Owning the generic definitions in one place means that attaching several r-causal packages at once produces no masking: each package contributes methods to a common generic instead of redefining the function.
+
+The package is modeled on the [generics](https://generics.r-lib.org) package, which provides commonly used S3 generics for the same reason: so that packages can share a definition instead of each defining their own.
+
+## Installation
+
+causalgenerics is not yet on CRAN. You can install the development version from [GitHub](https://github.com/r-causal/causalgenerics) with:
+
+``` r
+# install.packages("pak")
+pak::pak("r-causal/causalgenerics")
+```
+
+Most users will get causalgenerics as a dependency of another r-causal package rather than installing it directly.
+
+## Generics
+
+causalgenerics owns the following generics:
+
+- `ipw()`: bring-your-own-model inverse probability weighted estimation of causal effects from a weighting model and a weighted outcome model.
+- `ess()`: the effective sample size of a set of weights or a fitted model.
+- `is_causal_wt()`, `estimand()`, and `estimand<-()`: accessors for the metadata carried by causal weight vectors.
+
+The generics are intentionally minimal. Method-specific arguments are passed through `...`, and the classes themselves live in the packages that own them.
+
+## How ecosystem packages depend on it
+
+Packages in the r-causal ecosystem import causalgenerics and register their methods against these generics. Because the generic is defined once, a user can attach any combination of those packages without one masking another.
+
+## Status
+
+causalgenerics is under active development.

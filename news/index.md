@@ -1,6 +1,6 @@
 # Changelog
 
-## causalgenerics 0.0.0.9001
+## causalgenerics 0.0.0.9000
 
 - Added
   [`new_causal_wts()`](https://r-causal.github.io/causalgenerics/reference/new_causal_wts.md),

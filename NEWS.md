@@ -1,4 +1,4 @@
-# causalgenerics 0.0.0.9001
+# causalgenerics 0.0.0.9000
 
 * Added `new_causal_wts()`, the low-level constructor for the abstract
   `causal_wts` weight class that concrete weight classes in the ecosystem are

@@ -309,6 +309,40 @@ test_that("comparison enforces vctrs N-or-1 recycling rather than base's", {
   )
 })
 
+test_that("a size-mismatched comparison reports the operator, not the helper", {
+  # `vec_recycle_common()` records the frame it is handed, and the frame it
+  # takes by default is the one that called it. That frame belongs to
+  # `causal_wts_compare()`, an unexported helper the user never named, so the
+  # size error read as though the fault lay inside this package rather than in
+  # the comparison the user wrote. Each operator method passes its own call
+  # down instead.
+  #
+  # The call an operator method records is the rewritten dispatch call rather
+  # than the infix expression, because that is what `sys.call()` gives inside an
+  # S3 method for `==`. It is as close to the operation as R keeps, and it is
+  # more than an environment can reach here: rlang treats a dispatch frame as
+  # uninformative and walks past it, so blaming the caller's environment names
+  # whatever called the comparison and loses the comparison itself.
+  wts <- cg_probe_wts(c(2, 1, 3, 4, 5))
+  other <- c(1, 2)
+
+  cnd <- tryCatch(wts == other, error = identity)
+  expect_identical(conditionCall(cnd), quote(`==.causal_wts`(wts, other)))
+
+  # Threading a call changes who is blamed and nothing else. The message is
+  # still vctrs', and a handler written against the size error still matches.
+  expect_s3_class(cnd, "vctrs_error_incompatible_size")
+  expect_identical(
+    conditionMessage(cnd),
+    "Can't recycle `..1` (size 5) to match `..2` (size 2)."
+  )
+
+  # Every operator shares the one helper, so each has to name itself rather than
+  # the operator that happened to be tested first.
+  reversed <- tryCatch(other > wts, error = identity)
+  expect_identical(conditionCall(reversed), quote(`>.causal_wts`(other, wts)))
+})
+
 test_that("the unwrapper methods are registered against causal_wts", {
   # Downstream packages reach these through the S3 method table a NAMESPACE
   # `S3method()` directive fills in, and the table an entry goes to belongs to

@@ -117,10 +117,19 @@ diff.causal_wts <- function(x, lag = 1L, differences = 1L, ...) {
 #' paths (`vec_c()`, `vec_cast()`) still go through the warning-emitting
 #' `vec_ptype2` methods, so the user is still informed when the weight class
 #' really is dropped.
+#'
+#' `call` is what the size error blames. Left to its own default,
+#' `vec_recycle_common()` blames its caller, which is this helper, and the user
+#' is told an unexported name they never wrote. `sys.call(-1)` records the
+#' operator method instead, matching how `stop_no_method()` and
+#' `stop_invalid_argument()` take a call in `R/utils.R`. An environment would be
+#' the more usual thing to hand rlang, but not here: rlang treats a dispatch
+#' frame as uninformative and walks past it, so the caller's environment names
+#' whatever called the comparison rather than the comparison.
 #' @importFrom vctrs vec_recycle_common
 #' @noRd
-causal_wts_compare <- function(e1, e2) {
-  args <- vctrs::vec_recycle_common(e1, e2)
+causal_wts_compare <- function(e1, e2, call = sys.call(-1)) {
+  args <- vctrs::vec_recycle_common(e1, e2, .call = call)
   if (inherits(args[[1]], "causal_wts")) {
     args[[1]] <- vctrs::vec_data(args[[1]])
   }

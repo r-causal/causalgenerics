@@ -59,3 +59,33 @@ signal an error when no method is registered for the object.
 [`new_causal_wts()`](https://r-causal.github.io/causalgenerics/reference/new_causal_wts.md)
 for the class these generics have methods for, and the `propensity`
 package for concrete weight classes.
+
+## Examples
+
+``` r
+wts <- new_causal_wts(
+  c(1.2, 0.8, 1.5),
+  subclass = "cg_toy_wts",
+  estimand = "ate"
+)
+
+is_causal_wt(wts)
+#> [1] TRUE
+estimand(wts)
+#> [1] "ate"
+
+# The estimand is metadata on the vector, so it can be replaced in place.
+estimand(wts) <- "att"
+estimand(wts)
+#> [1] "att"
+
+# An object that is not a causal weight vector reports `FALSE` rather than
+# erroring.
+is_causal_wt(1:3)
+#> [1] FALSE
+
+# `estimand()` has no meaningful default, so it errors instead.
+try(estimand(1:3))
+#> Error in estimand.default(1:3) : 
+#>   No `estimand()` method for an object of class <integer>.
+```

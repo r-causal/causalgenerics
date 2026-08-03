@@ -103,6 +103,80 @@ constructing through <code><a href="new_ipw.html">new_ipw()</a></code> is also w
 <code>propensity</code> and <code>balancing</code> packages for methods.</p></div>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A confounded toy data set: the confounder `x` raises both the chance of</span></span></span>
+<span class="r-in"><span><span class="co"># exposure `z` and the risk of outcome `y`. Within either level of `x` the</span></span></span>
+<span class="r-in"><span><span class="co"># risk difference is 0.25.</span></span></span>
+<span class="r-in"><span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">10</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  z <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">0</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># The crude comparison ignores `x` and overstates that risk difference.</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/lm.html" class="external-link">lm</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">z</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">)</span><span class="op">)</span><span class="op">[[</span><span class="st">"z"</span><span class="op">]</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.4</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># A weighting object of a toy class, standing in for the fitted weighting</span></span></span>
+<span class="r-in"><span><span class="co"># models that the methods in other packages dispatch on. Weighting by the</span></span></span>
+<span class="r-in"><span><span class="co"># inverse probability of the exposure received breaks the dependence of `z`</span></span></span>
+<span class="r-in"><span><span class="co"># on `x`, so the weighted outcome model recovers the 0.25 risk difference.</span></span></span>
+<span class="r-in"><span><span class="va">ps</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/fitted.values.html" class="external-link">fitted</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/glm.html" class="external-link">glm</a></span><span class="op">(</span><span class="va">z</span> <span class="op">~</span> <span class="va">x</span>, family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">wt_mod</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/structure.html" class="external-link">structure</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>wts <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">z</span> <span class="op">==</span> <span class="fl">1</span>, <span class="fl">1</span> <span class="op">/</span> <span class="va">ps</span>, <span class="fl">1</span> <span class="op">/</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="va">ps</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  class <span class="op">=</span> <span class="st">"cg_toy_model"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># A method for that class. It reads the exposure coefficient of the weighted</span></span></span>
+<span class="r-in"><span><span class="co"># outcome model as a risk difference and returns through `new_ipw()`, which is</span></span></span>
+<span class="r-in"><span><span class="co"># what every `ipw()` method does. Inference is normal-based throughout, as the</span></span></span>
+<span class="r-in"><span><span class="co"># `z` column of the estimates contract calls for. The standard error is the</span></span></span>
+<span class="r-in"><span><span class="co"># model-based one the weighted fit reports; a real method uses a variance</span></span></span>
+<span class="r-in"><span><span class="co"># estimator that also accounts for the weights having been estimated.</span></span></span>
+<span class="r-in"><span><span class="va">ipw.cg_toy_model</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">wt_mod</span>, <span class="va">outcome_mod</span>, <span class="va">...</span><span class="op">)</span> <span class="op">{</span></span></span>
+<span class="r-in"><span>  <span class="va">coefs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">outcome_mod</span><span class="op">)</span><span class="op">$</span><span class="va">coefficients</span><span class="op">[</span><span class="st">"z"</span>, <span class="op">]</span></span></span>
+<span class="r-in"><span>  <span class="va">estimate</span> <span class="op">&lt;-</span> <span class="va">coefs</span><span class="op">[[</span><span class="st">"Estimate"</span><span class="op">]</span><span class="op">]</span></span></span>
+<span class="r-in"><span>  <span class="va">std_err</span> <span class="op">&lt;-</span> <span class="va">coefs</span><span class="op">[[</span><span class="st">"Std. Error"</span><span class="op">]</span><span class="op">]</span></span></span>
+<span class="r-in"><span>  <span class="va">z</span> <span class="op">&lt;-</span> <span class="va">estimate</span> <span class="op">/</span> <span class="va">std_err</span></span></span>
+<span class="r-in"><span>  <span class="va">half_width</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">qnorm</a></span><span class="op">(</span><span class="fl">0.975</span><span class="op">)</span> <span class="op">*</span> <span class="va">std_err</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="new_ipw.html">new_ipw</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>    estimand <span class="op">=</span> <span class="st">"ate"</span>,</span></span>
+<span class="r-in"><span>    wt_mod <span class="op">=</span> <span class="va">wt_mod</span>,</span></span>
+<span class="r-in"><span>    outcome_mod <span class="op">=</span> <span class="va">outcome_mod</span>,</span></span>
+<span class="r-in"><span>    estimates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>      effect <span class="op">=</span> <span class="st">"rd"</span>,</span></span>
+<span class="r-in"><span>      estimate <span class="op">=</span> <span class="va">estimate</span>,</span></span>
+<span class="r-in"><span>      std.err <span class="op">=</span> <span class="va">std_err</span>,</span></span>
+<span class="r-in"><span>      z <span class="op">=</span> <span class="va">z</span>,</span></span>
+<span class="r-in"><span>      ci.lower <span class="op">=</span> <span class="va">estimate</span> <span class="op">-</span> <span class="va">half_width</span>,</span></span>
+<span class="r-in"><span>      ci.upper <span class="op">=</span> <span class="va">estimate</span> <span class="op">+</span> <span class="va">half_width</span>,</span></span>
+<span class="r-in"><span>      conf.level <span class="op">=</span> <span class="fl">0.95</span>,</span></span>
+<span class="r-in"><span>      p.value <span class="op">=</span> <span class="fl">2</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">pnorm</a></span><span class="op">(</span><span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">z</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>    <span class="op">)</span>,</span></span>
+<span class="r-in"><span>    se_method <span class="op">=</span> <span class="st">"model-based"</span>,</span></span>
+<span class="r-in"><span>    fit <span class="op">=</span> <span class="cn">NULL</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="va">outcome_mod</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/lm.html" class="external-link">lm</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">z</span>, data <span class="op">=</span> <span class="va">dat</span>, weights <span class="op">=</span> <span class="va">wt_mod</span><span class="op">$</span><span class="va">wts</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Dispatch on the weighting object finds the method.</span></span></span>
+<span class="r-in"><span><span class="fu">ipw</span><span class="op">(</span><span class="va">wt_mod</span>, <span class="va">outcome_mod</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Inverse Probability Weight Estimator</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Estimand: ATE </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Weight Estimator:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Call: &lt;cg_toy_model&gt; </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Outcome Model:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Call: lm(formula = y ~ z, data = dat, weights = wt_mod$wts) </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Estimates:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    estimate std.err      z ci.lower ci.upper conf.level p.value</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> rd  0.25000 0.22822 1.0954  -0.1973   0.6973       0.95  0.2733</span>
+</code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 

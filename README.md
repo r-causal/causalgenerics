@@ -23,8 +23,15 @@ own.
 
 ## Installation
 
-causalgenerics is not yet on CRAN. You can install the development
-version from [GitHub](https://github.com/r-causal/causalgenerics) with:
+You can install the released version of causalgenerics from
+[CRAN](https://cran.r-project.org/) with:
+
+``` r
+install.packages("causalgenerics")
+```
+
+You can install the development version from
+[GitHub](https://github.com/r-causal/causalgenerics) with:
 
 ``` r
 # install.packages("pak")
@@ -46,8 +53,8 @@ causalgenerics owns the following generics:
   metadata carried by causal weight vectors.
 
 The generics are intentionally minimal. Method-specific arguments are
-passed through `...`, and the classes themselves live in the packages
-that own them.
+passed through `...`, and the concrete weight classes live in the
+packages that own them.
 
 ## How ecosystem packages depend on it
 
@@ -55,7 +62,3 @@ Packages in the r-causal ecosystem import causalgenerics and register
 their methods against these generics. Because the generic is defined
 once, a user can attach any combination of those packages without one
 masking another.
-
-## Status
-
-causalgenerics is under active development.

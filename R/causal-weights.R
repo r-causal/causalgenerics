@@ -33,6 +33,27 @@
 #' @seealso [new_causal_wts()] for the class these generics have methods for,
 #'   and the `propensity` package for concrete weight classes.
 #'
+#' @examples
+#' wts <- new_causal_wts(
+#'   c(1.2, 0.8, 1.5),
+#'   subclass = "cg_toy_wts",
+#'   estimand = "ate"
+#' )
+#'
+#' is_causal_wt(wts)
+#' estimand(wts)
+#'
+#' # The estimand is metadata on the vector, so it can be replaced in place.
+#' estimand(wts) <- "att"
+#' estimand(wts)
+#'
+#' # An object that is not a causal weight vector reports `FALSE` rather than
+#' # erroring.
+#' is_causal_wt(1:3)
+#'
+#' # `estimand()` has no meaningful default, so it errors instead.
+#' try(estimand(1:3))
+#'
 #' @name causal-weights
 NULL
 

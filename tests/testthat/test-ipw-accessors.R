@@ -366,7 +366,7 @@ test_that("confint() returns the stored bounds at the stored level", {
   # The bounds in the frame are the ones the fitting package reported, and at
   # the level it reported them for they are returned rather than rebuilt. The
   # fixture's stored bounds are rounded to six decimals, so they differ from a
-  # normal recomputation in the ninth; `expect_identical()` is what makes that
+  # normal recomputation in the sixth; `expect_identical()` is what makes that
   # difference matter and separates the two implementations.
   estimates <- binary_estimates()
   res <- ipw_result(estimates)

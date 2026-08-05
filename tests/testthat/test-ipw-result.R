@@ -164,17 +164,45 @@ corrected_outcome_vcov <- function(mod) {
   stats::vcov(mod) * 1.4
 }
 
+# The corrected block labelled in the reverse of the coefficient order, which is
+# the shape a fitting package produces when its stacked system holds the outcome
+# parameters the other way round. The two diagonal entries are far apart, so a
+# table that took the standard errors off the diagonal by position rather than
+# by label would print the intercept's against the slope and the slope's against
+# the intercept, and it would look exactly like a correct table while doing it.
+reversed_outcome_vcov <- function() {
+  matrix(
+    c(0.0625, 0.03125, 0.03125, 0.25),
+    nrow = 2,
+    dimnames = list(c("z", "(Intercept)"), c("z", "(Intercept)"))
+  )
+}
+
+# A block labelled with the parameter names of a stacked system rather than with
+# the model's coefficient names. `new_ipw_model()` takes it, since only the
+# fitting package knows which block of the sandwich belongs to which model, and
+# there is no reading of it against these coefficients.
+theta_outcome_vcov <- function() {
+  matrix(
+    c(0.0625, 0.03125, 0.03125, 0.25),
+    nrow = 2,
+    dimnames = list(c("theta1", "theta2"), c("theta1", "theta2"))
+  )
+}
+
 # A result that presents the conditional reading. `wrap = FALSE` leaves the
 # outcome model as it was fitted, carrying no covariance from the joint
 # estimation, which is the shape `print()` has to report rather than refuse.
-conditional_result <- function(wrap = TRUE) {
+# `vcov` names the block to wrap it with, for the tests that are about which
+# block the table is built from; the default is the corrected one.
+conditional_result <- function(wrap = TRUE, vcov = NULL) {
   mods <- conditional_models()
   outcome_mod <- mods$outcome_mod
   if (wrap) {
-    outcome_mod <- new_ipw_model(
-      outcome_mod,
-      corrected_outcome_vcov(outcome_mod)
-    )
+    if (is.null(vcov)) {
+      vcov <- corrected_outcome_vcov(outcome_mod)
+    }
+    outcome_mod <- new_ipw_model(outcome_mod, vcov)
   }
 
   new_ipw(
@@ -652,6 +680,38 @@ test_that("print() builds the conditional table from the corrected covariance", 
   expect_gt(abs(corrected_se[["z"]] - own_se[["z"]]), 1e-3)
 })
 
+test_that("print() pairs each coefficient with its own standard error", {
+  # The block a fitting package attaches is labelled, and the labels are what
+  # say which coefficient each variance belongs to. A table that took the
+  # standard errors off the diagonal by position instead prints one
+  # coefficient's uncertainty against another's and looks exactly like a
+  # correct table: the column is where it belongs, the numbers are plausible,
+  # and nothing in the output says they were crossed.
+  res <- conditional_result(vcov = reversed_outcome_vcov())
+
+  out <- capture.output(print(res))
+
+  # The block's diagonal is 0.25 for the intercept and 0.0625 for the slope, so
+  # the standard errors are 0.5 and 0.25. Crossed, they would be 0.25 and 0.5.
+  expect_equal(printed_numbers(out, "(Intercept)")[2], 0.5, tolerance = 1e-4)
+  expect_equal(printed_numbers(out, "z")[2], 0.25, tolerance = 1e-4)
+
+  # The z statistic is the estimate over that standard error, so the rest of
+  # the row moves with the pairing and reports a significance that belongs to
+  # neither coefficient.
+  coefficients <- coef(conditional_models()$outcome_mod)
+  expect_equal(
+    printed_numbers(out, "z")[3],
+    unname(coefficients["z"]) / 0.25,
+    tolerance = 1e-4
+  )
+  expect_equal(
+    printed_numbers(out, "(Intercept)")[3],
+    unname(coefficients["(Intercept)"]) / 0.5,
+    tolerance = 1e-4
+  )
+})
+
 test_that("print() reports a conditional result with no corrected covariance", {
   # An outcome model that was not wrapped carries no covariance from the joint
   # estimation, and `vcov()` refuses the reading for that reason. `print()` is
@@ -716,6 +776,111 @@ test_that("print() refuses a conditional result whose wrapper carries nothing", 
     class = "causalgenerics_no_vcov_ipw_model"
   )
   expect_error(capture.output(print(res)), class = "causalgenerics_no_vcov")
+})
+
+test_that("print() refuses a conditional block labelled for other parameters", {
+  # A model that was never wrapped is reported rather than refused: the note
+  # says what is missing and the coefficients are still worth looking at. This
+  # is not that case. The block is there and cannot be read against these
+  # coefficients, so there is no table to write and the note has nothing to
+  # tell the caller, whose model is wrapped already. The condition travels past
+  # the handler and out of `print()` the way a wrapper carrying nothing does.
+  #
+  # `capture.output()` because the error is raised partway down the summary,
+  # and the lines written before it belong in neither the test report nor the
+  # assertion.
+  res <- conditional_result(vcov = theta_outcome_vcov())
+
+  expect_error(
+    capture.output(print(res)),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
+  expect_error(capture.output(print(res)), class = "causalgenerics_no_vcov")
+})
+
+test_that("print() says a conditional result has no coefficients to tabulate", {
+  # An outcome model that reports no coefficients has no rows to tabulate under
+  # this heading. Everything above the table is still the summary of a result
+  # the caller is holding, so it is written, the heading names the reading, and
+  # the reason the table is absent takes its place.
+  res <- new_ipw(
+    estimand = "ate",
+    wt_mod = conditional_models()$wt_mod,
+    outcome_mod = structure(list(), class = "cg_no_coef"),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "conditional"
+  )
+
+  expect_no_error(capture.output(print(res)))
+
+  expect_snapshot(print(res))
+
+  out <- capture.output(print(res))
+
+  expect_match(out, "^Inverse Probability Weight Estimator$", all = FALSE)
+  expect_match(out, "^Conditional estimates \\(outcome model\\):$", all = FALSE)
+
+  # The sentence itself, read out of the output with its line breaks collapsed.
+  # Where the lines are broken is the implementation's to choose; that the
+  # reader is told why the table is missing, in those words, is not.
+  expect_match(
+    paste(trimws(out), collapse = " "),
+    paste0(
+      "The outcome model reports no coefficients, so there is no ",
+      "conditional table to print."
+    ),
+    fixed = TRUE
+  )
+
+  # The metadata block is the one both readings write, so a result with no
+  # table is still a result a caller can look at.
+  expect_match(out[heading_index(out, "Outcome Model:") + 1L], "cg_no_coef")
+})
+
+test_that("print() reports no coefficients without asking for a covariance", {
+  # The guard is on the coefficients, and it runs before the covariance is
+  # looked up. A wrapper carrying nothing raises an error of its own from that
+  # lookup, and a result with no rows to tabulate has no use for a covariance
+  # either way, so reaching for one would refuse a result over a part of it
+  # that nothing was going to read.
+  stripped <- new_ipw(
+    estimand = "ate",
+    wt_mod = conditional_models()$wt_mod,
+    outcome_mod = structure(list(), class = c("ipw_model", "cg_no_coef")),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "conditional"
+  )
+
+  expect_no_error(capture.output(print(stripped)))
+
+  # `coef()` answers `NULL` for the fixture above, through the default method
+  # reading a list element that is not there. A model with a method of its own
+  # reports the same fact as an empty numeric vector, and both are a model with
+  # no coefficients, so the guard is on the length rather than on the value.
+  local_s3_method("coef", "cg_empty_coef", function(object, ...) numeric())
+  empty <- new_ipw(
+    estimand = "ate",
+    wt_mod = conditional_models()$wt_mod,
+    outcome_mod = structure(list(), class = "cg_empty_coef"),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "conditional"
+  )
+
+  expect_no_error(capture.output(print(empty)))
+  expect_match(
+    paste(trimws(capture.output(print(empty))), collapse = " "),
+    paste0(
+      "The outcome model reports no coefficients, so there is no ",
+      "conditional table to print."
+    ),
+    fixed = TRUE
+  )
 })
 
 test_that("print() reads a result with no mode as marginal", {

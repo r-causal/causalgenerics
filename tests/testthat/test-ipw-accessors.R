@@ -201,6 +201,82 @@ corrected_outcome_vcov <- function(mod = outcome_model()) {
   stats::vcov(mod) * 1.4
 }
 
+# The corrected block labelled in the reverse of the coefficient order, which is
+# the shape a fitting package produces when its stacked system holds the outcome
+# parameters the other way round. The labels are what say which coefficient each
+# entry belongs to, so a block read by position rather than by name reports the
+# intercept's variance for the slope and the slope's for the intercept. The two
+# diagonal entries are far apart and their square roots are exact doubles, which
+# is what lets the standard errors below be written down.
+reversed_outcome_vcov <- function() {
+  matrix(
+    c(0.0625, 0.03125, 0.03125, 0.25),
+    nrow = 2,
+    dimnames = list(c("z", "(Intercept)"), c("z", "(Intercept)"))
+  )
+}
+
+# That same block in coefficient order, written out rather than permuted from
+# the fixture above. The reordering is the claim, so restating it with the
+# indexing the implementation uses would assert nothing.
+coefficient_order_vcov <- function() {
+  matrix(
+    c(0.25, 0.03125, 0.03125, 0.0625),
+    nrow = 2,
+    dimnames = list(c("(Intercept)", "z"), c("(Intercept)", "z"))
+  )
+}
+
+# A block labelled with the parameter names of a stacked system rather than with
+# the model's coefficient names. `new_ipw_model()` takes it, deliberately: only
+# the fitting package knows which block of the sandwich belongs to which model,
+# so the constructor checks that both margins are labelled rather than what the
+# labels say. Where the block meets the coefficients is where the pairing has to
+# be made, and there is none to make here.
+theta_outcome_vcov <- function() {
+  matrix(
+    c(0.0625, 0.03125, 0.03125, 0.25),
+    nrow = 2,
+    dimnames = list(c("theta1", "theta2"), c("theta1", "theta2"))
+  )
+}
+
+# A three by three block for a model with two coefficients, labelled with both
+# coefficient names and one more. The extra term is what makes it discriminating:
+# indexing it by the coefficient names alone gives a two by two matrix, so an
+# implementation that only reordered would answer with the covariance of two
+# coefficients of a different fit.
+oversized_outcome_vcov <- function() {
+  matrix(
+    c(0.25, 0.03125, 0, 0.03125, 0.0625, 0, 0, 0, 0.5),
+    nrow = 3,
+    dimnames = list(
+      c("(Intercept)", "z", "x"),
+      c("(Intercept)", "z", "x")
+    )
+  )
+}
+
+# A conditional result whose outcome model reports its coefficients without
+# names, carrying a block that is labelled. The two cannot be paired at all:
+# there is nothing to match the labels against, and matching them by position is
+# what the labels exist to prevent. The class carries no `coef()` method of its
+# own, so the test that uses this registers one.
+unnamed_coef_result <- function() {
+  new_ipw(
+    estimand = "ate",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = new_ipw_model(
+      structure(list(), class = "cg_unnamed_coef"),
+      coefficient_order_vcov()
+    ),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "conditional"
+  )
+}
+
 # A variance object that is not a fitted model: a named parameter vector and its
 # covariance in a bare list, which is the shape an M-estimator from outside the
 # ecosystem can take. `df.residual()` has nothing for it and `$vcov` is right
@@ -1010,6 +1086,112 @@ test_that("vcov() reports the corrected block in the conditional mode", {
   expect_false(identical(vcov(res), binary_vcov()))
 })
 
+test_that("vcov() reorders a conditional block into coefficient order", {
+  # A fitting package labels the block from the stacked system it solved, and
+  # the order the parameters sit in there is its own. The labels are what pair
+  # the block with the coefficients, so the matrix comes back in the order
+  # `coef()` reports and a caller reading the diagonal alongside the
+  # coefficients gets each variance against the coefficient it belongs to.
+  #
+  # The test above is the other half of this: a block already in coefficient
+  # order comes back as attached, so the reordering is skipped rather than
+  # applied to a matrix that needs none.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = reversed_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_identical(vcov(res), coefficient_order_vcov())
+  expect_identical(
+    dimnames(vcov(res)),
+    list(conditional_labels(), conditional_labels())
+  )
+  expect_identical(names(coef(res)), rownames(vcov(res)))
+  # The variance each label names travels with it, which is what separates
+  # reordering the matrix from relabelling it. Relabelling would produce a
+  # matrix that satisfies every assertion about the dimnames while reporting
+  # the intercept's variance for the slope.
+  expect_identical(diag(vcov(res)), c("(Intercept)" = 0.25, "z" = 0.0625))
+  # The block as attached is a different matrix, so the assertions above are
+  # about the reordering rather than about a block that was already in order.
+  expect_false(identical(vcov(res), reversed_outcome_vcov()))
+})
+
+test_that("vcov() refuses a conditional block labelled for other parameters", {
+  # `new_ipw_model()` takes the block's labels on trust, since only the fitting
+  # package knows which block of the sandwich belongs to which model. The
+  # accessor is where they meet the coefficients, and labels that name a
+  # stacked system's parameters cannot be paired with them at all. Pairing by
+  # position instead would report a covariance of something else under this
+  # model's coefficient names, which is the one answer a caller has no way to
+  # check.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = theta_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_error(vcov(res), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
+
+  # Not the refusal the reading raises for a model that was never wrapped,
+  # which says the fitting package attached no block and is answered by
+  # wrapping the model. This model is wrapped and carries a block. The two
+  # conditions share the general class, so telling them apart is a claim about
+  # the specific one.
+  cnd <- tryCatch(vcov(res), error = identity)
+  expect_false(inherits(cnd, "causalgenerics_no_conditional_vcov"))
+
+  # The coefficients are the model's own and need no block to report, so the
+  # pairing is not something `coef()` has to make and this result is still one
+  # a caller can read the estimates of.
+  expect_identical(coef(res), coef(res$outcome_mod))
+
+  expect_snapshot(error = TRUE, vcov(res))
+})
+
+test_that("vcov() refuses a conditional block of the wrong size", {
+  # Three labels for two coefficients: the block of a model with another term
+  # in it. Both coefficient names are among its labels, so an implementation
+  # that indexed by name and stopped there would take the two by two corner and
+  # answer with it, which is the covariance of two coefficients of a different
+  # fit rather than of these.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = oversized_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_error(vcov(res), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+})
+
+test_that("vcov() refuses a conditional block it cannot pair by name", {
+  # A model whose coefficients have no names leaves the labels nothing to match
+  # against. The pairing is unverifiable rather than wrong, and assuming the
+  # positions are it would be the assumption the labels exist to replace.
+  local_s3_method("coef", "cg_unnamed_coef", function(object, ...) {
+    c(-0.847298, 1.694596)
+  })
+  res <- unnamed_coef_result()
+
+  expect_null(names(coef(res)))
+  expect_error(vcov(res), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
+})
+
 test_that("vcov() refuses the conditional mode without a corrected block", {
   # An outcome model that was not wrapped carries no covariance the two-step
   # estimation implies, and there is nothing to fall back on. The model has a
@@ -1086,6 +1268,46 @@ test_that("confint() bounds the outcome coefficients in the conditional mode", {
     ci[, 2],
     setNames(estimate + half_width, conditional_labels())
   )
+})
+
+test_that("confint() pairs a reordered block with its own coefficients", {
+  # The half width of a coefficient's interval is taken from that coefficient's
+  # variance, which is the entry the labels name rather than the entry in its
+  # position. The block's diagonal here is 0.25 for the intercept and 0.0625
+  # for the slope, so the standard errors are 0.5 and 0.25 exactly and the
+  # limits can be written down.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = reversed_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  ci <- confint(res)
+  estimate <- coef(res$outcome_mod)
+  half_width <- qnorm(1 - (1 - 0.95) / 2) * c(0.5, 0.25)
+
+  expect_identical(
+    dimnames(ci),
+    list(conditional_labels(), c("2.5 %", "97.5 %"))
+  )
+  expect_identical(
+    ci[, 1],
+    setNames(estimate - half_width, conditional_labels())
+  )
+  expect_identical(
+    ci[, 2],
+    setNames(estimate + half_width, conditional_labels())
+  )
+
+  # The pairing the positions give is a matrix of the same shape carrying the
+  # same labels, so nothing but the numbers tells the two apart. Here the
+  # intervals it gives are twice and half the width of the right ones.
+  crossed <- qnorm(1 - (1 - 0.95) / 2) * c(0.25, 0.5)
+  expect_false(identical(
+    ci[, 1],
+    setNames(estimate - crossed, conditional_labels())
+  ))
 })
 
 test_that("confint() recomputes in the conditional mode at every level", {

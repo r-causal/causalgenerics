@@ -15,7 +15,9 @@
 #'
 #' The field names and their order are part of the contract, since callers read
 #' fields by name and print the object positionally. `fit` is present on every
-#' path, including the ones that have no fitted variance object to report.
+#' path, including the ones that have no fitted variance object to report, and
+#' `effects` is present whether or not the method that built the result named a
+#' mode.
 #'
 #' `as.data.frame()` returns the `estimates` component. With
 #' `exponentiate = TRUE` it moves the `log(rr)` and `log(or)` rows to their
@@ -33,6 +35,16 @@
 #' and `comparison` pasted together, such as `"rd b vs a"`, when there is. A
 #' categorical exposure repeats each effect measure across its contrasts, so
 #' `effect` alone would name several rows the same thing.
+#'
+#' # The presentation mode
+#'
+#' A result reports its effects in one of two readings, recorded in the
+#' `effects` field. The `"marginal"` reading shows the causal contrast
+#' estimates the method targeted; the `"conditional"` reading presents the
+#' outcome model's coefficient surface. Both surfaces always exist on the
+#' object, so the field says which one the result presents rather than which
+#' one it holds. [as_marginal()] and [as_conditional()] are how a caller moves a
+#' result between them.
 #'
 #' # The covariance of the effects
 #'
@@ -56,9 +68,12 @@
 #' @param se_method The standard error method that ran, such as `"mestimation"`
 #'   or `"linearization"`.
 #' @param fit The fitted variance object, or `NULL` when the method has none.
+#' @param effects The presentation mode the result reports its effects in,
+#'   either `"marginal"` or `"conditional"`. A method that names no mode reports
+#'   marginal effects.
 #'
 #' @return `new_ipw()` returns an S3 object of class `ipw`: a list of the
-#'   following six components, in this order.
+#'   following seven components, in this order.
 #' \describe{
 #'   \item{`estimand`}{The causal estimand, such as `"ate"` or `"att"`.}
 #'   \item{`wt_mod`}{The weighting object: the fitted model that produced the
@@ -76,12 +91,18 @@
 #'   \item{`fit`}{The fitted object the variance estimator produced, or `NULL`.
 #'     A method that stacks estimating equations records the M-estimator here;
 #'     the linearization path has no such object and records `NULL`.}
+#'   \item{`effects`}{The presentation mode, either `"marginal"` or
+#'     `"conditional"`. The marginal reading shows the causal contrast
+#'     estimates and the conditional reading presents the outcome model's
+#'     coefficient surface; both surfaces exist on every result. See
+#'     [as_marginal()] and [as_conditional()].}
 #' }
 #'
 #'   `print()` returns its input invisibly. `as.data.frame()` returns the
 #'   `estimates` component as a data frame.
 #'
-#' @seealso [ipw()], the generic these results come from.
+#' @seealso [ipw()], the generic these results come from, and [as_marginal()]
+#'   and [as_conditional()] for the presentation mode.
 #'
 #' @export
 #'
@@ -118,7 +139,20 @@
 #'
 #' # The ratios on their natural scale.
 #' as.data.frame(res, exponentiate = TRUE)
-new_ipw <- function(estimand, wt_mod, outcome_mod, estimates, se_method, fit) {
+new_ipw <- function(
+  estimand,
+  wt_mod,
+  outcome_mod,
+  estimates,
+  se_method,
+  fit,
+  effects = "marginal"
+) {
+  # The mode is the one field with a fixed set of values, and a misspelling
+  # stored unchecked would sit in the result until something downstream branched
+  # on it and took the branch neither reading names.
+  check_ipw_effects(effects)
+
   structure(
     list(
       estimand = estimand,
@@ -126,7 +160,8 @@ new_ipw <- function(estimand, wt_mod, outcome_mod, estimates, se_method, fit) {
       outcome_mod = outcome_mod,
       estimates = estimates,
       se_method = se_method,
-      fit = fit
+      fit = fit,
+      effects = effects
     ),
     class = "ipw"
   )

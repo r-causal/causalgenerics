@@ -1,3 +1,19 @@
+# the effects error states the contract
+
+    Code
+      ipw_with_effects("everything")
+    Condition
+      Error in `new_ipw()`:
+      ! `effects` must be a single string, either "marginal" or "conditional".
+
+---
+
+    Code
+      ipw_with_effects(c("marginal", "conditional"))
+    Condition
+      Error in `new_ipw()`:
+      ! `effects` must be a single string, either "marginal" or "conditional".
+
 # print() summarizes a binary-exposure result
 
     Code

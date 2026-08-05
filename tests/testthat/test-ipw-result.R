@@ -293,6 +293,12 @@ test_that("new_ipw() rejects an effects value that is not a single string", {
     ipw_with_effects(c("marginal", "marginal")),
     class = "causalgenerics_invalid_argument_effects"
   )
+  # `NULL` is not a single string either, and a result that stored it would
+  # record no mode at all.
+  expect_error(
+    ipw_with_effects(NULL),
+    class = "causalgenerics_invalid_argument_effects"
+  )
 })
 
 test_that("the effects error states the contract", {

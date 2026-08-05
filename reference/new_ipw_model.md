@@ -113,5 +113,5 @@ vcov(wrapped)
 # Everything else about the model reaches its own methods.
 coef(wrapped)
 #>  (Intercept)            z 
-#> 3.919028e-01 1.012353e-15 
+#> 3.919028e-01 6.859992e-16 
 ```

@@ -8,6 +8,9 @@ produces no masking.
 
 - [`ipw()`](https://r-causal.github.io/causalgenerics/reference/ipw.md)
   : Inverse probability weighted estimation
+- [`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  [`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  : The presentation mode of an inverse probability weighted result
 - [`ess()`](https://r-causal.github.io/causalgenerics/reference/ess.md)
   : Effective sample size
 - [`is_causal_wt()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)

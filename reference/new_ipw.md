@@ -10,7 +10,15 @@ validated.
 ## Usage
 
 ``` r
-new_ipw(estimand, wt_mod, outcome_mod, estimates, se_method, fit)
+new_ipw(
+  estimand,
+  wt_mod,
+  outcome_mod,
+  estimates,
+  se_method,
+  fit,
+  effects = "marginal"
+)
 
 # S3 method for class 'ipw'
 print(x, ...)
@@ -47,6 +55,12 @@ as.data.frame(x, row.names = NULL, optional = NULL, exponentiate = FALSE, ...)
 
   The fitted variance object, or `NULL` when the method has none.
 
+- effects:
+
+  The presentation mode the result reports its effects in, either
+  `"marginal"` or `"conditional"`. A method that names no mode reports
+  marginal effects.
+
 - x:
 
   An `ipw` object.
@@ -74,7 +88,7 @@ as.data.frame(x, row.names = NULL, optional = NULL, exponentiate = FALSE, ...)
 ## Value
 
 `new_ipw()` returns an S3 object of class `ipw`: a list of the following
-six components, in this order.
+seven components, in this order.
 
 - `estimand`:
 
@@ -109,6 +123,16 @@ six components, in this order.
   that stacks estimating equations records the M-estimator here; the
   linearization path has no such object and records `NULL`.
 
+- `effects`:
+
+  The presentation mode, either `"marginal"` or `"conditional"`. The
+  marginal reading shows the causal contrast estimates and the
+  conditional reading presents the outcome model's coefficient surface;
+  both surfaces exist on every result. See
+  [`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  and
+  [`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md).
+
 [`print()`](https://rdrr.io/r/base/print.html) returns its input
 invisibly.
 [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) returns
@@ -129,7 +153,13 @@ which is the situation this package exists to prevent.
 The field names and their order are part of the contract, since callers
 read fields by name and print the object positionally. `fit` is present
 on every path, including the ones that have no fitted variance object to
-report.
+report, and `effects` is present whether or not the method that built
+the result named a mode.
+
+[`print()`](https://rdrr.io/r/base/print.html) writes the estimand and
+the call of each component model, then the table of the surface the
+result's presentation mode names. The section below describes the two
+modes and what each one tabulates.
 
 [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) returns
 the `estimates` component. With `exponentiate = TRUE` it moves the
@@ -153,6 +183,33 @@ pasted together, such as `"rd b vs a"`, when there is. A categorical
 exposure repeats each effect measure across its contrasts, so `effect`
 alone would name several rows the same thing.
 
+## The presentation mode
+
+A result reports its effects in one of two readings, recorded in the
+`effects` field. The `"marginal"` reading shows the causal contrast
+estimates the method targeted; the `"conditional"` reading presents the
+outcome model's coefficient surface. Both surfaces always exist on the
+object, so the field says which one the result presents rather than
+which one it holds.
+[`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+and
+[`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+are how a caller moves a result between them.
+
+A printed result names its mode twice, since the two readings are
+different tables of different numbers: once on an `Effects:` line beside
+the estimand, and once in the heading of the table itself. The marginal
+reading tabulates the effect estimates the result stores, under
+`Marginal estimates:`. The conditional reading tabulates the outcome
+model's coefficients, under `Conditional estimates (outcome model):`,
+with the standard errors implied by the corrected covariance a fitting
+package attaches through
+[`new_ipw_model()`](https://r-causal.github.io/causalgenerics/reference/new_ipw_model.md).
+An outcome model that carries no such covariance is still printed: the
+coefficients are written on their own, followed by a note saying that no
+covariance from the joint estimation is recorded, rather than beside the
+standard errors the model computed for itself.
+
 ## The covariance of the effects
 
 A method that can compute the covariance of the effects it reports
@@ -170,7 +227,11 @@ effects estimated from the same weighted means.
 ## See also
 
 [`ipw()`](https://r-causal.github.io/causalgenerics/reference/ipw.md),
-the generic these results come from.
+the generic these results come from, and
+[`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+and
+[`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+for the presentation mode.
 
 ## Examples
 
@@ -206,6 +267,7 @@ res <- new_ipw(
 res
 #> Inverse Probability Weight Estimator
 #> Estimand: ATE 
+#> Effects: marginal (population-averaged) 
 #> 
 #> Weight Estimator:
 #>   Call: glm(formula = z ~ x, family = binomial(), data = dat) 
@@ -213,7 +275,7 @@ res
 #> Outcome Model:
 #>   Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
 #> 
-#> Estimates:
+#> Marginal estimates:
 #>         estimate  std.err      z ci.lower ci.upper conf.level p.value  
 #> rd      0.199882 0.092425 2.1626 0.018732  0.38103       0.95 0.03057 *
 #> log(rr) 0.560414 0.273519 2.0489 0.024326  1.09650       0.95 0.04047 *

@@ -165,6 +165,7 @@ constructing through <code><a href="new_ipw.html">new_ipw()</a></code> is also w
 <span class="r-in"><span><span class="fu">ipw</span><span class="op">(</span><span class="va">wt_mod</span>, <span class="va">outcome_mod</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Inverse Probability Weight Estimator</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Estimand: ATE </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Effects: marginal (population-averaged) </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Weight Estimator:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   Call: &lt;cg_toy_model&gt; </span>
@@ -172,7 +173,7 @@ constructing through <code><a href="new_ipw.html">new_ipw()</a></code> is also w
 <span class="r-out co"><span class="r-pr">#&gt;</span> Outcome Model:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   Call: lm(formula = y ~ z, data = dat, weights = wt_mod$wts) </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Estimates:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Marginal estimates:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    estimate std.err      z ci.lower ci.upper conf.level p.value</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> rd  0.25000 0.22822 1.0954  -0.1973   0.6973       0.95  0.2733</span>
 </code></pre></div>

@@ -122,6 +122,7 @@ outcome_mod <- lm(y ~ z, data = dat, weights = wt_mod$wts)
 ipw(wt_mod, outcome_mod)
 #> Inverse Probability Weight Estimator
 #> Estimand: ATE 
+#> Effects: marginal (population-averaged) 
 #> 
 #> Weight Estimator:
 #>   Call: <cg_toy_model> 
@@ -129,7 +130,7 @@ ipw(wt_mod, outcome_mod)
 #> Outcome Model:
 #>   Call: lm(formula = y ~ z, data = dat, weights = wt_mod$wts) 
 #> 
-#> Estimates:
+#> Marginal estimates:
 #>    estimate std.err      z ci.lower ci.upper conf.level p.value
 #> rd  0.25000 0.22822 1.0954  -0.1973   0.6973       0.95  0.2733
 ```

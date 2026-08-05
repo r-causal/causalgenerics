@@ -76,13 +76,13 @@ variance object.</p></li>
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># S3 method for class 'ipw'</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span>, effects <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S3 method for class 'ipw'</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span>, effects <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S3 method for class 'ipw'</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">parm</span>, level <span class="op">=</span> <span class="fl">0.95</span>, <span class="va">...</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">parm</span>, level <span class="op">=</span> <span class="fl">0.95</span>, <span class="va">...</span>, effects <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S3 method for class 'ipw'</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span><span class="op">)</span></span>
@@ -106,9 +106,17 @@ variance object.</p></li>
 <dd><p>Further arguments. These methods ignore them.</p></dd>
 
 
+<dt id="arg-effects">effects<a class="anchor" aria-label="anchor" href="#arg-effects"></a></dt>
+<dd><p>The reading to report, either <code>"marginal"</code> or
+<code>"conditional"</code>. <code>NULL</code>, the default, reports the reading the result
+records; any other value overrides it for the one call and leaves the
+result as it is.</p></dd>
+
+
 <dt id="arg-parm">parm<a class="anchor" aria-label="anchor" href="#arg-parm"></a></dt>
-<dd><p>The effects to report an interval for, given either as effect
-labels or as their positions in the result. Missing means all of them.</p></dd>
+<dd><p>The rows to report an interval for, given either as the labels
+of the reported surface or as their positions in it. Missing means all of
+them.</p></dd>
 
 
 <dt id="arg-level">level<a class="anchor" aria-label="anchor" href="#arg-level"></a></dt>
@@ -119,18 +127,30 @@ limits are returned; at any other level they are recomputed.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p><code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> returns a named numeric vector of effect estimates, one element per
-row of the <code>estimates</code> frame, named by effect label.</p>
+row of the <code>estimates</code> frame, named by effect label. In the conditional
+reading it returns the outcome model's coefficients as that model reports
+them, names included.</p>
 <p><code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> returns the square numeric covariance matrix of those estimates,
 with the effect labels as dimnames on both margins, exactly as the fitting
 package attached it. A result that records no such matrix raises an error of
 class <code>causalgenerics_no_vcov</code> rather than returning one built from the
-standard errors, which would report the effects as uncorrelated.</p>
+standard errors, which would report the effects as uncorrelated. In the
+conditional reading it returns the corrected covariance of the outcome
+model's coefficients, and an outcome model that carries none raises an error
+of class <code>causalgenerics_no_conditional_vcov</code>.</p>
 <p><code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> returns a matrix with one row per effect <code>parm</code> selects, in the
 order <code>parm</code> gives them, and two columns holding the lower and upper limit.
 The rows are named by effect label and the columns by the two tail
 probabilities as percentages, the way the <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> methods in <span class="pkg">stats</span>
 name theirs. A character <code>parm</code> that names an effect the result does not
-report raises an error of class <code>causalgenerics_invalid_argument</code>.</p>
+report raises an error of class <code>causalgenerics_invalid_argument</code>. In the
+conditional reading the rows are the outcome model's coefficients, which
+<code>parm</code> names and indexes in the same two ways, and the limits are the normal
+ones built from the corrected covariance at every level, since the limits the
+result stores belong to the effects the marginal reading reports.</p>
+<p><code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code>, <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code>, and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> raise an error of class
+<code>causalgenerics_invalid_argument_effects</code> when <code>effects</code> names neither
+reading, and when the result's own field does.</p>
 <p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code> returns a single integer, the number of observations the outcome
 model was fitted on, which is the number the estimates were computed from and
 not necessarily the number the weighting model saw.</p>
@@ -148,7 +168,8 @@ registering <code>coef.ipw()</code> would collide in the shared S3 method table,
 caller writing against a result would then get whichever package was
 installed last rather than the contract.</p>
 <p>Everything they read is part of the <code><a href="new_ipw.html">new_ipw()</a></code> contract: the <code>estimates</code>
-frame, the <code>ipw_vcov</code> attribute attached to it, <code>outcome_mod</code>, and <code>fit</code>.
+frame, the <code>ipw_vcov</code> attribute attached to it, <code>outcome_mod</code>, <code>fit</code>, and the
+<code>effects</code> field the section below describes.
 They never branch on <code>se_method</code>, since the fields they read already hold the
 result of whatever computation that names, and they reach into <code>fit</code> only
 through ordinary S3 dispatch. A package whose variance object is a bare list
@@ -156,6 +177,29 @@ rather than a fitted model therefore uses them unchanged.</p>
 <p>Rows are named by the effect labels the <code><a href="new_ipw.html">new_ipw()</a></code> contract defines, so the
 name <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> gives an estimate is the one <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> use for
 it and the one <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> labels its row with.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="the-reading-these-methods-report">The reading these methods report<a class="anchor" aria-label="anchor" href="#the-reading-these-methods-report"></a></h2>
+    <p><code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code>, <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code>, and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> report the surface the result's <code>effects</code>
+field names, and take an <code>effects</code> argument that names one for a single call.
+The marginal reading is the causal contrast estimates, which is what these
+methods reported before the field existed and what a result that records no
+mode still reports. The conditional reading is the outcome model's
+coefficient surface: <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> gives the model's coefficients, <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> gives
+their covariance, and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> bounds them.</p>
+<p>The covariance the conditional reading reports is the block of the joint
+estimation that the fitting package attached with <code><a href="new_ipw_model.html">new_ipw_model()</a></code>, never
+the one the outcome model computed for itself. A model fitted as though its
+weights were fixed understates its uncertainty, because the weights were
+estimated from the same data, so there is nothing to fall back on when no
+corrected block is there. <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> raise an error of class
+<code>causalgenerics_no_conditional_vcov</code> instead, which the package that produced
+the result answers by wrapping the outcome model with <code><a href="new_ipw_model.html">new_ipw_model()</a></code>
+before it builds the result. <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> needs no such block and reports the
+coefficients either way.</p>
+<p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code>, <code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code>, and <code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code> describe the fit rather than a
+surface of it, so they answer the same way in either reading and take no
+<code>effects</code> argument.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -231,6 +275,48 @@ it and the one <code><a href="https://rdrr.io/r/base/print.html" class="external
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights</a></span><span class="op">(</span><span class="va">res</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1.785796 2.272594 1.785796 2.272594 1.785796 2.083669</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># The conditional reading reports the outcome model's coefficient surface</span></span></span>
+<span class="r-in"><span><span class="co"># rather than the effects.</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">res</span>, effects <span class="op">=</span> <span class="st">"conditional"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  (Intercept)            z </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3.919028e-01 6.859992e-16 </span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Its covariance is the corrected block a fitting package attaches to the</span></span></span>
+<span class="r-in"><span><span class="co"># outcome model. This one carries none, and the covariance the model computed</span></span></span>
+<span class="r-in"><span><span class="co"># for itself is not a substitute: it treats the estimated weights as fixed.</span></span></span>
+<span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/try.html" class="external-link">try</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">res</span>, effects <span class="op">=</span> <span class="st">"conditional"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Error in vcov.ipw(res, effects = "conditional") : </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   The conditional reading reports the covariance the joint estimation of the weights and the outcome implies, and this result's outcome model records none; the package that produced the result attaches one by wrapping the model with `new_ipw_model()`.</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="va">outcome_mod</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/glm.html" class="external-link">glm</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">z</span>, family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">quasibinomial</a></span><span class="op">(</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">dat</span>, weights <span class="op">=</span> <span class="va">wts</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Standing in for the outcome block of a stacked sandwich, which a method</span></span></span>
+<span class="r-in"><span><span class="co"># computes from the estimating equations of both steps.</span></span></span>
+<span class="r-in"><span><span class="va">corrected</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">outcome_mod</span><span class="op">)</span> <span class="op">*</span> <span class="fl">1.4</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="va">conditional</span> <span class="op">&lt;-</span> <span class="fu"><a href="ipw-modes.html">as_conditional</a></span><span class="op">(</span><span class="fu"><a href="new_ipw.html">new_ipw</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  estimand <span class="op">=</span> <span class="st">"ate"</span>,</span></span>
+<span class="r-in"><span>  wt_mod <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/glm.html" class="external-link">glm</a></span><span class="op">(</span><span class="va">z</span> <span class="op">~</span> <span class="va">x</span>, family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  outcome_mod <span class="op">=</span> <span class="fu"><a href="new_ipw_model.html">new_ipw_model</a></span><span class="op">(</span><span class="va">outcome_mod</span>, <span class="va">corrected</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  estimates <span class="op">=</span> <span class="va">estimates</span>,</span></span>
+<span class="r-in"><span>  se_method <span class="op">=</span> <span class="st">"linearization"</span>,</span></span>
+<span class="r-in"><span>  fit <span class="op">=</span> <span class="cn">NULL</span></span></span>
+<span class="r-in"><span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># A result that records the conditional reading answers in it with nothing</span></span></span>
+<span class="r-in"><span><span class="co"># named at the call site.</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">conditional</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  (Intercept)            z </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3.919028e-01 6.859992e-16 </span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">conditional</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>             (Intercept)         z</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)    0.646421 -0.646421</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> z             -0.646421  1.292842</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">conditional</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                 2.5 %   97.5 %</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept) -1.183914 1.967720</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> z           -2.228542 2.228542</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

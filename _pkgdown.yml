@@ -21,5 +21,7 @@ reference:
     own.
   contents:
   - new_ipw
+  - new_ipw_model
+  - ipw-accessors
   - new_causal_wts
   - causal_wts_ptype2

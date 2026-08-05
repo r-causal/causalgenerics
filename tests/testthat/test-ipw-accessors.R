@@ -664,6 +664,34 @@ test_that("confint() selects rows by position", {
   )
 })
 
+test_that("confint() gives a numeric parm its ordinary subscript meaning", {
+  # Positions are indexed rather than matched, so a numeric `parm` reads the way
+  # a subscript reads everywhere else. Zero selects nothing and a negative
+  # position drops the row it names. An implementation that accepted only
+  # positive positions in range would refuse both, and a caller who reached for
+  # either would be told the surface does not have a row it does have.
+  estimates <- binary_estimates()
+  res <- ipw_result(estimates)
+
+  none <- confint(res, parm = 0)
+
+  expect_true(is.matrix(none))
+  expect_identical(dim(none), c(0L, 2L))
+  # An empty selection is still a labelled matrix, so a caller who built one
+  # from a filter that matched nothing can read its columns or bind it to
+  # another without treating the case apart.
+  expect_identical(colnames(none), c("2.5 %", "97.5 %"))
+
+  dropped <- confint(res, parm = -1)
+
+  expect_identical(dim(dropped), c(2L, 2L))
+  expect_identical(rownames(dropped), c("log(rr)", "log(or)"))
+  expect_identical(
+    dropped[, 1],
+    setNames(estimates$ci.lower[c(2, 3)], c("log(rr)", "log(or)"))
+  )
+})
+
 test_that("confint() selects a categorical row by its full label", {
   # The label is effect and comparison together, so `parm = "rd"` names nothing
   # in a categorical result even though `rd` is a value of the `effect` column.
@@ -705,6 +733,46 @@ test_that("confint() errors on labels the result does not have", {
 
   expect_snapshot(error = TRUE, confint(res, parm = "rr"))
   expect_snapshot(error = TRUE, confint(res, parm = c("rd", "rr")))
+})
+
+test_that("confint() errors on positions the result does not have", {
+  # The other half of the same guard. A position past the last row indexes
+  # nothing, and letting it through would give back a row of `NA` limits under
+  # an `NA` label, which reads as an effect that was estimated and came out
+  # unknown rather than as a subscript that named nothing. The message names the
+  # range rather than the labels, since a caller who wrote a number is working
+  # from the positions.
+  res <- ipw_result(binary_estimates())
+
+  expect_error(
+    confint(res, parm = 99),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  expect_error(
+    confint(res, parm = 99),
+    class = "causalgenerics_invalid_argument"
+  )
+  # A real position beside one past the end is refused as well, for the reason a
+  # mix of labels is: the position that matched does not make the request
+  # answerable.
+  expect_error(
+    confint(res, parm = c(1, 99)),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  # `NA` reaches this branch too, and it is the subscript that would go furthest
+  # unnoticed. A logical `NA` recycles to the length of the surface, so indexing
+  # with it gives one `NA` row per effect: a matrix of exactly the shape a
+  # caller expects, holding nothing.
+  expect_error(
+    confint(res, parm = NA),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  expect_error(
+    confint(res, parm = NA_integer_),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+
+  expect_snapshot(error = TRUE, confint(res, parm = 99))
 })
 
 # ---- nobs.ipw() and df.residual.ipw() ----------------------------------------
@@ -789,6 +857,28 @@ test_that("df.residual() converts a fit's answer to an integer safely", {
     fit = structure(list(), class = "cg_empty_df")
   )
   expect_identical(df.residual(empty), NA_integer_)
+})
+
+test_that("df.residual() reports a fractional answer as it stands", {
+  # Residual degrees of freedom are not always a whole number. A fit that spends
+  # a fractional count on penalized or smooth terms reports one, and so does a
+  # small-sample correction, so `12.4` is what the variance object has to say
+  # rather than an imprecise way of saying `12`. Truncating it reports a fit that
+  # spent 0.4 more parameters than it did, and nothing in the returned value
+  # would say the number had been altered on the way out.
+  #
+  # The whole-number cases are unchanged and are pinned in the test above, where
+  # `12` comes back as `12L` and `Inf` and `numeric()` come back as
+  # `NA_integer_`. This is the one answer that has no integer to become.
+  local_s3_method("df.residual", "cg_fractional_df", function(object, ...) 12.4)
+
+  res <- ipw_result(
+    binary_estimates(),
+    fit = structure(list(), class = "cg_fractional_df")
+  )
+
+  expect_identical(df.residual(res), 12.4)
+  expect_type(df.residual(res), "double")
 })
 
 # ---- weights.ipw() -----------------------------------------------------------
@@ -1385,6 +1475,30 @@ test_that("confint() selects conditional rows by position and by name", {
       c("z", "(Intercept)")
     )
   )
+})
+
+test_that("confint() empties a conditional selection the same way", {
+  # A subscript means the same thing in either reading. The two build their
+  # limits in different places in the method, so an empty selection that came
+  # back as a labelled matrix in one and as something else in the other would be
+  # a difference a caller who switched modes would meet with nothing to warn
+  # them.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  none <- confint(res, parm = 0)
+
+  expect_true(is.matrix(none))
+  expect_identical(dim(none), c(0L, 2L))
+  expect_identical(colnames(none), c("2.5 %", "97.5 %"))
+  # The surface it emptied is the coefficient one: two rows rather than the
+  # three effects the other reading reports, so the assertions above are about
+  # this reading rather than about a result that answered in the other.
+  expect_identical(dim(confint(res)), c(2L, 2L))
 })
 
 test_that("confint() refuses a conditional parm the outcome model lacks", {

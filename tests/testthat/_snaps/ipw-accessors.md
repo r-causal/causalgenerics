@@ -22,6 +22,14 @@
       Error in `confint.ipw()`:
       ! `parm` must name effects the result reports, which are "rd", "log(rr)", "log(or)".
 
+# confint() errors on positions the result does not have
+
+    Code
+      confint(res, parm = 99)
+    Condition
+      Error in `confint.ipw()`:
+      ! `parm` must index effects the result reports, numbered 1 to 3.
+
 # estimand<-() has no method for a result
 
     Code

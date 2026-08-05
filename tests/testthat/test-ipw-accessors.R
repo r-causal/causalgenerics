@@ -1066,6 +1066,29 @@ test_that("the effects argument overrides the mode a result records", {
   )
 })
 
+test_that("the effects argument reaches parm and level in the same call", {
+  # The three arguments are independent, and a caller who names all of them
+  # names the surface, the rows of it, and the width at once. The mode reaches
+  # `confint()` through an argument here rather than through the field, so an
+  # implementation that resolved it after selecting the rows would select from
+  # the wrong surface and the level would be applied to the wrong estimates.
+  corrected <- corrected_outcome_vcov()
+  marginal <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected
+  )
+  half_width <- qnorm(1 - (1 - 0.9) / 2) * sqrt(diag(corrected))
+  estimate <- coef(marginal$outcome_mod)
+
+  ci <- confint(marginal, parm = "z", level = 0.9, effects = "conditional")
+
+  expect_identical(dim(ci), c(1L, 2L))
+  expect_identical(dimnames(ci), list("z", c("5 %", "95 %")))
+  expect_identical(ci[1, 1], unname(estimate - half_width)[2])
+  expect_identical(ci[1, 2], unname(estimate + half_width)[2])
+})
+
 test_that("a NULL effects argument declines to override", {
   # `NULL` is the default, and it means the caller named no reading rather than
   # naming a third one. Passing it through from a wrapper that computes an

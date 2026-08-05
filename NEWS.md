@@ -1,5 +1,21 @@
 # causalgenerics (development version)
 
+* `coef()`, `vcov()`, and `confint()` on an `ipw` result report the reading the
+  `effects` field records, and each gains an `effects` argument that names a
+  reading for one call without changing the result. The conditional reading
+  reports the outcome model's coefficient surface: its coefficients, the
+  covariance the joint estimation of the weights and the outcome implies, and
+  the normal limits built from that covariance. `nobs()`, `df.residual()`, and
+  `weights()` describe the fit rather than a surface of it and answer the same
+  way in either reading.
+
+* `vcov()` and `confint()` refuse the conditional reading when the outcome model
+  carries no corrected covariance, with an error of class
+  `causalgenerics_no_conditional_vcov`. The covariance a weighted model computes
+  for itself treats the estimated weights as fixed, so it is not a substitute; a
+  fitting package supplies the corrected block by wrapping the outcome model
+  with `new_ipw_model()`.
+
 * `new_ipw()` gains an `effects` argument, stored as a seventh field, recording
   which reading a result presents: `"marginal"` for the causal contrast
   estimates or `"conditional"` for the outcome model's coefficient surface. A

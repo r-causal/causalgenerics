@@ -62,3 +62,29 @@ stop_no_vcov <- function(result, call = sys.call(-1)) {
     call = call
   ))
 }
+
+# Signal that the conditional reading has no covariance to report, because the
+# outcome model carries none from the joint estimation. The classes follow
+# `stop_no_vcov()`, whose general class this one also carries: a handler written
+# for any covariance this package cannot report catches both, and a handler
+# written for the conditional reading tells them apart. The specific class is
+# keyed to the reading rather than to the result class, since it is the reading
+# that cannot be answered. There is no fallback to offer: the covariance the
+# outcome model computed for itself treats the estimated weights as fixed and
+# reports an uncertainty the coefficients do not have.
+stop_no_conditional_vcov <- function(call = sys.call(-1)) {
+  message <- paste0(
+    "The conditional reading reports the covariance the joint estimation of ",
+    "the weights and the outcome implies, and this result's outcome model ",
+    "records none; the package that produced the result attaches one by ",
+    "wrapping the model with `new_ipw_model()`."
+  )
+  stop(errorCondition(
+    message,
+    class = c(
+      "causalgenerics_no_conditional_vcov",
+      "causalgenerics_no_vcov"
+    ),
+    call = call
+  ))
+}

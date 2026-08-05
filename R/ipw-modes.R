@@ -125,16 +125,24 @@ as_conditional.default <- function(x, ...) {
 #' method produced when neither did, so both are read as marginal rather than
 #' refused.
 #'
+#' A field holding anything else was assigned to directly, which is outside the
+#' contract the constructor and the mode generics keep. It is refused here
+#' rather than passed on, so that a caller reading the mode gets one of the two
+#' readings or an error and never a third thing to branch on.
+#'
 #' @param object An `ipw` object.
+#' @param call The call to report an invalid stored mode against, which is the
+#'   accessor's rather than this helper's.
 #'
 #' @return A single string, either `"marginal"` or `"conditional"`.
 #'
 #' @noRd
-ipw_effects <- function(object) {
+ipw_effects <- function(object, call = sys.call(-1)) {
   effects <- object$effects
   if (is.null(effects)) {
     return("marginal")
   }
+  check_ipw_effects(effects, call = call)
   effects
 }
 
@@ -144,6 +152,11 @@ ipw_effects <- function(object) {
 #' names, and the mode the result records when the caller names none. `NULL` is
 #' therefore how a caller declines to override, and any other value has to meet
 #' the contract the constructor holds its own argument to.
+#'
+#' A named mode says which surface to report, so the stored field is not read at
+#' all in that case. A result whose field was assigned to directly is therefore
+#' still readable by naming a mode, and reading it without naming one is refused
+#' where the field is read.
 #'
 #' @param object An `ipw` object.
 #' @param effects The `effects` argument as the caller supplied it, or `NULL`.
@@ -155,7 +168,7 @@ ipw_effects <- function(object) {
 #' @noRd
 resolve_ipw_effects <- function(object, effects, call = sys.call(-1)) {
   if (is.null(effects)) {
-    return(ipw_effects(object))
+    return(ipw_effects(object, call = call))
   }
   check_ipw_effects(effects, call = call)
   effects

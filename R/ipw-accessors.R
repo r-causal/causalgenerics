@@ -20,7 +20,8 @@
 #' installed last rather than the contract.
 #'
 #' Everything they read is part of the [new_ipw()] contract: the `estimates`
-#' frame, the `ipw_vcov` attribute attached to it, `outcome_mod`, and `fit`.
+#' frame, the `ipw_vcov` attribute attached to it, `outcome_mod`, `fit`, and the
+#' `effects` field the section below describes.
 #' They never branch on `se_method`, since the fields they read already hold the
 #' result of whatever computation that names, and they reach into `fit` only
 #' through ordinary S3 dispatch. A package whose variance object is a bare list
@@ -30,29 +31,72 @@
 #' name `coef()` gives an estimate is the one `vcov()` and `confint()` use for
 #' it and the one `print()` labels its row with.
 #'
+#' # The reading these methods report
+#'
+#' `coef()`, `vcov()`, and `confint()` report the surface the result's `effects`
+#' field names, and take an `effects` argument that names one for a single call.
+#' The marginal reading is the causal contrast estimates, which is what these
+#' methods reported before the field existed and what a result that records no
+#' mode still reports. The conditional reading is the outcome model's
+#' coefficient surface: `coef()` gives the model's coefficients, `vcov()` gives
+#' their covariance, and `confint()` bounds them.
+#'
+#' The covariance the conditional reading reports is the block of the joint
+#' estimation that the fitting package attached with [new_ipw_model()], never
+#' the one the outcome model computed for itself. A model fitted as though its
+#' weights were fixed understates its uncertainty, because the weights were
+#' estimated from the same data, so there is nothing to fall back on when no
+#' corrected block is there. `vcov()` and `confint()` raise an error of class
+#' `causalgenerics_no_conditional_vcov` instead, which the package that produced
+#' the result answers by wrapping the outcome model with [new_ipw_model()]
+#' before it builds the result. `coef()` needs no such block and reports the
+#' coefficients either way.
+#'
+#' `nobs()`, `df.residual()`, and `weights()` describe the fit rather than a
+#' surface of it, so they answer the same way in either reading and take no
+#' `effects` argument.
+#'
 #' @param object An `ipw` object.
-#' @param parm The effects to report an interval for, given either as effect
-#'   labels or as their positions in the result. Missing means all of them.
+#' @param parm The rows to report an interval for, given either as the labels
+#'   of the reported surface or as their positions in it. Missing means all of
+#'   them.
 #' @param level The confidence level. At the level the result stores, its own
 #'   limits are returned; at any other level they are recomputed.
+#' @param effects The reading to report, either `"marginal"` or
+#'   `"conditional"`. `NULL`, the default, reports the reading the result
+#'   records; any other value overrides it for the one call and leaves the
+#'   result as it is.
 #' @param ... Further arguments. These methods ignore them.
 #'
 #' @return
 #' `coef()` returns a named numeric vector of effect estimates, one element per
-#' row of the `estimates` frame, named by effect label.
+#' row of the `estimates` frame, named by effect label. In the conditional
+#' reading it returns the outcome model's coefficients as that model reports
+#' them, names included.
 #'
 #' `vcov()` returns the square numeric covariance matrix of those estimates,
 #' with the effect labels as dimnames on both margins, exactly as the fitting
 #' package attached it. A result that records no such matrix raises an error of
 #' class `causalgenerics_no_vcov` rather than returning one built from the
-#' standard errors, which would report the effects as uncorrelated.
+#' standard errors, which would report the effects as uncorrelated. In the
+#' conditional reading it returns the corrected covariance of the outcome
+#' model's coefficients, and an outcome model that carries none raises an error
+#' of class `causalgenerics_no_conditional_vcov`.
 #'
 #' `confint()` returns a matrix with one row per effect `parm` selects, in the
 #' order `parm` gives them, and two columns holding the lower and upper limit.
 #' The rows are named by effect label and the columns by the two tail
 #' probabilities as percentages, the way the `confint()` methods in \pkg{stats}
 #' name theirs. A character `parm` that names an effect the result does not
-#' report raises an error of class `causalgenerics_invalid_argument`.
+#' report raises an error of class `causalgenerics_invalid_argument`. In the
+#' conditional reading the rows are the outcome model's coefficients, which
+#' `parm` names and indexes in the same two ways, and the limits are the normal
+#' ones built from the corrected covariance at every level, since the limits the
+#' result stores belong to the effects the marginal reading reports.
+#'
+#' `coef()`, `vcov()`, and `confint()` raise an error of class
+#' `causalgenerics_invalid_argument_effects` when `effects` names neither
+#' reading, and when the result's own field does.
 #'
 #' `nobs()` returns a single integer, the number of observations the outcome
 #' model was fitted on, which is the number the estimates were computed from and
@@ -124,13 +168,50 @@
 #'
 #' head(weights(res))
 #'
+#' # The conditional reading reports the outcome model's coefficient surface
+#' # rather than the effects.
+#' coef(res, effects = "conditional")
+#'
+#' # Its covariance is the corrected block a fitting package attaches to the
+#' # outcome model. This one carries none, and the covariance the model computed
+#' # for itself is not a substitute: it treats the estimated weights as fixed.
+#' try(vcov(res, effects = "conditional"))
+#'
+#' outcome_mod <- glm(y ~ z, family = quasibinomial(), data = dat, weights = wts)
+#'
+#' # Standing in for the outcome block of a stacked sandwich, which a method
+#' # computes from the estimating equations of both steps.
+#' corrected <- vcov(outcome_mod) * 1.4
+#'
+#' conditional <- as_conditional(new_ipw(
+#'   estimand = "ate",
+#'   wt_mod = glm(z ~ x, family = binomial(), data = dat),
+#'   outcome_mod = new_ipw_model(outcome_mod, corrected),
+#'   estimates = estimates,
+#'   se_method = "linearization",
+#'   fit = NULL
+#' ))
+#'
+#' # A result that records the conditional reading answers in it with nothing
+#' # named at the call site.
+#' coef(conditional)
+#' vcov(conditional)
+#' confint(conditional)
+#'
 #' @name ipw-accessors
 NULL
 
 #' @rdname ipw-accessors
 #' @export
 #' @importFrom stats coef setNames
-coef.ipw <- function(object, ...) {
+coef.ipw <- function(object, ..., effects = NULL) {
+  # The coefficient surface is the outcome model's own, so the wrapper a
+  # corrected covariance travels on is beside the point here: `coef()` walks
+  # past it either way.
+  if (resolve_ipw_effects(object, effects) == "conditional") {
+    return(stats::coef(object$outcome_mod))
+  }
+
   stats::setNames(
     object$estimates$estimate,
     ipw_effect_labels(object$estimates)
@@ -140,7 +221,11 @@ coef.ipw <- function(object, ...) {
 #' @rdname ipw-accessors
 #' @export
 #' @importFrom stats vcov
-vcov.ipw <- function(object, ...) {
+vcov.ipw <- function(object, ..., effects = NULL) {
+  if (resolve_ipw_effects(object, effects) == "conditional") {
+    return(conditional_vcov(object$outcome_mod))
+  }
+
   # The attribute is what the contract names. A covariance the fitted variance
   # object happens to carry is of its own parameters, which are not the effects
   # reported here, so there is nothing in `fit` to fall back on.
@@ -154,7 +239,34 @@ vcov.ipw <- function(object, ...) {
 #' @rdname ipw-accessors
 #' @export
 #' @importFrom stats confint qnorm
-confint.ipw <- function(object, parm, level = 0.95, ...) {
+confint.ipw <- function(object, parm, level = 0.95, ..., effects = NULL) {
+  if (resolve_ipw_effects(object, effects) == "conditional") {
+    # The covariance first, so that a result with no corrected block is refused
+    # before a `parm` is matched against a surface no interval can be built for.
+    covariance <- conditional_vcov(object$outcome_mod)
+    estimate <- stats::coef(object$outcome_mod)
+    labels <- names(estimate)
+    rows <- if (missing(parm)) {
+      seq_along(labels)
+    } else {
+      select_effects(
+        parm,
+        labels,
+        surface = "coefficients the outcome model reports"
+      )
+    }
+
+    # No stored limits to prefer: the ones the frame holds belong to the effects
+    # the other reading reports, so every level is computed here.
+    half_width <- stats::qnorm(1 - (1 - level) / 2) * sqrt(diag(covariance))
+    limits <- cbind(
+      (estimate - half_width)[rows],
+      (estimate + half_width)[rows]
+    )
+    dimnames(limits) <- list(labels[rows], percent_labels(level))
+    return(limits)
+  }
+
   estimates <- object$estimates
   labels <- ipw_effect_labels(estimates)
   rows <- if (missing(parm)) {
@@ -219,31 +331,69 @@ weights.ipw <- function(object, ...) {
   stats::model.weights(stats::model.frame(object$outcome_mod))
 }
 
-#' The rows of an `ipw` result a `parm` argument selects
+#' The covariance the conditional reading reports
 #'
-#' Character `parm` matches the effect labels and numeric `parm` indexes them,
+#' The conditional reading presents the outcome model's coefficients, and their
+#' covariance is the block of the joint estimation that a fitting package
+#' attached with [new_ipw_model()]. A model that was not wrapped carries no such
+#' block, and its own covariance is not a substitute: it treats the weights as
+#' fixed when they were estimated from the same data, so it reports an
+#' uncertainty the coefficients do not have. The guard therefore runs before the
+#' model is asked anything, since asking is the mistake.
+#'
+#' @param model The result's `outcome_mod`.
+#' @param call The call to report the error against, which is the accessor's
+#'   rather than this helper's.
+#'
+#' @return The corrected covariance matrix, as the fitting package attached it.
+#'
+#' @noRd
+conditional_vcov <- function(model, call = sys.call(-1)) {
+  if (!inherits(model, "ipw_model")) {
+    stop_no_conditional_vcov(call = call)
+  }
+  stats::vcov(model)
+}
+
+#' The rows of a reported surface a `parm` argument selects
+#'
+#' Character `parm` matches the row labels and numeric `parm` indexes them,
 #' which is the split every `confint()` method in \pkg{stats} makes. Either way,
-#' a selection that names a row the result does not have is refused rather than
+#' a selection that names a row the surface does not have is refused rather than
 #' dropped: returning the rows that did match would answer a question the caller
 #' did not ask, with a matrix of the wrong number of rows and nothing to say
 #' why.
 #'
+#' The surface names itself in the message. A caller who asks the conditional
+#' reading for an effect label, or the marginal one for a coefficient name, has
+#' the labels of the surface they were reading in hand, and the error is where
+#' they find out which surface they are addressing.
+#'
 #' @param parm The `parm` argument as the caller supplied it.
-#' @param labels The result's effect labels.
+#' @param labels The reported surface's row labels.
+#' @param surface What those labels name, completing the sentence "`parm` must
+#'   name ..." and "`parm` must index ...".
 #' @param call The call to report the error against, which is the accessor's
 #'   rather than this helper's.
 #'
 #' @return An integer or numeric vector of row positions.
 #'
 #' @noRd
-select_effects <- function(parm, labels, call = sys.call(-1)) {
+select_effects <- function(
+  parm,
+  labels,
+  surface = "effects the result reports",
+  call = sys.call(-1)
+) {
   if (is.character(parm)) {
     rows <- match(parm, labels)
     if (anyNA(rows)) {
       stop_invalid_argument(
         "parm",
         paste0(
-          "name effects the result reports, which are ",
+          "name ",
+          surface,
+          ", which are ",
           toString(encodeString(labels, quote = '"'))
         ),
         call = call
@@ -254,13 +404,15 @@ select_effects <- function(parm, labels, call = sys.call(-1)) {
 
   # Indexing the positions rather than the labels keeps the ordinary meaning of
   # a numeric subscript, negative positions included, and turns anything outside
-  # the result into an `NA` to catch.
+  # the surface into an `NA` to catch.
   rows <- seq_along(labels)[parm]
   if (anyNA(rows)) {
     stop_invalid_argument(
       "parm",
       paste0(
-        "index effects the result reports, numbered 1 to ",
+        "index ",
+        surface,
+        ", numbered 1 to ",
         length(labels)
       ),
       call = call

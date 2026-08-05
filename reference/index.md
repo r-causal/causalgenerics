@@ -25,6 +25,16 @@ their own.
   [`print(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
   [`as.data.frame(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
   : Construct an inverse probability weighted result
+- [`new_ipw_model()`](https://r-causal.github.io/causalgenerics/reference/new_ipw_model.md)
+  [`vcov(`*`<ipw_model>`*`)`](https://r-causal.github.io/causalgenerics/reference/new_ipw_model.md)
+  : Attach a corrected covariance to a component model of an IPW fit
+- [`coef(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+  [`vcov(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+  [`confint(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+  [`nobs(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+  [`df.residual(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+  [`weights(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+  : Model accessors for an inverse probability weighted result
 - [`new_causal_wts()`](https://r-causal.github.io/causalgenerics/reference/new_causal_wts.md)
   : Construct a causal weight vector
 - [`causal_wts_ptype2()`](https://r-causal.github.io/causalgenerics/reference/causal_wts_ptype2.md)

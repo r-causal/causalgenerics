@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">causalgenerics</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,9 +40,15 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="causalgenerics-development-version">causalgenerics (development version)<a class="anchor" aria-label="anchor" href="#causalgenerics-development-version"></a></h2>
+<ul><li><p><code>ipw</code> results gain the accessors a fitted model answers to: <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code>, <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code>, <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code>, <code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code>, <code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code>, and <code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code>. A method that can compute the covariance of the effects it reports now attaches it to its <code>estimates</code> data frame as the <code>ipw_vcov</code> attribute, which is what <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> reads.</p></li>
+<li><p>New <code><a href="../reference/new_ipw_model.html">new_ipw_model()</a></code> wraps a component model of an IPW fit with the covariance the two-step estimation implies, so that <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> on the model accounts for the weights having been estimated rather than fixed.</p></li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.1.0" id="causalgenerics-010">causalgenerics 0.1.0<a class="anchor" aria-label="anchor" href="#causalgenerics-010"></a></h2>
 <ul><li>Initial CRAN submission.</li>
 </ul></div>
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

@@ -138,6 +138,35 @@ point estimate and the confidence limits and relabelling the two effects
 `"rr"` and `"or"`. Standard errors, z statistics, and p-values stay on
 the log scale, where the inference is done.
 
+## The effect labels
+
+Every row of `estimates` has a label, and it is the label rather than
+the position that [`print()`](https://rdrr.io/r/base/print.html) writes
+down the side of its table and that
+[`coef()`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md),
+[`vcov()`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md),
+and
+[`confint()`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+name their results with. The label is the `effect` column on its own
+when there is no `comparison` column, and `effect` and `comparison`
+pasted together, such as `"rd b vs a"`, when there is. A categorical
+exposure repeats each effect measure across its contrasts, so `effect`
+alone would name several rows the same thing.
+
+## The covariance of the effects
+
+A method that can compute the covariance of the effects it reports
+attaches it to the `estimates` data frame as an attribute named
+`ipw_vcov`. The value is a square numeric matrix whose row order is the
+row order of `estimates` and whose dimnames on both margins are the
+effect labels above.
+[`vcov()`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+reads that attribute and raises an error when it is absent, so a method
+that has no covariance to report attaches none rather than a substitute:
+the standard errors in `estimates` give the diagonal of the matrix and
+say nothing about the off-diagonal entries, which are not zero for
+effects estimated from the same weighted means.
+
 ## See also
 
 [`ipw()`](https://r-causal.github.io/causalgenerics/reference/ipw.md),

@@ -11,13 +11,13 @@ Source:
 [`DESCRIPTION`](https://github.com/r-causal/causalgenerics/blob/main/DESCRIPTION)
 
 Barrett M (2026). *causalgenerics: Shared Generics for the 'r-causal'
-Ecosystem*. R package version 0.0.0.9000,
+Ecosystem*. R package version 0.1.0.9000,
 <https://github.com/r-causal/causalgenerics>.
 
     @Manual{,
       title = {causalgenerics: Shared Generics for the 'r-causal' Ecosystem},
       author = {Malcolm Barrett},
       year = {2026},
-      note = {R package version 0.0.0.9000},
+      note = {R package version 0.1.0.9000},
       url = {https://github.com/r-causal/causalgenerics},
     }

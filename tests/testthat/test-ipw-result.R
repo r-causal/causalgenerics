@@ -695,6 +695,29 @@ test_that("print() reports a conditional result with no corrected covariance", {
   expect_true(any(grepl("covariance", out, ignore.case = TRUE)))
 })
 
+test_that("print() refuses a conditional result whose wrapper carries nothing", {
+  # The test above is the fitting package that attached no block, which is a
+  # result a caller can still look at: the note says what is missing and the
+  # coefficients are printed without it. This is a different object. The outcome
+  # model claims the wrapper class and carries no covariance behind it, which
+  # `new_ipw_model()` cannot produce, so the note would tell a caller to wrap a
+  # model that is already wrapped. It is reported as the error it is instead.
+  # The handler `print()` puts around the covariance names the reading's
+  # condition, and this one is the model's, so it travels past.
+  #
+  # `capture.output()` because the error is raised partway down the summary, and
+  # the lines written before it belong in neither the test report nor the
+  # assertion.
+  res <- conditional_result()
+  attr(res$outcome_mod, "ipw_vcov") <- NULL
+
+  expect_error(
+    capture.output(print(res)),
+    class = "causalgenerics_no_vcov_ipw_model"
+  )
+  expect_error(capture.output(print(res)), class = "causalgenerics_no_vcov")
+})
+
 test_that("print() reads a result with no mode as marginal", {
   # A result stored before the field existed carries six fields. Marginal is
   # the reading every method produced then, so it is the one printed, and what

@@ -47,6 +47,40 @@ test_that("stop_invalid_argument() builds the documented condition", {
   expect_identical(conditionCall(cnd), quote(reject_arg(1)))
 })
 
+test_that("stop_no_vcov() builds the documented condition", {
+  # A named wrapper rather than a bare call, for the reason the test above uses
+  # one: `sys.call(-1)` records the caller's call, and this is the caller.
+  refuse_vcov <- function(result) stop_no_vcov(result)
+
+  cnd <- tryCatch(refuse_vcov("ipw"), error = identity)
+
+  expect_identical(
+    class(cnd),
+    c(
+      "causalgenerics_no_vcov_ipw",
+      "causalgenerics_no_vcov",
+      "error",
+      "condition"
+    )
+  )
+  # The field, which is what a handler reads to report which kind of object
+  # carried no covariance without parsing the message for it.
+  expect_identical(cnd$result, "ipw")
+  # The message names the object in backticks, joins the two clauses with a
+  # semicolon, and writes the attribute the contract is keyed to as code. It
+  # says "object" rather than "result" because the helper answers for a result
+  # and for a component model of one alike, and the sentence has to read
+  # correctly whichever of the two is named.
+  expect_identical(
+    conditionMessage(cnd),
+    paste0(
+      "This `ipw` object records no covariance to report; the package that ",
+      "produced it attaches one when it supports the `ipw_vcov` contract."
+    )
+  )
+  expect_identical(conditionCall(cnd), quote(refuse_vcov("ipw")))
+})
+
 test_that("stop_no_conditional_vcov() builds the documented condition", {
   # A named wrapper rather than a bare call, for the reason the test above uses
   # one: `sys.call(-1)` records the caller's call, and this is the caller.

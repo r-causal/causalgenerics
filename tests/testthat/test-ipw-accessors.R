@@ -252,6 +252,24 @@ ipw_result <- function(
   )
 }
 
+# A conditional result whose outcome model carries the wrapper class with no
+# covariance behind it. `new_ipw_model()` cannot produce one: it validates the
+# matrix before it prepends the class, so the two go on together. An object of
+# this shape was assembled some other way, and it is a different case from a
+# model that was never wrapped: that one is a fitting package which has not
+# adopted the contract, and this one is a model that claims to carry a block and
+# does not. The accessors have to tell the caller which of the two they met.
+stripped_wrapper_result <- function(estimates = binary_estimates()) {
+  res <- ipw_result(
+    estimates,
+    vcov = binary_vcov(),
+    outcome_vcov = corrected_outcome_vcov(),
+    effects = "conditional"
+  )
+  attr(res$outcome_mod, "ipw_vcov") <- NULL
+  res
+}
+
 # A result of the shape the constructor built before the mode existed: six
 # fields and no `effects`. Results stored from an earlier version of a fitting
 # package have this shape, as does one built by hand against the earlier
@@ -1017,6 +1035,26 @@ test_that("vcov() refuses the conditional mode without a corrected block", {
   expect_snapshot(error = TRUE, vcov(res))
 })
 
+test_that("vcov() refuses a conditional block the outcome model lost", {
+  # A wrapper carrying nothing is refused for its own reason. The guard on the
+  # class is passed, since the class is there, and the model itself is the one
+  # that has nothing to report.
+  res <- stripped_wrapper_result()
+
+  expect_identical(class(res$outcome_mod)[[1]], "ipw_model")
+
+  expect_error(vcov(res), class = "causalgenerics_no_vcov_ipw_model")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+
+  # Not the conditional error, which says the fitting package attached no block
+  # and is answered by wrapping the model. This model was wrapped, so that
+  # advice has nothing left to tell the caller to do, and the object is what is
+  # wrong. The two conditions share the general class, so telling them apart is
+  # a claim about the specific one.
+  cnd <- tryCatch(vcov(res), error = identity)
+  expect_false(inherits(cnd, "causalgenerics_no_conditional_vcov"))
+})
+
 test_that("confint() bounds the outcome coefficients in the conditional mode", {
   # The interval is the normal one built from the corrected block: the estimate
   # plus and minus one half width, taken from the square root of the diagonal.
@@ -1176,6 +1214,27 @@ test_that("confint() refuses the conditional mode without a corrected block", {
   expect_no_error(stats::vcov(res$outcome_mod))
 
   expect_snapshot(error = TRUE, confint(res))
+})
+
+test_that("confint() refuses a conditional block the outcome model lost", {
+  # The limits are built from the covariance, so this reading needs the block
+  # `vcov()` needs, whatever the reason it is missing. A wrapper carrying
+  # nothing is where an interval goes wrong most quietly: the widths taken from
+  # it are an empty vector, and the limits come back as `NA` at every level with
+  # nothing said.
+  res <- stripped_wrapper_result()
+
+  expect_error(confint(res), class = "causalgenerics_no_vcov_ipw_model")
+  expect_error(confint(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res, parm = 1, level = 0.9),
+    class = "causalgenerics_no_vcov_ipw_model"
+  )
+
+  # Not the conditional error, for the reason `vcov()` does not raise it here:
+  # the model was wrapped, and wrapping it again is no answer.
+  cnd <- tryCatch(confint(res), error = identity)
+  expect_false(inherits(cnd, "causalgenerics_no_conditional_vcov"))
 })
 
 # ---- naming a reading for one call -------------------------------------------

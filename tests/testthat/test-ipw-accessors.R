@@ -1231,6 +1231,14 @@ test_that("confint() refuses a conditional block the outcome model lost", {
     class = "causalgenerics_no_vcov_ipw_model"
   )
 
+  # The covariance is asked for before `parm` is matched, the way the reading's
+  # own refusal documents. A label the surface does not have is beside the point
+  # when no interval can be built for any of them.
+  expect_error(
+    confint(res, parm = "nope", effects = "conditional"),
+    class = "causalgenerics_no_vcov_ipw_model"
+  )
+
   # Not the conditional error, for the reason `vcov()` does not raise it here:
   # the model was wrapped, and wrapping it again is no answer.
   cnd <- tryCatch(confint(res), error = identity)

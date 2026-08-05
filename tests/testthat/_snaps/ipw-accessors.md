@@ -4,7 +4,7 @@
       vcov(res)
     Condition
       Error in `vcov.ipw()`:
-      ! This `ipw` result records no covariance of the effects it reports; refit it with a current version of the package that produced it.
+      ! This `ipw` object records no covariance to report; the package that produced it attaches one when it supports the `ipw_vcov` contract.
 
 # confint() errors on labels the result does not have
 

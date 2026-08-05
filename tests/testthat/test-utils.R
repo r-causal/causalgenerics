@@ -3,8 +3,8 @@
 # class membership, which is the right altitude for a call site: it says the
 # error a function signals is the one the caller is told to handle, and it stays
 # true when the helper's message or fields change. What membership cannot say is
-# what the helpers themselves promise, and that is what the two tests below are
-# for.
+# what the helpers themselves promise, and that is what the tests below are for,
+# one per helper.
 #
 # Class order is part of that promise. `class(cnd)` is the S3 dispatch order for
 # the condition object, so `print()`, `format()`, `conditionMessage()`, and
@@ -79,6 +79,11 @@ test_that("stop_no_vcov() builds the documented condition", {
     )
   )
   expect_identical(conditionCall(cnd), quote(refuse_vcov("ipw")))
+
+  # The name is interpolated rather than written into the sentence, which is
+  # what lets the component model name itself here too.
+  model_cnd <- tryCatch(refuse_vcov("ipw_model"), error = identity)
+  expect_match(conditionMessage(model_cnd), "ipw_model", fixed = TRUE)
 })
 
 test_that("stop_no_conditional_vcov() builds the documented condition", {

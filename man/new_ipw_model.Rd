@@ -23,7 +23,13 @@ numeric matrix with dimnames on both margins.}
 \value{
 \code{new_ipw_model()} returns \code{model} with \code{"ipw_model"} prepended to its
 class vector and \code{vcov} attached as the \code{ipw_vcov} attribute. Everything
-else about the model is untouched. \code{vcov()} returns that matrix.
+else about the model is untouched. \code{vcov()} returns that matrix, and raises
+an error of class \code{causalgenerics_no_vcov_ipw_model}, and of the general
+class \code{causalgenerics_no_vcov}, when the attribute is absent. The
+constructor puts the class and the attribute on together, so a model
+carrying the class with nothing behind it passed through code that dropped
+its attributes and kept its class, and the covariance the model computed for
+itself is not a substitute for the one it lost.
 }
 \description{
 \code{new_ipw_model()} wraps one of the models an \code{\link[=ipw]{ipw()}} method was given so that

@@ -139,10 +139,15 @@ the effect estimates the result stores, under \verb{Marginal estimates:}. The
 conditional reading tabulates the outcome model's coefficients, under
 \verb{Conditional estimates (outcome model):}, with the standard errors implied by
 the corrected covariance a fitting package attaches through \code{\link[=new_ipw_model]{new_ipw_model()}}.
-An outcome model that carries no such covariance is still printed: the
+An outcome model a fitting package never wrapped is still printed: the
 coefficients are written on their own, followed by a note saying that no
 covariance from the joint estimation is recorded, rather than beside the
-standard errors the model computed for itself.
+standard errors the model computed for itself. An outcome model that carries
+the \code{\link[=new_ipw_model]{new_ipw_model()}} class with no covariance behind it is refused instead,
+with an error of class \code{causalgenerics_no_vcov_ipw_model}. The note answers a
+package that has not adopted the contract by telling the reader to wrap the
+model, and that advice has already been taken here: the object is what is
+wrong, not the package that produced it.
 }
 
 \section{The covariance of the effects}{

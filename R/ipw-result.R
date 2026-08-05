@@ -57,10 +57,15 @@
 #' conditional reading tabulates the outcome model's coefficients, under
 #' `Conditional estimates (outcome model):`, with the standard errors implied by
 #' the corrected covariance a fitting package attaches through [new_ipw_model()].
-#' An outcome model that carries no such covariance is still printed: the
+#' An outcome model a fitting package never wrapped is still printed: the
 #' coefficients are written on their own, followed by a note saying that no
 #' covariance from the joint estimation is recorded, rather than beside the
-#' standard errors the model computed for itself.
+#' standard errors the model computed for itself. An outcome model that carries
+#' the [new_ipw_model()] class with no covariance behind it is refused instead,
+#' with an error of class `causalgenerics_no_vcov_ipw_model`. The note answers a
+#' package that has not adopted the contract by telling the reader to wrap the
+#' model, and that advice has already been taken here: the object is what is
+#' wrong, not the package that produced it.
 #'
 #' # The covariance of the effects
 #'
@@ -268,14 +273,22 @@ print_marginal_estimates <- function(estimates) {
 #' covariance the joint estimation of the weights and the outcome gives, which a
 #' fitting package attaches with [new_ipw_model()].
 #'
-#' A model carrying no such covariance is summarized rather than refused.
-#' `print()` is the view of whatever a caller is holding, and refusing here would
-#' leave a result that cannot be looked at at all. The coefficients are written
-#' on their own in that case, with a note saying what is missing, rather than
-#' beside the standard errors the model computed for itself: those treat the
+#' A model a fitting package never wrapped is summarized rather than refused.
+#' `print()` is the view of whatever a caller is holding, and refusing there
+#' would leave a result that cannot be looked at at all. The coefficients are
+#' written on their own in that case, with a note saying what is missing, rather
+#' than beside the standard errors the model computed for itself: those treat the
 #' estimated weights as fixed and report an uncertainty the coefficients do not
 #' have, and a column of them under this heading would be read as the corrected
 #' ones.
+#'
+#' A model carrying the `ipw_model` class with no covariance behind it is refused
+#' instead, and the error travels out of `print()`. The note has nothing to tell
+#' that caller: it answers a package that has not adopted the contract by saying
+#' to wrap the model, and this model is wrapped. What is wrong is the object
+#' itself, which no constructor here could have produced, and an object in that
+#' state should fail the same way wherever it is met rather than reading as a
+#' result with one part missing.
 #'
 #' @param model The result's `outcome_mod`.
 #'
@@ -288,9 +301,13 @@ print_conditional_estimates <- function(model) {
 
   estimate <- stats::coef(model)
 
-  # Asked for through the helper the accessors read it with, so that whether a
-  # model carries a covariance this reading can report is one fact rather than
-  # two.
+  # Asked for through the helper the accessors read it with, so that what counts
+  # as a covariance this reading can report is settled in one place. Two
+  # conditions come back from it and only one is handled here. A model that was
+  # never wrapped raises `causalgenerics_no_conditional_vcov`, which is the case
+  # the note below answers. A model wrapped and then stripped raises
+  # `causalgenerics_no_vcov_ipw_model`, which is left to travel past this handler
+  # and out of `print()`.
   covariance <- tryCatch(
     conditional_vcov(model),
     causalgenerics_no_conditional_vcov = function(cnd) NULL

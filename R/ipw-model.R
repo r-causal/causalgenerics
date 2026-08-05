@@ -37,7 +37,13 @@
 #'
 #' @return `new_ipw_model()` returns `model` with `"ipw_model"` prepended to its
 #'   class vector and `vcov` attached as the `ipw_vcov` attribute. Everything
-#'   else about the model is untouched. `vcov()` returns that matrix.
+#'   else about the model is untouched. `vcov()` returns that matrix, and raises
+#'   an error of class `causalgenerics_no_vcov_ipw_model`, and of the general
+#'   class `causalgenerics_no_vcov`, when the attribute is absent. The
+#'   constructor puts the class and the attribute on together, so a model
+#'   carrying the class with nothing behind it passed through code that dropped
+#'   its attributes and kept its class, and the covariance the model computed for
+#'   itself is not a substitute for the one it lost.
 #'
 #' @seealso [new_ipw()] for the result these models are components of, and
 #'   [ipw-accessors] for the accessors on the result itself.
@@ -92,5 +98,14 @@ new_ipw_model <- function(model, vcov) {
 #' @export
 #' @importFrom stats vcov
 vcov.ipw_model <- function(object, ...) {
-  attr(object, "ipw_vcov", exact = TRUE)
+  # The class and the attribute go on together, so an object carrying one
+  # without the other was assembled somewhere other than the constructor. Handing
+  # the attribute back as it was found would answer `NULL`, and `NULL` travels:
+  # the standard errors taken from it are an empty vector and the limits built
+  # from those come back as `NA` with nothing said about why.
+  covariance <- attr(object, "ipw_vcov", exact = TRUE)
+  if (is.null(covariance)) {
+    stop_no_vcov("ipw_model")
+  }
+  covariance
 }

@@ -1,5 +1,22 @@
 # causalgenerics (development version)
 
+* `vcov()` on a model wrapped by `new_ipw_model()` raises an error of class
+  `causalgenerics_no_vcov_ipw_model` when the wrapper no longer carries a
+  covariance, rather than returning `NULL`. The class and the attribute go on
+  together, so a model carrying one without the other passed through code that
+  dropped its attributes and kept its class. `NULL` travelled from there:
+  standard errors taken from it are an empty vector, and the limits built from
+  those come back as `NA` with nothing said about why. `print()` on a
+  conditional result whose wrapper lost its covariance refuses for the same
+  reason, rather than printing the coefficients under a note telling the reader
+  to wrap a model that is already wrapped.
+
+* The error a missing covariance raises now says that the package which produced
+  the object attaches one when it supports the `ipw_vcov` contract, in place of
+  telling the reader to refit with a current version. The same helper answers
+  for a result and for a component model of one, and a package that never
+  attached a covariance is not one an upgrade would fix.
+
 * `model.frame()` on an `ipw` result returns the outcome model's model frame, so
   prediction and averaging tooling can recover the data an estimate was computed
   from out of the result itself. The `(weights)` column a weighted frame carries

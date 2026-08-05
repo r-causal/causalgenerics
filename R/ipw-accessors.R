@@ -48,11 +48,17 @@
 #' the one the outcome model computed for itself. A model fitted as though its
 #' weights were fixed understates its uncertainty, because the weights were
 #' estimated from the same data, so there is nothing to fall back on when no
-#' corrected block is there. `vcov()` and `confint()` raise an error of class
-#' `causalgenerics_no_conditional_vcov` instead, which the package that produced
-#' the result answers by wrapping the outcome model with [new_ipw_model()]
-#' before it builds the result. `coef()` needs no such block and reports the
-#' coefficients either way.
+#' corrected block is there. `vcov()` and `confint()` refuse the reading instead,
+#' and name which of the two ways the block can be missing they met. An outcome
+#' model that was never wrapped raises an error of class
+#' `causalgenerics_no_conditional_vcov`, which the package that produced the
+#' result answers by wrapping the outcome model with [new_ipw_model()] before it
+#' builds the result. An outcome model that carries the wrapper class with no
+#' covariance behind it raises an error of class
+#' `causalgenerics_no_vcov_ipw_model`, since a model that is already wrapped has
+#' nothing to gain from being wrapped again and the object itself is what is
+#' wrong. Both carry the general class `causalgenerics_no_vcov`. `coef()` needs
+#' no such block and reports the coefficients either way.
 #'
 #' `nobs()`, `df.residual()`, `weights()`, `model.frame()`, and `estimand()`
 #' describe the fit rather than a surface of it, so they answer the same way in
@@ -86,8 +92,10 @@
 #' class `causalgenerics_no_vcov` rather than returning one built from the
 #' standard errors, which would report the effects as uncorrelated. In the
 #' conditional reading it returns the corrected covariance of the outcome
-#' model's coefficients, and an outcome model that carries none raises an error
-#' of class `causalgenerics_no_conditional_vcov`.
+#' model's coefficients. An outcome model that was never wrapped raises an error
+#' of class `causalgenerics_no_conditional_vcov`, and a wrapped model that no
+#' longer carries the covariance raises an error of class
+#' `causalgenerics_no_vcov_ipw_model`.
 #'
 #' `confint()` returns a matrix with one row per effect `parm` selects, in the
 #' order `parm` gives them, and two columns holding the lower and upper limit.

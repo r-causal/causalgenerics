@@ -23,6 +23,29 @@
 #' relabelling the two effects `"rr"` and `"or"`. Standard errors, z statistics,
 #' and p-values stay on the log scale, where the inference is done.
 #'
+#' # The effect labels
+#'
+#' Every row of `estimates` has a label, and it is the label rather than the
+#' position that `print()` writes down the side of its table and that
+#' [`coef()`][ipw-accessors], [`vcov()`][ipw-accessors], and
+#' [`confint()`][ipw-accessors] name their results with. The label is the
+#' `effect` column on its own when there is no `comparison` column, and `effect`
+#' and `comparison` pasted together, such as `"rd b vs a"`, when there is. A
+#' categorical exposure repeats each effect measure across its contrasts, so
+#' `effect` alone would name several rows the same thing.
+#'
+#' # The covariance of the effects
+#'
+#' A method that can compute the covariance of the effects it reports attaches
+#' it to the `estimates` data frame as an attribute named `ipw_vcov`. The value
+#' is a square numeric matrix whose row order is the row order of `estimates`
+#' and whose dimnames on both margins are the effect labels above.
+#' [`vcov()`][ipw-accessors] reads that attribute and raises an error when it is
+#' absent, so a method that has no covariance to report attaches none rather
+#' than a substitute: the standard errors in `estimates` give the diagonal of the
+#' matrix and say nothing about the off-diagonal entries, which are not zero for
+#' effects estimated from the same weighted means.
+#'
 #' @param estimand The causal estimand the method targeted, such as `"ate"` or
 #'   `"att"`.
 #' @param wt_mod The weighting object: the fitted model that produced the
@@ -129,22 +152,41 @@ print.ipw <- function(x, ...) {
   cat("\n")
 
   cat("Estimates:\n")
-  if ("comparison" %in% names(x$estimates)) {
-    # A categorical exposure repeats effect labels across comparisons, so the
-    # printed rows are keyed by effect and comparison together and the character
-    # comparison column is dropped from the numeric matrix printCoefmat formats.
-    estimates <- x$estimates[setdiff(
-      names(x$estimates),
-      c("effect", "comparison")
-    )]
-    rownames(estimates) <- paste(x$estimates$effect, x$estimates$comparison)
-  } else {
-    estimates <- x$estimates[-1]
-    rownames(estimates) <- x$estimates$effect
-  }
+  # The rows are keyed by effect label, and the character columns the labels are
+  # built from are dropped from the numeric matrix printCoefmat() formats.
+  estimates <- x$estimates[setdiff(
+    names(x$estimates),
+    c("effect", "comparison")
+  )]
+  rownames(estimates) <- ipw_effect_labels(x$estimates)
   stats::printCoefmat(estimates, has.Pvalue = TRUE, cs.ind = 1:2, tst.ind = 3)
 
   invisible(x)
+}
+
+#' The label each row of an `ipw` result's estimates carries
+#'
+#' `print()` writes these down the side of its table, `coef()` names its vector
+#' with them, `vcov()` uses them as dimnames, and `confint()` both labels its
+#' rows and matches a character `parm` against them. One helper so that the
+#' surfaces cannot drift: a caller who reads a covariance out by the name
+#' `coef()` gave has to get the entry `print()` showed.
+#'
+#' A categorical exposure repeats each effect measure across its contrasts, so a
+#' frame with a `comparison` column needs both columns to name a row uniquely.
+#' The labels stay unique because the comparison labels are distinct.
+#'
+#' @param estimates The `estimates` component of an `ipw` object.
+#'
+#' @return A character vector, one element per row of `estimates`.
+#'
+#' @noRd
+ipw_effect_labels <- function(estimates) {
+  if ("comparison" %in% names(estimates)) {
+    paste(estimates$effect, estimates$comparison)
+  } else {
+    as.character(estimates$effect)
+  }
 }
 
 #' Format a model's originating call for the `ipw()` summary

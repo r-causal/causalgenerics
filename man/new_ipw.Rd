@@ -89,6 +89,29 @@ natural scale, exponentiating the point estimate and the confidence limits and
 relabelling the two effects \code{"rr"} and \code{"or"}. Standard errors, z statistics,
 and p-values stay on the log scale, where the inference is done.
 }
+\section{The effect labels}{
+Every row of \code{estimates} has a label, and it is the label rather than the
+position that \code{print()} writes down the side of its table and that
+\code{\link[=ipw-accessors]{coef()}}, \code{\link[=ipw-accessors]{vcov()}}, and
+\code{\link[=ipw-accessors]{confint()}} name their results with. The label is the
+\code{effect} column on its own when there is no \code{comparison} column, and \code{effect}
+and \code{comparison} pasted together, such as \code{"rd b vs a"}, when there is. A
+categorical exposure repeats each effect measure across its contrasts, so
+\code{effect} alone would name several rows the same thing.
+}
+
+\section{The covariance of the effects}{
+A method that can compute the covariance of the effects it reports attaches
+it to the \code{estimates} data frame as an attribute named \code{ipw_vcov}. The value
+is a square numeric matrix whose row order is the row order of \code{estimates}
+and whose dimnames on both margins are the effect labels above.
+\code{\link[=ipw-accessors]{vcov()}} reads that attribute and raises an error when it is
+absent, so a method that has no covariance to report attaches none rather
+than a substitute: the standard errors in \code{estimates} give the diagonal of the
+matrix and say nothing about the off-diagonal entries, which are not zero for
+effects estimated from the same weighted means.
+}
+
 \examples{
 dat <- data.frame(
   x = rep(c(-1.5, -0.5, 0.5, 1.5), each = 5),

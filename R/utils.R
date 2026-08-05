@@ -38,3 +38,27 @@ stop_invalid_argument <- function(arg, must, call = sys.call(-1)) {
     call = call
   ))
 }
+
+# Signal that a result records no covariance of the effects it reports. The
+# classes follow `stop_no_method()`: one keyed to the result class, for tests and
+# for handlers that care about one kind of result, and one general class for
+# callers that want any missing covariance. There is no fallback to offer, since
+# the standard errors a result stores give the diagonal of that matrix and say
+# nothing about the rest of it.
+stop_no_vcov <- function(result, call = sys.call(-1)) {
+  message <- paste0(
+    "This `",
+    result,
+    "` result records no covariance of the effects it reports; refit it with a ",
+    "current version of the package that produced it."
+  )
+  stop(errorCondition(
+    message,
+    result = result,
+    class = c(
+      paste0("causalgenerics_no_vcov_", result),
+      "causalgenerics_no_vcov"
+    ),
+    call = call
+  ))
+}

@@ -12,6 +12,8 @@
 #' * `df.residual()` returns the residual degrees of freedom of the fitted
 #'   variance object.
 #' * `weights()` returns the weights the outcome model was fitted with.
+#' * `model.frame()` returns the outcome model's model frame.
+#' * `estimand()` returns the estimand the weights targeted.
 #'
 #' @details
 #' These methods live here for the reason `print()` does. Two packages each
@@ -20,8 +22,8 @@
 #' installed last rather than the contract.
 #'
 #' Everything they read is part of the [new_ipw()] contract: the `estimates`
-#' frame, the `ipw_vcov` attribute attached to it, `outcome_mod`, `fit`, and the
-#' `effects` field the section below describes.
+#' frame, the `ipw_vcov` attribute attached to it, `estimand`, `outcome_mod`,
+#' `fit`, and the `effects` field the section below describes.
 #' They never branch on `se_method`, since the fields they read already hold the
 #' result of whatever computation that names, and they reach into `fit` only
 #' through ordinary S3 dispatch. A package whose variance object is a bare list
@@ -52,11 +54,15 @@
 #' before it builds the result. `coef()` needs no such block and reports the
 #' coefficients either way.
 #'
-#' `nobs()`, `df.residual()`, and `weights()` describe the fit rather than a
-#' surface of it, so they answer the same way in either reading and take no
-#' `effects` argument.
+#' `nobs()`, `df.residual()`, `weights()`, `model.frame()`, and `estimand()`
+#' describe the fit rather than a surface of it, so they answer the same way in
+#' either reading and take no `effects` argument.
 #'
 #' @param object An `ipw` object.
+#' @param formula An `ipw` object. The `model.frame()` generic in \pkg{stats}
+#'   names its first argument `formula`, and the method matches it.
+#' @param x An `ipw` object. The `estimand()` generic names its first argument
+#'   `x`, and the method matches it.
 #' @param parm The rows to report an interval for, given either as the labels
 #'   of the reported surface or as their positions in it. Missing means all of
 #'   them.
@@ -109,6 +115,20 @@
 #' `weights()` returns the outcome model's weights as its model frame stores
 #' them, so a concrete weight class such as `psw` comes back as itself, or
 #' `NULL` when the outcome model was fitted unweighted.
+#'
+#' `model.frame()` returns the outcome model's model frame, which is the data
+#' the reported estimates were computed from. The `(weights)` column a weighted
+#' frame carries is deliberately dropped, since tooling that reads the columns
+#' of a frame as the variables a model was fitted on, such as prediction and
+#' averaging packages, would otherwise treat the estimation weights as one of
+#' them; `weights()` is where those are reported. A model whose own method has
+#' no frame to give raises that model's error rather than one of this package's.
+#'
+#' `estimand()` returns the estimand the result records, which is the one the
+#' weights the estimates were computed under targeted. There is deliberately no
+#' `estimand<-()` method for a result: assigning a new estimand would relabel
+#' those estimates rather than recompute them, so a caller who writes the
+#' assignment is told that no method exists.
 #'
 #' @seealso [new_ipw()] for the result class and the fields these methods read.
 #'
@@ -167,6 +187,12 @@
 #' df.residual(res)
 #'
 #' head(weights(res))
+#'
+#' # The data the estimates were computed from, without the `(weights)` column
+#' # the fitting machinery stored beside the variables the formula named.
+#' head(model.frame(res))
+#'
+#' estimand(res)
 #'
 #' # The conditional reading reports the outcome model's coefficient surface
 #' # rather than the effects.
@@ -329,6 +355,24 @@ df.residual.ipw <- function(object, ...) {
 #' @importFrom stats model.frame model.weights weights
 weights.ipw <- function(object, ...) {
   stats::model.weights(stats::model.frame(object$outcome_mod))
+}
+
+#' @rdname ipw-accessors
+#' @export
+#' @importFrom stats model.frame
+model.frame.ipw <- function(formula, ...) {
+  # Delegation and nothing else, so a model with no frame to give says so
+  # itself. The `(weights)` column is the one thing taken off: the formula never
+  # named it, and tooling that reads the columns of a frame as the variables a
+  # model was fitted on would take the estimation weights for one of them.
+  mf <- stats::model.frame(formula$outcome_mod)
+  mf[, setdiff(colnames(mf), "(weights)"), drop = FALSE]
+}
+
+#' @rdname ipw-accessors
+#' @export
+estimand.ipw <- function(x, ...) {
+  x$estimand
 }
 
 #' The covariance the conditional reading reports

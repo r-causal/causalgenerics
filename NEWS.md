@@ -1,5 +1,17 @@
 # causalgenerics (development version)
 
+* `model.frame()` on an `ipw` result returns the outcome model's model frame, so
+  prediction and averaging tooling can recover the data an estimate was computed
+  from out of the result itself. The `(weights)` column a weighted frame carries
+  is dropped, since a package that reads the columns of a frame as the variables
+  a model was fitted on would otherwise treat the estimation weights as one of
+  them. `weights()` reports those.
+
+* `estimand()` on an `ipw` result returns the estimand the weights it was
+  computed under targeted. There is no replacement method for a result:
+  assigning a new estimand would relabel the estimates rather than recompute
+  them.
+
 * `print()` on an `ipw` result names the reading it is showing, on an `Effects:`
   line beside the estimand and in the heading of the table. The marginal
   reading tabulates the effect estimates as before, under `Marginal estimates:`.

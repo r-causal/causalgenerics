@@ -8,6 +8,8 @@
 \alias{nobs.ipw}
 \alias{df.residual.ipw}
 \alias{weights.ipw}
+\alias{model.frame.ipw}
+\alias{estimand.ipw}
 \title{Model accessors for an inverse probability weighted result}
 \usage{
 \method{coef}{ipw}(object, ..., effects = NULL)
@@ -21,6 +23,10 @@
 \method{df.residual}{ipw}(object, ...)
 
 \method{weights}{ipw}(object, ...)
+
+\method{model.frame}{ipw}(formula, ...)
+
+\method{estimand}{ipw}(x, ...)
 }
 \arguments{
 \item{object}{An \code{ipw} object.}
@@ -38,6 +44,12 @@ them.}
 
 \item{level}{The confidence level. At the level the result stores, its own
 limits are returned; at any other level they are recomputed.}
+
+\item{formula}{An \code{ipw} object. The \code{model.frame()} generic in \pkg{stats}
+names its first argument \code{formula}, and the method matches it.}
+
+\item{x}{An \code{ipw} object. The \code{estimand()} generic names its first argument
+\code{x}, and the method matches it.}
 }
 \value{
 \code{coef()} returns a named numeric vector of effect estimates, one element per
@@ -80,6 +92,20 @@ of freedom.
 \code{weights()} returns the outcome model's weights as its model frame stores
 them, so a concrete weight class such as \code{psw} comes back as itself, or
 \code{NULL} when the outcome model was fitted unweighted.
+
+\code{model.frame()} returns the outcome model's model frame, which is the data
+the reported estimates were computed from. The \code{(weights)} column a weighted
+frame carries is deliberately dropped, since tooling that reads the columns
+of a frame as the variables a model was fitted on, such as prediction and
+averaging packages, would otherwise treat the estimation weights as one of
+them; \code{weights()} is where those are reported. A model whose own method has
+no frame to give raises that model's error rather than one of this package's.
+
+\code{estimand()} returns the estimand the result records, which is the one the
+weights the estimates were computed under targeted. There is deliberately no
+\verb{estimand<-()} method for a result: assigning a new estimand would relabel
+those estimates rather than recompute them, so a caller who writes the
+assignment is told that no method exists.
 }
 \description{
 The accessors a fitted model answers to, defined for the class \code{\link[=new_ipw]{new_ipw()}}
@@ -93,6 +119,8 @@ on.
 \item \code{df.residual()} returns the residual degrees of freedom of the fitted
 variance object.
 \item \code{weights()} returns the weights the outcome model was fitted with.
+\item \code{model.frame()} returns the outcome model's model frame.
+\item \code{estimand()} returns the estimand the weights targeted.
 }
 }
 \details{
@@ -102,8 +130,8 @@ caller writing against a result would then get whichever package was
 installed last rather than the contract.
 
 Everything they read is part of the \code{\link[=new_ipw]{new_ipw()}} contract: the \code{estimates}
-frame, the \code{ipw_vcov} attribute attached to it, \code{outcome_mod}, \code{fit}, and the
-\code{effects} field the section below describes.
+frame, the \code{ipw_vcov} attribute attached to it, \code{estimand}, \code{outcome_mod},
+\code{fit}, and the \code{effects} field the section below describes.
 They never branch on \code{se_method}, since the fields they read already hold the
 result of whatever computation that names, and they reach into \code{fit} only
 through ordinary S3 dispatch. A package whose variance object is a bare list
@@ -133,9 +161,9 @@ the result answers by wrapping the outcome model with \code{\link[=new_ipw_model
 before it builds the result. \code{coef()} needs no such block and reports the
 coefficients either way.
 
-\code{nobs()}, \code{df.residual()}, and \code{weights()} describe the fit rather than a
-surface of it, so they answer the same way in either reading and take no
-\code{effects} argument.
+\code{nobs()}, \code{df.residual()}, \code{weights()}, \code{model.frame()}, and \code{estimand()}
+describe the fit rather than a surface of it, so they answer the same way in
+either reading and take no \code{effects} argument.
 }
 
 \examples{
@@ -193,6 +221,12 @@ nobs(res)
 df.residual(res)
 
 head(weights(res))
+
+# The data the estimates were computed from, without the `(weights)` column
+# the fitting machinery stored beside the variables the formula named.
+head(model.frame(res))
+
+estimand(res)
 
 # The conditional reading reports the outcome model's coefficient surface
 # rather than the effects.

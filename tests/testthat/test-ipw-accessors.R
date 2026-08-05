@@ -1,16 +1,17 @@
 # The accessors give an `ipw` result the interface a fitted model has:
-# `coef()`, `vcov()`, `confint()`, `nobs()`, `df.residual()`, and `weights()`.
-# They live here for the same reason `print.ipw()` does. Two packages each
-# registering `coef.ipw()` would collide in the shared S3 method table, and a
-# caller writing against a result would then get whichever package was installed
-# last rather than the contract.
+# `coef()`, `vcov()`, `confint()`, `nobs()`, `df.residual()`, `weights()`, and
+# `model.frame()`, alongside `estimand()`, which reports the estimand the
+# weights targeted. They live here for the same reason `print.ipw()` does. Two
+# packages each registering `coef.ipw()` would collide in the shared S3 method
+# table, and a caller writing against a result would then get whichever package
+# was installed last rather than the contract.
 #
 # Everything the accessors read is part of the `new_ipw()` contract: the
-# `estimates` frame, the `ipw_vcov` attribute attached to it, `outcome_mod`, and
-# `fit`. They never branch on `se_method`, and they reach into `fit` only
-# through ordinary S3 dispatch. That is what lets a package whose variance
-# object is a bare list use them, and it is asserted directly below rather than
-# left to follow from the other tests.
+# `estimates` frame, the `ipw_vcov` attribute attached to it, `estimand`,
+# `outcome_mod`, and `fit`. They never branch on `se_method`, and they reach
+# into `fit` only through ordinary S3 dispatch. That is what lets a package
+# whose variance object is a bare list use them, and it is asserted directly
+# below rather than left to follow from the other tests.
 #
 # The estimates frames are written out literally, in the shape the `ipw()`
 # return contract documents, rather than produced by fitting a model. Nothing
@@ -25,8 +26,9 @@
 # above is written against. The conditional reading reports the outcome model's
 # coefficient surface, and its covariance is the corrected block a fitting
 # package attached with `new_ipw_model()`, never the one the outcome model
-# computed for itself. `nobs()`, `df.residual()`, and `weights()` describe the
-# fit rather than a surface of it, so they answer the same way in either mode.
+# computed for itself. `nobs()`, `df.residual()`, `weights()`, `model.frame()`,
+# and `estimand()` describe the fit rather than a surface of it, so they answer
+# the same way in either mode.
 
 # ---- fixtures ----------------------------------------------------------------
 
@@ -275,6 +277,27 @@ labels_a_printed_row <- function(out, label) {
   candidates <- out[startsWith(out, label)]
   remainder <- substring(candidates, nchar(label) + 1L)
   any(grepl("^ +-?[0-9]", remainder))
+}
+
+# The columns the outcome model's frame holds once the weights column is gone:
+# the response and the one term, as `ipw_data()` supplies them. Written out
+# rather than read back off the model, for the reason the effect labels are.
+# Which columns come back is the claim, and a comparison against the frame the
+# model stored would hold whichever ones they were.
+outcome_frame_columns <- function() {
+  data.frame(y = ipw_data()$y, z = ipw_data()$z)
+}
+
+# A model frame with its `terms` attribute removed.
+#
+# Selecting columns from a data frame drops that attribute, so a frame that had
+# no weights column to drop is not `identical()` to the one the model stored
+# even though every column, name, and row name agrees. Taking it off both sides
+# keeps the comparison an `expect_identical()` without asserting anything about
+# the attribute in either direction.
+without_terms <- function(frame) {
+  attr(frame, "terms") <- NULL
+  frame
 }
 
 # ---- coef.ipw() --------------------------------------------------------------
@@ -731,6 +754,125 @@ test_that("weights() is NULL for an unweighted outcome model", {
   )
 
   expect_null(weights(res))
+})
+
+# ---- model.frame.ipw() -------------------------------------------------------
+
+test_that("model.frame() drops the weights column from the outcome frame", {
+  # The frame a weighted model stores carries a `(weights)` column that the
+  # formula never named. It is the fitting machinery's bookkeeping rather than
+  # data the caller supplied, and `weights()` reports it already, so the frame
+  # comes back holding the columns the formula named and nothing else.
+  res <- ipw_result(binary_estimates())
+  stored <- stats::model.frame(res$outcome_mod)
+  mf <- model.frame(res)
+
+  expect_true("(weights)" %in% colnames(stored))
+  expect_false("(weights)" %in% colnames(mf))
+  expect_identical(colnames(mf), c("y", "z"))
+  expect_identical(nrow(mf), nrow(stored))
+  expect_identical(mf, outcome_frame_columns())
+})
+
+test_that("model.frame() returns every column of an unweighted frame", {
+  # An unweighted model frame has no weights column, so there is nothing to drop
+  # and the whole frame comes back. The `terms` attribute does not: selecting
+  # columns from a data frame drops it whether or not a column went with it, and
+  # it is taken off both sides here rather than asserted either way, since the
+  # claim is about the columns.
+  res <- ipw_result(binary_estimates(), wts = NULL)
+  stored <- stats::model.frame(res$outcome_mod)
+  mf <- model.frame(res)
+
+  expect_false("(weights)" %in% colnames(stored))
+  expect_identical(without_terms(mf), without_terms(stored))
+  expect_identical(mf, outcome_frame_columns())
+  expect_identical(nrow(mf), 20L)
+})
+
+test_that("model.frame() reads the outcome model wrapped or not", {
+  # The wrapper carries a corrected covariance and registers nothing else, so
+  # `model.frame()` walks past it to the model's own method the way `coef()`
+  # does, and the frame is the same either way.
+  wrapped <- ipw_result(
+    binary_estimates(),
+    outcome_vcov = corrected_outcome_vcov()
+  )
+  bare <- ipw_result(binary_estimates())
+
+  expect_s3_class(wrapped$outcome_mod, "ipw_model")
+  expect_false(inherits(bare$outcome_mod, "ipw_model"))
+  expect_identical(model.frame(wrapped), model.frame(bare))
+  expect_identical(model.frame(wrapped), outcome_frame_columns())
+})
+
+test_that("model.frame() lets the outcome model's error through", {
+  # Delegation and nothing else, with no guard for a model that has no frame to
+  # give. A model whose own method refuses says why it refuses, and an error of
+  # this package's own raised in front of it would replace the one explanation a
+  # caller can act on with one about a result that is not the problem.
+  local_s3_method("model.frame", "cg_no_frame", function(formula, ...) {
+    stop(errorCondition(
+      "this model records no model frame",
+      class = "cg_no_frame_error"
+    ))
+  })
+
+  res <- new_ipw(
+    estimand = "ate",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = structure(list(), class = "cg_no_frame"),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL
+  )
+
+  expect_error(model.frame(res), class = "cg_no_frame_error")
+  expect_error(
+    model.frame(res),
+    "this model records no model frame",
+    fixed = TRUE
+  )
+})
+
+# ---- estimand.ipw() ----------------------------------------------------------
+
+test_that("estimand() returns the estimand the result records", {
+  # The field rather than a constant. The two results here differ in it and in
+  # nothing else, so a method that answered `"ate"` for every result would pass
+  # the first assertion and fail the second.
+  expect_identical(estimand(ipw_result(binary_estimates())), "ate")
+
+  att <- new_ipw(
+    estimand = "att",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = outcome_model(),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL
+  )
+
+  expect_identical(estimand(att), "att")
+})
+
+test_that("estimand<-() has no method for a result", {
+  # The estimand a result records is a fact about the weights its method
+  # targeted and the estimates computed under them. Assigning a new one would
+  # relabel those numbers rather than recompute them, so there is no method for
+  # the replacement generic here and a caller who writes the assignment is told
+  # as much. The absence is deliberate, and this is what pins it.
+  res <- ipw_result(binary_estimates())
+
+  expect_error(
+    estimand(res) <- "att",
+    class = "causalgenerics_no_method_estimand<-"
+  )
+  expect_error(
+    estimand(res) <- "att",
+    class = "causalgenerics_no_method"
+  )
+
+  expect_snapshot(error = TRUE, estimand(res) <- "att")
 })
 
 # ---- the contract the accessors read -----------------------------------------
@@ -1265,6 +1407,33 @@ test_that("a result with no mode reads as marginal", {
   )
 })
 
+test_that("model.frame() does not read the mode", {
+  # The frame is the outcome model's, and which surface a result presents says
+  # nothing about the data that model was fitted on. A result stored before the
+  # field existed answers the same way, so an older one needs no migration to be
+  # asked for its frame.
+  res <- ipw_result(binary_estimates())
+  legacy <- legacy_result()
+
+  expect_length(legacy, 6L)
+  expect_identical(model.frame(as_conditional(res)), model.frame(res))
+  expect_identical(model.frame(legacy), model.frame(res))
+  expect_identical(model.frame(res), outcome_frame_columns())
+})
+
+test_that("estimand() does not read the mode", {
+  # The estimand is what the weights targeted, and both readings of a result are
+  # readings of estimates computed under those weights. A flip cannot move it,
+  # and a result recording no mode reports it unchanged.
+  res <- ipw_result(binary_estimates())
+  legacy <- legacy_result()
+
+  expect_length(legacy, 6L)
+  expect_identical(estimand(as_conditional(res)), estimand(res))
+  expect_identical(estimand(legacy), estimand(res))
+  expect_identical(estimand(res), "ate")
+})
+
 # ---- registration ------------------------------------------------------------
 
 test_that("the accessors are registered against ipw", {
@@ -1290,4 +1459,26 @@ test_that("the accessors are registered against ipw", {
   )
 
   expect_identical(generics[!registered], character())
+})
+
+test_that("model.frame() is registered against ipw", {
+  # `model.frame()` lives in stats as the six accessors above do, so its entry
+  # belongs to stats' table rather than to this package's. The claim is the one
+  # the test above makes: every assertion written for this method reaches it
+  # from the test frame, and a downstream package calling `model.frame()` on a
+  # result from its own namespace has only the table.
+  table <- s3_methods_table("model.frame")
+
+  expect_false(is.null(table))
+  expect_true(exists("model.frame.ipw", envir = table, inherits = FALSE))
+})
+
+test_that("estimand() is registered against ipw", {
+  # `estimand()` is this package's own generic, so its entry belongs to this
+  # package's table rather than to stats'. `s3_methods_table()` reads the
+  # generic's own environment and finds either one.
+  table <- s3_methods_table("estimand")
+
+  expect_false(is.null(table))
+  expect_true(exists("estimand.ipw", envir = table, inherits = FALSE))
 })

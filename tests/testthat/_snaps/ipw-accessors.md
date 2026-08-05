@@ -22,6 +22,14 @@
       Error in `confint.ipw()`:
       ! `parm` must name effects the result reports, which are "rd", "log(rr)", "log(or)".
 
+# estimand<-() has no method for a result
+
+    Code
+      estimand(res) <- "att"
+    Condition
+      Error in `estimand<-.default`:
+      ! No `estimand<-()` method for an object of class <ipw>.
+
 # vcov() refuses the conditional mode without a corrected block
 
     Code

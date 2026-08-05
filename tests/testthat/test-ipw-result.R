@@ -100,9 +100,24 @@ ipw_result <- function(estimates) {
   )
 }
 
+# A result built with a given presentation mode, so that a test naming a mode
+# does not restate the other six fields. The two model slots hold strings rather
+# than fits, since nothing about the mode reads them.
+ipw_with_effects <- function(effects) {
+  new_ipw(
+    estimand = "ate",
+    wt_mod = "a propensity score model",
+    outcome_mod = "an outcome model",
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = effects
+  )
+}
+
 # ---- new_ipw() ---------------------------------------------------------------
 
-test_that("new_ipw() builds the documented six-field list", {
+test_that("new_ipw() builds the documented seven-field list", {
   estimates <- binary_estimates()
   fit <- structure(list(theta = c(1, 2)), class = "cg_mestimator")
 
@@ -112,14 +127,23 @@ test_that("new_ipw() builds the documented six-field list", {
     outcome_mod = "an outcome model",
     estimates = estimates,
     se_method = "mestimation",
-    fit = fit
+    fit = fit,
+    effects = "conditional"
   )
 
   expect_type(res, "list")
   expect_s3_class(res, "ipw", exact = TRUE)
   expect_identical(
     names(res),
-    c("estimand", "wt_mod", "outcome_mod", "estimates", "se_method", "fit")
+    c(
+      "estimand",
+      "wt_mod",
+      "outcome_mod",
+      "estimates",
+      "se_method",
+      "fit",
+      "effects"
+    )
   )
 
   expect_identical(res$estimand, "ate")
@@ -128,12 +152,13 @@ test_that("new_ipw() builds the documented six-field list", {
   expect_identical(res$estimates, estimates)
   expect_identical(res$se_method, "mestimation")
   expect_identical(res$fit, fit)
+  expect_identical(res$effects, "conditional")
 })
 
 test_that("new_ipw() keeps a NULL fit as a named field", {
   # The linearization path has no M-estimator object to report. `fit` still has
   # to be present and `NULL`, because callers read the field by name and a list
-  # that dropped it would have five elements rather than six.
+  # that dropped it would have six elements rather than seven.
   res <- new_ipw(
     estimand = "att",
     wt_mod = NULL,
@@ -143,10 +168,18 @@ test_that("new_ipw() keeps a NULL fit as a named field", {
     fit = NULL
   )
 
-  expect_length(res, 6L)
+  expect_length(res, 7L)
   expect_identical(
     names(res),
-    c("estimand", "wt_mod", "outcome_mod", "estimates", "se_method", "fit")
+    c(
+      "estimand",
+      "wt_mod",
+      "outcome_mod",
+      "estimates",
+      "se_method",
+      "fit",
+      "effects"
+    )
   )
   expect_null(res$fit)
   expect_identical(res$se_method, "linearization")
@@ -157,17 +190,114 @@ test_that("new_ipw() takes its arguments in the documented order", {
   # order is part of the contract and not just the field order.
   estimates <- binary_estimates()
 
-  positional <- new_ipw("ate", "wt", "outcome", estimates, "mestimation", "fit")
+  positional <- new_ipw(
+    "ate",
+    "wt",
+    "outcome",
+    estimates,
+    "mestimation",
+    "fit",
+    "conditional"
+  )
   named <- new_ipw(
     estimand = "ate",
     wt_mod = "wt",
     outcome_mod = "outcome",
     estimates = estimates,
     se_method = "mestimation",
-    fit = "fit"
+    fit = "fit",
+    effects = "conditional"
   )
 
   expect_identical(positional, named)
+
+  # `effects` is the last argument as well as the last field, so a call written
+  # against the six-argument signature is still a call this one answers, and it
+  # still means the marginal reading.
+  earlier <- new_ipw("ate", "wt", "outcome", estimates, "mestimation", "fit")
+
+  expect_identical(names(earlier), names(positional))
+  expect_identical(earlier$effects, "marginal")
+})
+
+# ---- the effects mode --------------------------------------------------------
+
+test_that("new_ipw() defaults the effects mode to marginal", {
+  # A method that names no mode reports marginal effects, which is what every
+  # method downstream computes today. The default is stored rather than left
+  # absent, so that a caller reading `res$effects` gets the mode whichever way
+  # the result was built.
+  res <- new_ipw(
+    estimand = "ate",
+    wt_mod = "a propensity score model",
+    outcome_mod = "an outcome model",
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL
+  )
+
+  expect_identical(res$effects, "marginal")
+  expect_identical(names(res)[[7]], "effects")
+  expect_identical(res[[7]], "marginal")
+})
+
+test_that("new_ipw() stores either mode as given", {
+  expect_identical(ipw_with_effects("marginal")$effects, "marginal")
+  expect_identical(ipw_with_effects("conditional")$effects, "conditional")
+})
+
+test_that("new_ipw() rejects an effects value that is not a mode", {
+  # The field has two readings and no third. A misspelling stored unchecked
+  # would sit in the result until something downstream branched on the mode and
+  # took the branch neither reading names.
+  expect_error(
+    ipw_with_effects("conditonal"),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    ipw_with_effects("conditonal"),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_with_effects("everything"),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  # The value is the string, so case is part of it.
+  expect_error(
+    ipw_with_effects("Marginal"),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+})
+
+test_that("new_ipw() rejects an effects value that is not a single string", {
+  # A factor prints as its label and a length-two vector holds a mode in its
+  # first element, so both would pass a check that read the first element of
+  # whatever it was given, and neither is a mode.
+  expect_error(
+    ipw_with_effects(factor("marginal")),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    ipw_with_effects(1),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    ipw_with_effects(TRUE),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    ipw_with_effects(c("marginal", "conditional")),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    ipw_with_effects(c("marginal", "marginal")),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+})
+
+test_that("the effects error states the contract", {
+  expect_snapshot(error = TRUE, ipw_with_effects("everything"))
+  expect_snapshot(error = TRUE, ipw_with_effects(c("marginal", "conditional")))
 })
 
 # ---- print.ipw() -------------------------------------------------------------

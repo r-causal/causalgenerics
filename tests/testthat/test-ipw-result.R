@@ -679,6 +679,15 @@ test_that("print() reports a conditional result with no corrected covariance", {
     tolerance = 1e-4
   )
 
+  # The standard errors the model computed for itself are not among the numbers
+  # on the row. A column of them would satisfy everything above while reporting
+  # the uncertainty the coefficients would have had if the weights had been
+  # fixed rather than estimated, which is the reading this table exists to
+  # correct, and a reader has no way to tell such a column from the corrected
+  # one.
+  own_se <- sqrt(diag(stats::vcov(conditional_models()$outcome_mod)))
+  expect_false(any(abs(printed_numbers(out, "z") - own_se[["z"]]) < 1e-4))
+
   # The note states the fact. Its wording is the implementation's, but a reader
   # has to be told that the covariance is the missing part rather than left to
   # notice that a column is absent. It is part of the printed form rather than

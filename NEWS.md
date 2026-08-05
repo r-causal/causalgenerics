@@ -1,5 +1,12 @@
 # causalgenerics (development version)
 
+* `print()` on an `ipw` result names the reading it is showing, on an `Effects:`
+  line beside the estimand and in the heading of the table. The marginal
+  reading tabulates the effect estimates as before, under `Marginal estimates:`.
+  The conditional reading tabulates the outcome model's coefficients with the
+  standard errors the corrected covariance implies, and prints the coefficients
+  on their own, with a note, when the outcome model records no such covariance.
+
 * `coef()`, `vcov()`, and `confint()` on an `ipw` result report the reading the
   `effects` field records, and each gains an `effects` argument that names a
   reading for one call without changing the result. The conditional reading

@@ -21,6 +21,7 @@
     Output
       Inverse Probability Weight Estimator
       Estimand: ATE 
+      Effects: marginal (population-averaged) 
       
       Weight Estimator:
         Call: glm(formula = z ~ x, family = binomial(), data = dat) 
@@ -28,7 +29,7 @@
       Outcome Model:
         Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
       
-      Estimates:
+      Marginal estimates:
               estimate  std.err      z ci.lower ci.upper conf.level p.value  
       rd      0.199882 0.092425 2.1626 0.018732  0.38103       0.95 0.03057 *
       log(rr) 0.560414 0.273519 2.0489 0.024326  1.09650       0.95 0.04047 *
@@ -43,6 +44,7 @@
     Output
       Inverse Probability Weight Estimator
       Estimand: ATE 
+      Effects: marginal (population-averaged) 
       
       Weight Estimator:
         Call: glm(formula = z ~ x, family = binomial(), data = dat) 
@@ -50,7 +52,7 @@
       Outcome Model:
         Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
       
-      Estimates:
+      Marginal estimates:
                      estimate  std.err      z  ci.lower ci.upper conf.level   p.value
       rd b vs a      0.081945 0.050387 1.6263 -0.016811  0.18070       0.95 0.1038822
       log(rr) b vs a 0.168870 0.104633 1.6139 -0.036207  0.37395       0.95 0.1065433
@@ -75,6 +77,7 @@
     Output
       Inverse Probability Weight Estimator
       Estimand: ATE 
+      Effects: marginal (population-averaged) 
       
       Weight Estimator:
         Call: glm(formula = z ~ x, family = binomial(), data = dat) 
@@ -82,9 +85,62 @@
       Outcome Model:
         Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
       
-      Estimates:
+      Marginal estimates:
            estimate std.err      z ci.lower ci.upper conf.level   p.value    
       diff  2.25255 0.17524 12.854   1.9091    2.596       0.95 < 2.2e-16 ***
       ---
       Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+# print() names the conditional reading in its metadata and its table
+
+    Code
+      print(res)
+    Output
+      Inverse Probability Weight Estimator
+      Estimand: ATE 
+      Effects: conditional (outcome model) 
+      
+      Weight Estimator:
+        Call: glm(formula = z ~ x, family = binomial(), data = dat) 
+      
+      Outcome Model:
+        Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
+      
+      Conditional estimates (outcome model):
+                  Estimate Std. Error z value Pr(>|z|)
+      (Intercept) -0.84730    0.86066 -0.9845   0.3249
+      z            1.69460    1.21716  1.3923   0.1638
+
+# print() reports a conditional result with no corrected covariance
+
+    Code
+      print(res)
+    Output
+      Inverse Probability Weight Estimator
+      Estimand: ATE 
+      Effects: conditional (outcome model) 
+      
+      Weight Estimator:
+        Call: glm(formula = z ~ x, family = binomial(), data = dat) 
+      
+      Outcome Model:
+        Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
+      
+      Conditional estimates (outcome model):
+                  Estimate
+      (Intercept)  -0.8473
+      z             1.6946
+      
+      Standard errors are not reported: this result's outcome model records
+      no covariance from the joint estimation of the weights and the outcome.
+      The package that produced it attaches one by wrapping the model with
+      `new_ipw_model()`.
+
+# print() refuses a stored mode that is not a reading
+
+    Code
+      print(res)
+    Condition
+      Error in `print.ipw()`:
+      ! `effects` must be a single string, either "marginal" or "conditional".
 

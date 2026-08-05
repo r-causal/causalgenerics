@@ -102,6 +102,10 @@ path, including the ones that have no fitted variance object to report, and
 \code{effects} is present whether or not the method that built the result named a
 mode.
 
+\code{print()} writes the estimand and the call of each component model, then the
+table of the surface the result's presentation mode names. The section below
+describes the two modes and what each one tabulates.
+
 \code{as.data.frame()} returns the \code{estimates} component. With
 \code{exponentiate = TRUE} it moves the \code{log(rr)} and \code{log(or)} rows to their
 natural scale, exponentiating the point estimate and the confidence limits and
@@ -127,6 +131,18 @@ outcome model's coefficient surface. Both surfaces always exist on the
 object, so the field says which one the result presents rather than which
 one it holds. \code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} are how a caller moves a
 result between them.
+
+A printed result names its mode twice, since the two readings are different
+tables of different numbers: once on an \verb{Effects:} line beside the estimand,
+and once in the heading of the table itself. The marginal reading tabulates
+the effect estimates the result stores, under \verb{Marginal estimates:}. The
+conditional reading tabulates the outcome model's coefficients, under
+\verb{Conditional estimates (outcome model):}, with the standard errors implied by
+the corrected covariance a fitting package attaches through \code{\link[=new_ipw_model]{new_ipw_model()}}.
+An outcome model that carries no such covariance is still printed: the
+coefficients are written on their own, followed by a note saying that no
+covariance from the joint estimation is recorded, rather than beside the
+standard errors the model computed for itself.
 }
 
 \section{The covariance of the effects}{

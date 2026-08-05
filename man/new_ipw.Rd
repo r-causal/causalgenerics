@@ -6,7 +6,15 @@
 \alias{as.data.frame.ipw}
 \title{Construct an inverse probability weighted result}
 \usage{
-new_ipw(estimand, wt_mod, outcome_mod, estimates, se_method, fit)
+new_ipw(
+  estimand,
+  wt_mod,
+  outcome_mod,
+  estimates,
+  se_method,
+  fit,
+  effects = "marginal"
+)
 
 \method{print}{ipw}(x, ...)
 
@@ -29,6 +37,10 @@ or \code{"linearization"}.}
 
 \item{fit}{The fitted variance object, or \code{NULL} when the method has none.}
 
+\item{effects}{The presentation mode the result reports its effects in,
+either \code{"marginal"} or \code{"conditional"}. A method that names no mode reports
+marginal effects.}
+
 \item{x}{An \code{ipw} object.}
 
 \item{...}{Further arguments. \code{print()} ignores them; \code{as.data.frame()}
@@ -43,7 +55,7 @@ statistics, and p-values remain on the log scale. Default is \code{FALSE}.}
 }
 \value{
 \code{new_ipw()} returns an S3 object of class \code{ipw}: a list of the
-following six components, in this order.
+following seven components, in this order.
 \describe{
 \item{\code{estimand}}{The causal estimand, such as \code{"ate"} or \code{"att"}.}
 \item{\code{wt_mod}}{The weighting object: the fitted model that produced the
@@ -61,6 +73,11 @@ or \code{"linearization"}.}
 \item{\code{fit}}{The fitted object the variance estimator produced, or \code{NULL}.
 A method that stacks estimating equations records the M-estimator here;
 the linearization path has no such object and records \code{NULL}.}
+\item{\code{effects}}{The presentation mode, either \code{"marginal"} or
+\code{"conditional"}. The marginal reading shows the causal contrast
+estimates and the conditional reading presents the outcome model's
+coefficient surface; both surfaces exist on every result. See
+\code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}}.}
 }
 
 \code{print()} returns its input invisibly. \code{as.data.frame()} returns the
@@ -81,7 +98,13 @@ the situation this package exists to prevent.
 
 The field names and their order are part of the contract, since callers read
 fields by name and print the object positionally. \code{fit} is present on every
-path, including the ones that have no fitted variance object to report.
+path, including the ones that have no fitted variance object to report, and
+\code{effects} is present whether or not the method that built the result named a
+mode.
+
+\code{print()} writes the estimand and the call of each component model, then the
+table of the surface the result's presentation mode names. The section below
+describes the two modes and what each one tabulates.
 
 \code{as.data.frame()} returns the \code{estimates} component. With
 \code{exponentiate = TRUE} it moves the \code{log(rr)} and \code{log(or)} rows to their
@@ -98,6 +121,28 @@ position that \code{print()} writes down the side of its table and that
 and \code{comparison} pasted together, such as \code{"rd b vs a"}, when there is. A
 categorical exposure repeats each effect measure across its contrasts, so
 \code{effect} alone would name several rows the same thing.
+}
+
+\section{The presentation mode}{
+A result reports its effects in one of two readings, recorded in the
+\code{effects} field. The \code{"marginal"} reading shows the causal contrast
+estimates the method targeted; the \code{"conditional"} reading presents the
+outcome model's coefficient surface. Both surfaces always exist on the
+object, so the field says which one the result presents rather than which
+one it holds. \code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} are how a caller moves a
+result between them.
+
+A printed result names its mode twice, since the two readings are different
+tables of different numbers: once on an \verb{Effects:} line beside the estimand,
+and once in the heading of the table itself. The marginal reading tabulates
+the effect estimates the result stores, under \verb{Marginal estimates:}. The
+conditional reading tabulates the outcome model's coefficients, under
+\verb{Conditional estimates (outcome model):}, with the standard errors implied by
+the corrected covariance a fitting package attaches through \code{\link[=new_ipw_model]{new_ipw_model()}}.
+An outcome model that carries no such covariance is still printed: the
+coefficients are written on their own, followed by a note saying that no
+covariance from the joint estimation is recorded, rather than beside the
+standard errors the model computed for itself.
 }
 
 \section{The covariance of the effects}{
@@ -147,5 +192,6 @@ res
 as.data.frame(res, exponentiate = TRUE)
 }
 \seealso{
-\code{\link[=ipw]{ipw()}}, the generic these results come from.
+\code{\link[=ipw]{ipw()}}, the generic these results come from, and \code{\link[=as_marginal]{as_marginal()}}
+and \code{\link[=as_conditional]{as_conditional()}} for the presentation mode.
 }

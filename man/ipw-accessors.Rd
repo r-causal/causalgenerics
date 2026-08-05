@@ -10,11 +10,11 @@
 \alias{weights.ipw}
 \title{Model accessors for an inverse probability weighted result}
 \usage{
-\method{coef}{ipw}(object, ...)
+\method{coef}{ipw}(object, ..., effects = NULL)
 
-\method{vcov}{ipw}(object, ...)
+\method{vcov}{ipw}(object, ..., effects = NULL)
 
-\method{confint}{ipw}(object, parm, level = 0.95, ...)
+\method{confint}{ipw}(object, parm, level = 0.95, ..., effects = NULL)
 
 \method{nobs}{ipw}(object, ...)
 
@@ -27,28 +27,47 @@
 
 \item{...}{Further arguments. These methods ignore them.}
 
-\item{parm}{The effects to report an interval for, given either as effect
-labels or as their positions in the result. Missing means all of them.}
+\item{effects}{The reading to report, either \code{"marginal"} or
+\code{"conditional"}. \code{NULL}, the default, reports the reading the result
+records; any other value overrides it for the one call and leaves the
+result as it is.}
+
+\item{parm}{The rows to report an interval for, given either as the labels
+of the reported surface or as their positions in it. Missing means all of
+them.}
 
 \item{level}{The confidence level. At the level the result stores, its own
 limits are returned; at any other level they are recomputed.}
 }
 \value{
 \code{coef()} returns a named numeric vector of effect estimates, one element per
-row of the \code{estimates} frame, named by effect label.
+row of the \code{estimates} frame, named by effect label. In the conditional
+reading it returns the outcome model's coefficients as that model reports
+them, names included.
 
 \code{vcov()} returns the square numeric covariance matrix of those estimates,
 with the effect labels as dimnames on both margins, exactly as the fitting
 package attached it. A result that records no such matrix raises an error of
 class \code{causalgenerics_no_vcov} rather than returning one built from the
-standard errors, which would report the effects as uncorrelated.
+standard errors, which would report the effects as uncorrelated. In the
+conditional reading it returns the corrected covariance of the outcome
+model's coefficients, and an outcome model that carries none raises an error
+of class \code{causalgenerics_no_conditional_vcov}.
 
 \code{confint()} returns a matrix with one row per effect \code{parm} selects, in the
 order \code{parm} gives them, and two columns holding the lower and upper limit.
 The rows are named by effect label and the columns by the two tail
 probabilities as percentages, the way the \code{confint()} methods in \pkg{stats}
 name theirs. A character \code{parm} that names an effect the result does not
-report raises an error of class \code{causalgenerics_invalid_argument}.
+report raises an error of class \code{causalgenerics_invalid_argument}. In the
+conditional reading the rows are the outcome model's coefficients, which
+\code{parm} names and indexes in the same two ways, and the limits are the normal
+ones built from the corrected covariance at every level, since the limits the
+result stores belong to the effects the marginal reading reports.
+
+\code{coef()}, \code{vcov()}, and \code{confint()} raise an error of class
+\code{causalgenerics_invalid_argument_effects} when \code{effects} names neither
+reading, and when the result's own field does.
 
 \code{nobs()} returns a single integer, the number of observations the outcome
 model was fitted on, which is the number the estimates were computed from and
@@ -83,7 +102,8 @@ caller writing against a result would then get whichever package was
 installed last rather than the contract.
 
 Everything they read is part of the \code{\link[=new_ipw]{new_ipw()}} contract: the \code{estimates}
-frame, the \code{ipw_vcov} attribute attached to it, \code{outcome_mod}, and \code{fit}.
+frame, the \code{ipw_vcov} attribute attached to it, \code{outcome_mod}, \code{fit}, and the
+\code{effects} field the section below describes.
 They never branch on \code{se_method}, since the fields they read already hold the
 result of whatever computation that names, and they reach into \code{fit} only
 through ordinary S3 dispatch. A package whose variance object is a bare list
@@ -93,6 +113,31 @@ Rows are named by the effect labels the \code{\link[=new_ipw]{new_ipw()}} contra
 name \code{coef()} gives an estimate is the one \code{vcov()} and \code{confint()} use for
 it and the one \code{print()} labels its row with.
 }
+\section{The reading these methods report}{
+\code{coef()}, \code{vcov()}, and \code{confint()} report the surface the result's \code{effects}
+field names, and take an \code{effects} argument that names one for a single call.
+The marginal reading is the causal contrast estimates, which is what these
+methods reported before the field existed and what a result that records no
+mode still reports. The conditional reading is the outcome model's
+coefficient surface: \code{coef()} gives the model's coefficients, \code{vcov()} gives
+their covariance, and \code{confint()} bounds them.
+
+The covariance the conditional reading reports is the block of the joint
+estimation that the fitting package attached with \code{\link[=new_ipw_model]{new_ipw_model()}}, never
+the one the outcome model computed for itself. A model fitted as though its
+weights were fixed understates its uncertainty, because the weights were
+estimated from the same data, so there is nothing to fall back on when no
+corrected block is there. \code{vcov()} and \code{confint()} raise an error of class
+\code{causalgenerics_no_conditional_vcov} instead, which the package that produced
+the result answers by wrapping the outcome model with \code{\link[=new_ipw_model]{new_ipw_model()}}
+before it builds the result. \code{coef()} needs no such block and reports the
+coefficients either way.
+
+\code{nobs()}, \code{df.residual()}, and \code{weights()} describe the fit rather than a
+surface of it, so they answer the same way in either reading and take no
+\code{effects} argument.
+}
+
 \examples{
 dat <- data.frame(
   x = rep(c(-1.5, -0.5, 0.5, 1.5), each = 5),
@@ -148,6 +193,36 @@ nobs(res)
 df.residual(res)
 
 head(weights(res))
+
+# The conditional reading reports the outcome model's coefficient surface
+# rather than the effects.
+coef(res, effects = "conditional")
+
+# Its covariance is the corrected block a fitting package attaches to the
+# outcome model. This one carries none, and the covariance the model computed
+# for itself is not a substitute: it treats the estimated weights as fixed.
+try(vcov(res, effects = "conditional"))
+
+outcome_mod <- glm(y ~ z, family = quasibinomial(), data = dat, weights = wts)
+
+# Standing in for the outcome block of a stacked sandwich, which a method
+# computes from the estimating equations of both steps.
+corrected <- vcov(outcome_mod) * 1.4
+
+conditional <- as_conditional(new_ipw(
+  estimand = "ate",
+  wt_mod = glm(z ~ x, family = binomial(), data = dat),
+  outcome_mod = new_ipw_model(outcome_mod, corrected),
+  estimates = estimates,
+  se_method = "linearization",
+  fit = NULL
+))
+
+# A result that records the conditional reading answers in it with nothing
+# named at the call site.
+coef(conditional)
+vcov(conditional)
+confint(conditional)
 
 }
 \seealso{

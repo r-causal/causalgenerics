@@ -15,7 +15,13 @@
 #'
 #' The field names and their order are part of the contract, since callers read
 #' fields by name and print the object positionally. `fit` is present on every
-#' path, including the ones that have no fitted variance object to report.
+#' path, including the ones that have no fitted variance object to report, and
+#' `effects` is present whether or not the method that built the result named a
+#' mode.
+#'
+#' `print()` writes the estimand and the call of each component model, then the
+#' table of the surface the result's presentation mode names. The section below
+#' describes the two modes and what each one tabulates.
 #'
 #' `as.data.frame()` returns the `estimates` component. With
 #' `exponentiate = TRUE` it moves the `log(rr)` and `log(or)` rows to their
@@ -33,6 +39,28 @@
 #' and `comparison` pasted together, such as `"rd b vs a"`, when there is. A
 #' categorical exposure repeats each effect measure across its contrasts, so
 #' `effect` alone would name several rows the same thing.
+#'
+#' # The presentation mode
+#'
+#' A result reports its effects in one of two readings, recorded in the
+#' `effects` field. The `"marginal"` reading shows the causal contrast
+#' estimates the method targeted; the `"conditional"` reading presents the
+#' outcome model's coefficient surface. Both surfaces always exist on the
+#' object, so the field says which one the result presents rather than which
+#' one it holds. [as_marginal()] and [as_conditional()] are how a caller moves a
+#' result between them.
+#'
+#' A printed result names its mode twice, since the two readings are different
+#' tables of different numbers: once on an `Effects:` line beside the estimand,
+#' and once in the heading of the table itself. The marginal reading tabulates
+#' the effect estimates the result stores, under `Marginal estimates:`. The
+#' conditional reading tabulates the outcome model's coefficients, under
+#' `Conditional estimates (outcome model):`, with the standard errors implied by
+#' the corrected covariance a fitting package attaches through [new_ipw_model()].
+#' An outcome model that carries no such covariance is still printed: the
+#' coefficients are written on their own, followed by a note saying that no
+#' covariance from the joint estimation is recorded, rather than beside the
+#' standard errors the model computed for itself.
 #'
 #' # The covariance of the effects
 #'
@@ -56,9 +84,12 @@
 #' @param se_method The standard error method that ran, such as `"mestimation"`
 #'   or `"linearization"`.
 #' @param fit The fitted variance object, or `NULL` when the method has none.
+#' @param effects The presentation mode the result reports its effects in,
+#'   either `"marginal"` or `"conditional"`. A method that names no mode reports
+#'   marginal effects.
 #'
 #' @return `new_ipw()` returns an S3 object of class `ipw`: a list of the
-#'   following six components, in this order.
+#'   following seven components, in this order.
 #' \describe{
 #'   \item{`estimand`}{The causal estimand, such as `"ate"` or `"att"`.}
 #'   \item{`wt_mod`}{The weighting object: the fitted model that produced the
@@ -76,12 +107,18 @@
 #'   \item{`fit`}{The fitted object the variance estimator produced, or `NULL`.
 #'     A method that stacks estimating equations records the M-estimator here;
 #'     the linearization path has no such object and records `NULL`.}
+#'   \item{`effects`}{The presentation mode, either `"marginal"` or
+#'     `"conditional"`. The marginal reading shows the causal contrast
+#'     estimates and the conditional reading presents the outcome model's
+#'     coefficient surface; both surfaces exist on every result. See
+#'     [as_marginal()] and [as_conditional()].}
 #' }
 #'
 #'   `print()` returns its input invisibly. `as.data.frame()` returns the
 #'   `estimates` component as a data frame.
 #'
-#' @seealso [ipw()], the generic these results come from.
+#' @seealso [ipw()], the generic these results come from, and [as_marginal()]
+#'   and [as_conditional()] for the presentation mode.
 #'
 #' @export
 #'
@@ -118,7 +155,20 @@
 #'
 #' # The ratios on their natural scale.
 #' as.data.frame(res, exponentiate = TRUE)
-new_ipw <- function(estimand, wt_mod, outcome_mod, estimates, se_method, fit) {
+new_ipw <- function(
+  estimand,
+  wt_mod,
+  outcome_mod,
+  estimates,
+  se_method,
+  fit,
+  effects = "marginal"
+) {
+  # The mode is the one field with a fixed set of values, and a misspelling
+  # stored unchecked would sit in the result until something downstream branched
+  # on it and took the branch neither reading names.
+  check_ipw_effects(effects)
+
   structure(
     list(
       estimand = estimand,
@@ -126,7 +176,8 @@ new_ipw <- function(estimand, wt_mod, outcome_mod, estimates, se_method, fit) {
       outcome_mod = outcome_mod,
       estimates = estimates,
       se_method = se_method,
-      fit = fit
+      fit = fit,
+      effects = effects
     ),
     class = "ipw"
   )
@@ -137,10 +188,17 @@ new_ipw <- function(estimand, wt_mod, outcome_mod, estimates, se_method, fit) {
 #'   passes them to [base::as.data.frame()].
 #' @rdname new_ipw
 #' @export
-#' @importFrom stats printCoefmat
 print.ipw <- function(x, ...) {
+  # The mode decides which table is written, and it is read first so that a
+  # result recording something that is not a reading is refused before any of
+  # the summary reaches the console.
+  effects <- ipw_effects(x)
+
   cat("Inverse Probability Weight Estimator\n")
-  cat("Estimand:", toupper(x$estimand), "\n\n")
+  cat("Estimand:", toupper(x$estimand), "\n")
+  # The mode is a fact about the result rather than about the table, so it is
+  # reported here beside the estimand as well as in the table's own heading.
+  cat("Effects:", ipw_effects_label(effects), "\n\n")
 
   cat("Weight Estimator:\n")
   cat("  Call:", format_model_call(x$wt_mod), "\n")
@@ -151,17 +209,129 @@ print.ipw <- function(x, ...) {
 
   cat("\n")
 
-  cat("Estimates:\n")
-  # The rows are keyed by effect label, and the character columns the labels are
-  # built from are dropped from the numeric matrix printCoefmat() formats.
-  estimates <- x$estimates[setdiff(
-    names(x$estimates),
-    c("effect", "comparison")
-  )]
-  rownames(estimates) <- ipw_effect_labels(x$estimates)
-  stats::printCoefmat(estimates, has.Pvalue = TRUE, cs.ind = 1:2, tst.ind = 3)
+  if (effects == "conditional") {
+    print_conditional_estimates(x$outcome_mod)
+  } else {
+    print_marginal_estimates(x$estimates)
+  }
 
   invisible(x)
+}
+
+#' The presentation mode as the printed form names it
+#'
+#' The field holds the reading's name and nothing more, and a printed line
+#' saying only "marginal" or "conditional" would say that the estimates are
+#' marginal or conditional without saying what over. The parenthetical completes
+#' each one.
+#'
+#' @param effects The mode the result records, either `"marginal"` or
+#'   `"conditional"`.
+#'
+#' @return A single string.
+#'
+#' @noRd
+ipw_effects_label <- function(effects) {
+  switch(
+    effects,
+    marginal = "marginal (population-averaged)",
+    conditional = "conditional (outcome model)"
+  )
+}
+
+#' Write the table the marginal reading reports
+#'
+#' The effect estimates the result stores, keyed by the effect labels the
+#' [new_ipw()] contract defines.
+#'
+#' @param estimates The `estimates` component of an `ipw` object.
+#'
+#' @return `NULL`, invisibly. Called for the table it writes.
+#'
+#' @noRd
+#' @importFrom stats printCoefmat
+print_marginal_estimates <- function(estimates) {
+  cat("Marginal estimates:\n")
+
+  # The rows are keyed by effect label, and the character columns the labels are
+  # built from are dropped from the numeric matrix printCoefmat() formats.
+  numbers <- estimates[setdiff(names(estimates), c("effect", "comparison"))]
+  rownames(numbers) <- ipw_effect_labels(estimates)
+  stats::printCoefmat(numbers, has.Pvalue = TRUE, cs.ind = 1:2, tst.ind = 3)
+
+  invisible(NULL)
+}
+
+#' Write the table the conditional reading reports
+#'
+#' The outcome model's coefficients, with the standard errors implied by the
+#' covariance the joint estimation of the weights and the outcome gives, which a
+#' fitting package attaches with [new_ipw_model()].
+#'
+#' A model carrying no such covariance is summarized rather than refused.
+#' `print()` is the view of whatever a caller is holding, and refusing here would
+#' leave a result that cannot be looked at at all. The coefficients are written
+#' on their own in that case, with a note saying what is missing, rather than
+#' beside the standard errors the model computed for itself: those treat the
+#' estimated weights as fixed and report an uncertainty the coefficients do not
+#' have, and a column of them under this heading would be read as the corrected
+#' ones.
+#'
+#' @param model The result's `outcome_mod`.
+#'
+#' @return `NULL`, invisibly. Called for the table it writes.
+#'
+#' @noRd
+#' @importFrom stats coef pnorm printCoefmat
+print_conditional_estimates <- function(model) {
+  cat("Conditional estimates (outcome model):\n")
+
+  estimate <- stats::coef(model)
+
+  # Asked for through the helper the accessors read it with, so that whether a
+  # model carries a covariance this reading can report is one fact rather than
+  # two.
+  covariance <- tryCatch(
+    conditional_vcov(model),
+    causalgenerics_no_conditional_vcov = function(cnd) NULL
+  )
+
+  if (is.null(covariance)) {
+    stats::printCoefmat(
+      cbind(Estimate = estimate),
+      cs.ind = 1L,
+      tst.ind = integer(),
+      has.Pvalue = FALSE,
+      signif.stars = FALSE
+    )
+    cat("\n")
+    # Printed rather than signalled, so that it travels with the output a caller
+    # captures and stays beside the table it qualifies.
+    cat(
+      "Standard errors are not reported: this result's outcome model records\n",
+      "no covariance from the joint estimation of the weights and the outcome.\n",
+      "The package that produced it attaches one by wrapping the model with\n",
+      "`new_ipw_model()`.\n",
+      sep = ""
+    )
+    return(invisible(NULL))
+  }
+
+  standard_error <- sqrt(diag(covariance))
+  z <- estimate / standard_error
+  stats::printCoefmat(
+    cbind(
+      Estimate = estimate,
+      `Std. Error` = standard_error,
+      `z value` = z,
+      `Pr(>|z|)` = 2 * stats::pnorm(-abs(z))
+    ),
+    has.Pvalue = TRUE,
+    cs.ind = 1:2,
+    tst.ind = 3
+  )
+
+  invisible(NULL)
 }
 
 #' The label each row of an `ipw` result's estimates carries

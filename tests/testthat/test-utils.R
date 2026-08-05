@@ -1,4 +1,4 @@
-# The condition contract is pinned here, at the two helpers that build it, and
+# The condition contract is pinned here, at the helpers that build it, and
 # nowhere else. Every other assertion in the suite matches these conditions by
 # class membership, which is the right altitude for a call site: it says the
 # error a function signals is the one the caller is told to handle, and it stays
@@ -45,6 +45,40 @@ test_that("stop_invalid_argument() builds the documented condition", {
     "`value` must be a numeric vector."
   )
   expect_identical(conditionCall(cnd), quote(reject_arg(1)))
+})
+
+test_that("stop_no_conditional_vcov() builds the documented condition", {
+  # A named wrapper rather than a bare call, for the reason the test above uses
+  # one: `sys.call(-1)` records the caller's call, and this is the caller.
+  refuse_conditional <- function() stop_no_conditional_vcov()
+
+  cnd <- tryCatch(refuse_conditional(), error = identity)
+
+  # The specific class first and the general one behind it. A handler written
+  # for any covariance this package cannot report catches this one alongside
+  # `stop_no_vcov()`, and a handler written for the conditional reading tells
+  # the two apart: the first says the result records no covariance of its
+  # effects, the second that the outcome model carries no corrected one.
+  expect_identical(
+    class(cnd),
+    c(
+      "causalgenerics_no_conditional_vcov",
+      "causalgenerics_no_vcov",
+      "error",
+      "condition"
+    )
+  )
+
+  # The shape of the message rather than its wording, which the snapshots at the
+  # accessors record: a single string naming the reading that cannot be
+  # answered, ending in a period the way every condition here does.
+  message <- conditionMessage(cnd)
+
+  expect_type(message, "character")
+  expect_length(message, 1L)
+  expect_match(message, "conditional", fixed = TRUE)
+  expect_match(message, "\\.$")
+  expect_identical(conditionCall(cnd), quote(refuse_conditional()))
 })
 
 test_that("stop_no_method() builds the documented condition", {

@@ -12,6 +12,7 @@ reference:
     no masking.
   contents:
   - ipw
+  - ipw-modes
   - ess
   - causal-weights
 - title: Shared classes

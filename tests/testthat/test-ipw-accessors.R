@@ -18,6 +18,15 @@
 # dependency to build one with. The binary, categorical, and continuous frames
 # hold the same numbers as their counterparts in `test-ipw-result.R`, so that
 # the printed form and the accessors are asserted against one set of estimates.
+#
+# `coef()`, `vcov()`, and `confint()` also read the presentation mode the
+# `effects` field records, and take an `effects` argument that names a reading
+# for one call. The marginal reading is the one every assertion in the sections
+# above is written against. The conditional reading reports the outcome model's
+# coefficient surface, and its covariance is the corrected block a fitting
+# package attached with `new_ipw_model()`, never the one the outcome model
+# computed for itself. `nobs()`, `df.residual()`, and `weights()` describe the
+# fit rather than a surface of it, so they answer the same way in either mode.
 
 # ---- fixtures ----------------------------------------------------------------
 
@@ -102,6 +111,15 @@ binary_labels <- function() {
   c("rd", "log(rr)", "log(or)")
 }
 
+# The names the outcome model's coefficient surface carries, which are the row
+# labels of the conditional reading. Written out rather than read off the model
+# for the reason the effect labels are: the claim is about which of the two
+# surfaces comes back, and `names(coef(mod))` on both sides of an assertion
+# would hold whichever one it was.
+conditional_labels <- function() {
+  c("(Intercept)", "z")
+}
+
 categorical_labels <- function() {
   c(
     "rd b vs a",
@@ -160,6 +178,27 @@ outcome_weights <- function() {
   setNames(rep(c(0.5, 1.5, 1, 2), each = 5), paste0("u", 1:20))
 }
 
+# The outcome model every result below is built around. It is a function of its
+# own rather than a call inside the result builder because the conditional
+# reading is a statement about this model, and asserting it needs the model and
+# the result at once. The fit is deterministic, so the model a test holds and the
+# one the result carries are the same numbers.
+outcome_model <- function(wts = outcome_weights()) {
+  glm(y ~ z, family = quasibinomial(), data = ipw_data(), weights = wts)
+}
+
+# The corrected covariance of that model's coefficients, in the shape a fitting
+# package hands to `new_ipw_model()`: the outcome block of the stacked sandwich,
+# labelled with the coefficient names. It is built from the model's own
+# covariance so that the dimnames agree without being restated, and scaled so
+# that it differs from it. Accounting for the weights having been estimated
+# ordinarily widens the block, and the scaling is what makes "the conditional
+# covariance is the corrected one" separable from "the conditional covariance is
+# whatever the outcome model computed for itself".
+corrected_outcome_vcov <- function(mod = outcome_model()) {
+  stats::vcov(mod) * 1.4
+}
+
 # A variance object that is not a fitted model: a named parameter vector and its
 # covariance in a bare list, which is the shape an M-estimator from outside the
 # ecosystem can take. `df.residual()` has nothing for it and `$vcov` is right
@@ -178,32 +217,48 @@ foreign_fit <- function() {
 }
 
 # Assemble a result the way a method would, so that each test names only the
-# part it is about. The covariance is attached to the `estimates` frame rather
-# than passed to `new_ipw()`, which is where the contract puts it.
+# part it is about. The covariance of the effects is attached to the `estimates`
+# frame rather than passed to `new_ipw()`, which is where the contract puts it,
+# and the covariance of the outcome model's coefficients goes on the model
+# itself, which is where `new_ipw_model()` puts it. A result built without
+# `outcome_vcov` carries a plain `glm`, which is what a fitting package whose
+# variance estimator has no stacked system to take the block from produces.
 ipw_result <- function(
   estimates,
   vcov = NULL,
   fit = NULL,
   se_method = "mestimation",
-  wts = outcome_weights()
+  wts = outcome_weights(),
+  effects = "marginal",
+  outcome_vcov = NULL
 ) {
   if (!is.null(vcov)) {
     attr(estimates, "ipw_vcov") <- vcov
   }
-  dat <- ipw_data()
+  outcome_mod <- outcome_model(wts)
+  if (!is.null(outcome_vcov)) {
+    outcome_mod <- new_ipw_model(outcome_mod, outcome_vcov)
+  }
   new_ipw(
     estimand = "ate",
-    wt_mod = glm(z ~ x, family = binomial(), data = dat),
-    outcome_mod = glm(
-      y ~ z,
-      family = quasibinomial(),
-      data = dat,
-      weights = wts
-    ),
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = outcome_mod,
     estimates = estimates,
     se_method = se_method,
-    fit = fit
+    fit = fit,
+    effects = effects
   )
+}
+
+# A result of the shape the constructor built before the mode existed: six
+# fields and no `effects`. Results stored from an earlier version of a fitting
+# package have this shape, as does one built by hand against the earlier
+# contract. It is derived from the seven-field result rather than written out
+# again so that the two differ in the field and in nothing else.
+legacy_result <- function(estimates = binary_estimates(), vcov = NULL) {
+  fields <- unclass(ipw_result(estimates, vcov = vcov))
+  fields$effects <- NULL
+  structure(fields, class = "ipw")
 }
 
 # Whether `print()` writes a row labelled exactly `label`.
@@ -727,6 +782,487 @@ test_that("the accessors do not branch on se_method", {
   expect_identical(confint(mestimation), confint(linearization))
   expect_identical(nobs(mestimation), nobs(linearization))
   expect_identical(weights(mestimation), weights(linearization))
+})
+
+# ---- the conditional reading -------------------------------------------------
+
+test_that("coef() reports the outcome coefficients in the conditional mode", {
+  # No argument at the call site. A caller handed a conditional result asks for
+  # its coefficients the ordinary way, and that is what lets a package which
+  # calls `coef()` and `vcov()` on whatever it is given work with one: the mode
+  # travels on the object, so the caller does not have to know about it.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_identical(coef(res), coef(res$outcome_mod))
+  expect_identical(names(coef(res)), conditional_labels())
+  expect_length(coef(res), 2L)
+  # The two readings are different vectors, so the assertions above are about
+  # the mode rather than about a result whose surfaces happen to agree.
+  expect_false(identical(coef(res), coef(as_marginal(res))))
+})
+
+test_that("coef() reads the outcome model wrapped or not", {
+  # The wrapper is about the covariance. `coef()` walks past it to the model's
+  # own method, so the coefficient surface is there either way and the guard
+  # `vcov()` raises in the conditional mode has no counterpart here.
+  wrapped <- ipw_result(
+    binary_estimates(),
+    outcome_vcov = corrected_outcome_vcov(),
+    effects = "conditional"
+  )
+  bare <- ipw_result(binary_estimates(), effects = "conditional")
+
+  expect_identical(names(coef(bare)), conditional_labels())
+  expect_identical(coef(bare), coef(wrapped))
+  expect_no_error(coef(bare))
+})
+
+test_that("vcov() reports the corrected block in the conditional mode", {
+  # The conditional covariance is the one the fitting package attached to the
+  # outcome model, which is the block of the stacked sandwich that accounts for
+  # the weights having been estimated. It comes back as attached, dimnames
+  # included, so a caller reading a variance out by coefficient name gets the
+  # name `coef()` gave in the same mode.
+  corrected <- corrected_outcome_vcov()
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected,
+    effects = "conditional"
+  )
+
+  expect_identical(vcov(res), corrected)
+  expect_identical(vcov(res), vcov(res$outcome_mod))
+  expect_identical(dim(vcov(res)), c(2L, 2L))
+  expect_identical(
+    dimnames(vcov(res)),
+    list(conditional_labels(), conditional_labels())
+  )
+  # Not the covariance the outcome model computed for itself, and not the
+  # covariance of the effects either. Both are reachable from this result, and
+  # neither is the answer to this question.
+  expect_false(identical(vcov(res), stats::vcov(outcome_model())))
+  expect_false(identical(vcov(res), binary_vcov()))
+})
+
+test_that("vcov() refuses the conditional mode without a corrected block", {
+  # An outcome model that was not wrapped carries no covariance the two-step
+  # estimation implies, and there is nothing to fall back on. The model has a
+  # `vcov()` of its own, and it is the wrong answer rather than an approximate
+  # one: it treats the estimated weights as fixed and reports an uncertainty the
+  # estimate does not have. The caller is told instead.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    effects = "conditional"
+  )
+
+  expect_error(vcov(res), class = "causalgenerics_no_conditional_vcov")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    vcov(as_marginal(res), effects = "conditional"),
+    class = "causalgenerics_no_conditional_vcov"
+  )
+  # The fixture is discriminating: the naive matrix is right there to be
+  # returned by an implementation that let the guard fall through.
+  expect_no_error(stats::vcov(res$outcome_mod))
+
+  expect_snapshot(error = TRUE, vcov(res))
+})
+
+test_that("confint() bounds the outcome coefficients in the conditional mode", {
+  # The interval is the normal one built from the corrected block: the estimate
+  # plus and minus one half width, taken from the square root of the diagonal.
+  # `qnorm()` is not exactly antisymmetric, so a lower limit taken from the
+  # lower tail instead would miss this by one unit in the last place.
+  corrected <- corrected_outcome_vcov()
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected,
+    effects = "conditional"
+  )
+
+  ci <- confint(res)
+  half_width <- qnorm(1 - (1 - 0.95) / 2) * sqrt(diag(corrected))
+  estimate <- coef(res$outcome_mod)
+
+  expect_true(is.matrix(ci))
+  expect_identical(dim(ci), c(2L, 2L))
+  expect_identical(
+    dimnames(ci),
+    list(conditional_labels(), c("2.5 %", "97.5 %"))
+  )
+  expect_identical(
+    ci[, 1],
+    setNames(estimate - half_width, conditional_labels())
+  )
+  expect_identical(
+    ci[, 2],
+    setNames(estimate + half_width, conditional_labels())
+  )
+})
+
+test_that("confint() recomputes in the conditional mode at every level", {
+  # The stored limits belong to the marginal reading, and the level they are
+  # stored at is the 0.95 asked for above, so the fast path has a row to offer
+  # at every level a caller is likely to name. It has nothing to do here: the
+  # conditional limits are built from the outcome coefficients whatever the
+  # level, and the two-row matrix above is already a different shape from the
+  # three stored effects.
+  corrected <- corrected_outcome_vcov()
+  res <- ipw_result(
+    stored_interval_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected,
+    effects = "conditional"
+  )
+
+  ci <- confint(res, level = 0.9)
+  half_width <- qnorm(1 - (1 - 0.9) / 2) * sqrt(diag(corrected))
+  estimate <- coef(res$outcome_mod)
+
+  expect_identical(
+    dimnames(ci),
+    list(conditional_labels(), c("5 %", "95 %"))
+  )
+  expect_identical(
+    ci[, 1],
+    setNames(estimate - half_width, conditional_labels())
+  )
+  expect_identical(
+    ci[, 2],
+    setNames(estimate + half_width, conditional_labels())
+  )
+  # The columns are labelled the way the marginal reading labels them, since a
+  # caller reading a limit out by column name is entitled to the same names in
+  # either mode.
+  expect_identical(
+    colnames(confint(res, level = 0.99)),
+    c("0.5 %", "99.5 %")
+  )
+})
+
+test_that("confint() selects conditional rows by position and by name", {
+  # `parm` matches the surface being reported, so in this mode it indexes and
+  # names the outcome coefficients. The rows come back in the order they were
+  # asked for rather than the order the model stores them.
+  corrected <- corrected_outcome_vcov()
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected,
+    effects = "conditional"
+  )
+  half_width <- qnorm(1 - (1 - 0.95) / 2) * sqrt(diag(corrected))
+  estimate <- coef(res$outcome_mod)
+
+  expect_identical(rownames(confint(res, parm = 2)), "z")
+  expect_identical(dim(confint(res, parm = 2)), c(1L, 2L))
+  expect_identical(
+    confint(res, parm = 2)[1, 1],
+    unname(estimate - half_width)[2]
+  )
+
+  by_name <- confint(res, parm = c("z", "(Intercept)"))
+
+  expect_identical(rownames(by_name), c("z", "(Intercept)"))
+  expect_identical(
+    by_name[, 2],
+    setNames(
+      unname(estimate + half_width)[c(2, 1)],
+      c("z", "(Intercept)")
+    )
+  )
+})
+
+test_that("confint() refuses a conditional parm the outcome model lacks", {
+  # `rd` is an effect the result reports in its other reading, which is exactly
+  # the mistake worth catching: the labels a caller has in hand belong to the
+  # surface they were reading, and asking the other one for them names nothing.
+  # The condition is the one the marginal reading raises for an unmatched label,
+  # so a caller handles one class in either mode.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_error(
+    confint(res, parm = "rd"),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  expect_error(
+    confint(res, parm = "rd"),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    confint(res, parm = c("z", "rd")),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  expect_error(
+    confint(res, parm = 3),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+
+  expect_snapshot(error = TRUE, confint(res, parm = "rd"))
+})
+
+test_that("confint() refuses the conditional mode without a corrected block", {
+  # The limits are built from the covariance, so an interval in this mode needs
+  # the block `vcov()` needs. Widths taken from the model's own covariance would
+  # be the naive ones, and an interval is where a reader would be least likely
+  # to notice.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    effects = "conditional"
+  )
+
+  expect_error(confint(res), class = "causalgenerics_no_conditional_vcov")
+  expect_error(confint(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res, parm = 1, level = 0.9),
+    class = "causalgenerics_no_conditional_vcov"
+  )
+  expect_no_error(stats::vcov(res$outcome_mod))
+
+  expect_snapshot(error = TRUE, confint(res))
+})
+
+# ---- naming a reading for one call -------------------------------------------
+
+test_that("the effects argument overrides the mode a result records", {
+  # The stored mode is the default and the argument is the override, in both
+  # directions. A caller who holds a marginal result and wants the coefficient
+  # surface for one line does not have to flip the object to get it.
+  corrected <- corrected_outcome_vcov()
+  marginal <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected
+  )
+  conditional <- as_conditional(marginal)
+  effects <- setNames(binary_estimates()$estimate, binary_labels())
+
+  expect_identical(coef(marginal, effects = "conditional"), coef(conditional))
+  expect_identical(vcov(marginal, effects = "conditional"), corrected)
+  expect_identical(
+    confint(marginal, effects = "conditional"),
+    confint(conditional)
+  )
+
+  expect_identical(coef(conditional, effects = "marginal"), effects)
+  expect_identical(vcov(conditional, effects = "marginal"), binary_vcov())
+  expect_identical(
+    confint(conditional, effects = "marginal"),
+    confint(marginal)
+  )
+})
+
+test_that("the effects argument reaches parm and level in the same call", {
+  # The three arguments are independent, and a caller who names all of them
+  # names the surface, the rows of it, and the width at once. The mode reaches
+  # `confint()` through an argument here rather than through the field, so an
+  # implementation that resolved it after selecting the rows would select from
+  # the wrong surface and the level would be applied to the wrong estimates.
+  corrected <- corrected_outcome_vcov()
+  marginal <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected
+  )
+  half_width <- qnorm(1 - (1 - 0.9) / 2) * sqrt(diag(corrected))
+  estimate <- coef(marginal$outcome_mod)
+
+  ci <- confint(marginal, parm = "z", level = 0.9, effects = "conditional")
+
+  expect_identical(dim(ci), c(1L, 2L))
+  expect_identical(dimnames(ci), list("z", c("5 %", "95 %")))
+  expect_identical(ci[1, 1], unname(estimate - half_width)[2])
+  expect_identical(ci[1, 2], unname(estimate + half_width)[2])
+})
+
+test_that("a NULL effects argument declines to override", {
+  # `NULL` is the default, and it means the caller named no reading rather than
+  # naming a third one. Passing it through from a wrapper that computes an
+  # argument therefore reads the result the way omitting it does.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_identical(coef(res, effects = NULL), coef(res))
+  expect_identical(coef(res, effects = NULL), coef(res$outcome_mod))
+  expect_identical(vcov(res, effects = NULL), vcov(res))
+  expect_identical(confint(res, effects = NULL), confint(res))
+})
+
+test_that("the marginal reading is the one that was there before the mode", {
+  # Everything the sections above assert of a result holds of a marginal result
+  # and of a conditional one asked for the marginal reading. The mode adds a
+  # surface; it does not move the one that was already reported.
+  estimates <- binary_estimates()
+  covariance <- binary_vcov()
+  marginal <- ipw_result(
+    estimates,
+    vcov = covariance,
+    outcome_vcov = corrected_outcome_vcov()
+  )
+  conditional <- as_conditional(marginal)
+
+  for (res in list(marginal, conditional)) {
+    expect_identical(
+      coef(res, effects = "marginal"),
+      setNames(estimates$estimate, binary_labels())
+    )
+    expect_identical(vcov(res, effects = "marginal"), covariance)
+
+    ci <- confint(res, effects = "marginal")
+
+    expect_identical(
+      dimnames(ci),
+      list(binary_labels(), c("2.5 %", "97.5 %"))
+    )
+    # The stored limits at the stored level, which is the fast path the marginal
+    # reading takes and the conditional one has no use for.
+    expect_identical(ci[, 1], setNames(estimates$ci.lower, binary_labels()))
+    expect_identical(ci[, 2], setNames(estimates$ci.upper, binary_labels()))
+    expect_identical(
+      rownames(confint(res, parm = "log(rr)", effects = "marginal")),
+      "log(rr)"
+    )
+  }
+
+  # Without this the loop would hold of accessors that ignored the argument and
+  # the mode alike, which is what they did before this contract existed.
+  expect_false(identical(coef(conditional), coef(marginal)))
+  expect_false(identical(vcov(conditional), vcov(marginal)))
+})
+
+test_that("the accessors refuse an effects argument that is not a reading", {
+  # There are two readings and no third, so anything else is a misspelling or a
+  # wrong argument, and answering it with either surface would give the caller
+  # one they did not ask for. The condition is the one the constructor raises
+  # for the same value, so a caller handles a single class wherever it came
+  # from.
+  res <- ipw_result(binary_estimates(), vcov = binary_vcov())
+
+  expect_error(
+    coef(res, effects = "banana"),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    coef(res, effects = "banana"),
+    class = "causalgenerics_invalid_argument"
+  )
+  # A character vector of length one that names nothing, which `==` alone would
+  # answer with `NA` rather than with a refusal.
+  expect_error(
+    coef(res, effects = NA_character_),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    vcov(res, effects = 1),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    confint(res, effects = c("marginal", "conditional")),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+
+  expect_snapshot(error = TRUE, coef(res, effects = "banana"))
+  expect_snapshot(error = TRUE, vcov(res, effects = 1))
+  expect_snapshot(
+    error = TRUE,
+    confint(res, effects = c("marginal", "conditional"))
+  )
+})
+
+test_that("the accessors refuse a stored mode that is not a reading", {
+  # The field is set through `as_marginal()` and `as_conditional()`, which can
+  # only put one of the two readings there, and the constructor checks the value
+  # it is handed. A field that says something else was assigned to directly,
+  # which is outside the contract, and there is no reading to fall back on:
+  # reporting the marginal surface would answer for a result that named neither
+  # and leave the corruption in place for the next caller to inherit.
+  res <- ipw_result(binary_estimates(), vcov = binary_vcov())
+  res$effects <- "banana"
+
+  expect_error(coef(res), class = "causalgenerics_invalid_argument_effects")
+  expect_error(coef(res), class = "causalgenerics_invalid_argument")
+  expect_error(vcov(res), class = "causalgenerics_invalid_argument_effects")
+  expect_error(confint(res), class = "causalgenerics_invalid_argument_effects")
+  # Naming a reading is still answerable. The argument says which surface to
+  # report, so the stored field is not consulted at all.
+  expect_identical(vcov(res, effects = "marginal"), binary_vcov())
+
+  expect_snapshot(error = TRUE, coef(res))
+})
+
+# ---- what the mode does not reach --------------------------------------------
+
+test_that("nobs(), df.residual(), and weights() do not read the mode", {
+  # These three describe the fit rather than a surface of it. The number of
+  # observations the outcome model saw, the residual degrees of freedom of the
+  # variance object, and the weights it was fitted with are the same facts
+  # whichever reading the result presents, so a flip cannot move them.
+  marginal <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    fit = lm(y ~ x, data = ipw_data()),
+    outcome_vcov = corrected_outcome_vcov()
+  )
+  conditional <- as_conditional(marginal)
+
+  expect_identical(nobs(conditional), nobs(marginal))
+  expect_identical(nobs(conditional), 20L)
+  expect_identical(df.residual(conditional), df.residual(marginal))
+  expect_identical(df.residual(conditional), 18L)
+  expect_identical(weights(conditional), weights(marginal))
+  expect_identical(weights(conditional), outcome_weights())
+
+  # The flip is one the other three accessors do act on, so the assertions above
+  # are about these three rather than about a result nothing reads the mode of.
+  expect_false(identical(coef(conditional), coef(marginal)))
+  expect_false(identical(vcov(conditional), vcov(marginal)))
+})
+
+test_that("a result with no mode reads as marginal", {
+  # A result stored before the field existed carries six fields. Every accessor
+  # reports the reading it reported then, and a caller who names the other one
+  # gets it, so an older result needs no migration to be read either way.
+  estimates <- binary_estimates()
+  covariance <- binary_vcov()
+  legacy <- legacy_result(estimates, vcov = covariance)
+
+  expect_length(legacy, 6L)
+  expect_null(legacy$effects)
+
+  expect_identical(
+    coef(legacy),
+    setNames(estimates$estimate, binary_labels())
+  )
+  expect_identical(vcov(legacy), covariance)
+  expect_identical(rownames(confint(legacy)), binary_labels())
+  expect_identical(
+    confint(legacy)[, 1],
+    setNames(estimates$ci.lower, binary_labels())
+  )
+
+  expect_identical(coef(legacy, effects = "marginal"), coef(legacy))
+  expect_identical(
+    coef(legacy, effects = "conditional"),
+    coef(legacy$outcome_mod)
+  )
 })
 
 # ---- registration ------------------------------------------------------------

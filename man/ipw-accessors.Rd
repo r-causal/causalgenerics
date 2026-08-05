@@ -89,9 +89,13 @@ reading, and when the result's own field does.
 model was fitted on, which is the number the estimates were computed from and
 not necessarily the number the weighting model saw.
 
-\code{df.residual()} returns a single integer, or \code{NA_integer_} when the result
-records no fitted variance object or that object reports no residual degrees
-of freedom.
+\code{df.residual()} returns the residual degrees of freedom the fitted variance
+object reports, as an integer when that number is a whole one an integer can
+hold and as the double the object gave when it is not. A fractional count is
+what a penalized or smooth fit spends, and it comes back as it stands rather
+than truncated to a count the fit did not spend. \code{NA_integer_} comes back
+when the result records no fitted variance object or that object reports no
+residual degrees of freedom.
 
 \code{weights()} returns the outcome model's weights as its model frame stores
 them, so a concrete weight class such as \code{psw} comes back as itself, or
@@ -120,8 +124,8 @@ constructs.
 \item \code{confint()} returns their confidence limits.
 \item \code{nobs()} returns the number of observations the outcome model was fitted
 on.
-\item \code{df.residual()} returns the residual degrees of freedom of the fitted
-variance object.
+\item \code{df.residual()} returns the residual degrees of freedom the fitted variance
+object reports.
 \item \code{weights()} returns the weights the outcome model was fitted with.
 \item \code{model.frame()} returns the outcome model's model frame.
 \item \code{estimand()} returns the estimand the weights targeted.

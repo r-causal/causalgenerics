@@ -1,5 +1,11 @@
 # causalgenerics (development version)
 
+* `df.residual()` on an `ipw` result reports a fractional degrees of freedom as
+  the double the fit reports, rather than truncating it to an integer. A
+  penalized or smooth fit spends a fractional count of parameters, and
+  truncating it would report a fit that spent more of them than it did. A whole
+  number still comes back as an integer.
+
 * The conditional reading pairs the corrected covariance with the outcome
   model's coefficients by name. A block a fitting package attached in the order
   of its own stacked system is reported in coefficient order, so the variance

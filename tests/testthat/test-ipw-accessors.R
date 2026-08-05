@@ -830,15 +830,18 @@ test_that("df.residual() is NA for a fit the generic has nothing for", {
 })
 
 test_that("df.residual() converts a fit's answer to an integer safely", {
-  # Two things a registered method can hand back that `as.integer()` alone
+  # The answers a registered method can hand back that `as.integer()` alone
   # mishandles. A whole number stored as a double has to come back as an
   # integer, and `Inf` has to come back as `NA_integer_` without the "NAs
-  # introduced by coercion" warning that `as.integer(Inf)` raises. A warning
+  # introduced by coercion" warning that `as.integer(Inf)` raises. A whole
+  # number past the largest integer raises that same warning, and it has to come
+  # back as the double it is, since the count itself is a real one. A warning
   # would surface as noise in every run of a suite downstream, so the guard is
   # asserted here rather than left to a code reading.
   local_s3_method("df.residual", "cg_double_df", function(object, ...) 12)
   local_s3_method("df.residual", "cg_infinite_df", function(object, ...) Inf)
   local_s3_method("df.residual", "cg_empty_df", function(object, ...) numeric())
+  local_s3_method("df.residual", "cg_huge_df", function(object, ...) 1e10)
 
   as_double <- ipw_result(
     binary_estimates(),
@@ -857,6 +860,13 @@ test_that("df.residual() converts a fit's answer to an integer safely", {
     fit = structure(list(), class = "cg_empty_df")
   )
   expect_identical(df.residual(empty), NA_integer_)
+
+  huge <- ipw_result(
+    binary_estimates(),
+    fit = structure(list(), class = "cg_huge_df")
+  )
+  expect_no_warning(expect_identical(df.residual(huge), 1e10))
+  expect_type(df.residual(huge), "double")
 })
 
 test_that("df.residual() reports a fractional answer as it stands", {
@@ -1528,6 +1538,14 @@ test_that("confint() refuses a conditional parm the outcome model lacks", {
   )
   expect_error(
     confint(res, parm = 3),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  # A position is matched against the surface the call names, so the reading
+  # asked for at the call site is refused the same way as the one the result
+  # records. Two coefficients are all this model has, and `99` indexes none of
+  # them either way.
+  expect_error(
+    confint(res, parm = 99, effects = "conditional"),
     class = "causalgenerics_invalid_argument_parm"
   )
 

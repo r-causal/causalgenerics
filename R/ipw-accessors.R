@@ -9,8 +9,8 @@
 #' * `confint()` returns their confidence limits.
 #' * `nobs()` returns the number of observations the outcome model was fitted
 #'   on.
-#' * `df.residual()` returns the residual degrees of freedom of the fitted
-#'   variance object.
+#' * `df.residual()` returns the residual degrees of freedom the fitted variance
+#'   object reports.
 #' * `weights()` returns the weights the outcome model was fitted with.
 #' * `model.frame()` returns the outcome model's model frame.
 #' * `estimand()` returns the estimand the weights targeted.
@@ -128,9 +128,13 @@
 #' model was fitted on, which is the number the estimates were computed from and
 #' not necessarily the number the weighting model saw.
 #'
-#' `df.residual()` returns a single integer, or `NA_integer_` when the result
-#' records no fitted variance object or that object reports no residual degrees
-#' of freedom.
+#' `df.residual()` returns the residual degrees of freedom the fitted variance
+#' object reports, as an integer when that number is a whole one an integer can
+#' hold and as the double the object gave when it is not. A fractional count is
+#' what a penalized or smooth fit spends, and it comes back as it stands rather
+#' than truncated to a count the fit did not spend. `NA_integer_` comes back
+#' when the result records no fitted variance object or that object reports no
+#' residual degrees of freedom.
 #'
 #' `weights()` returns the outcome model's weights as its model frame stores
 #' them, so a concrete weight class such as `psw` comes back as itself, or
@@ -360,14 +364,21 @@ df.residual.ipw <- function(object, ...) {
 
   # A variance object is whatever the fitting package records, so the generic
   # may have nothing for it. `df.residual.default()` gives `NULL` for a bare
-  # list, and a registered method is free to answer with a double, an empty
-  # vector, or `Inf` for a fit with no residual degrees of freedom left. Each of
-  # those has to become `NA_integer_` rather than a warning from `as.integer()`.
+  # list, and a registered method is free to answer with an empty vector or
+  # `Inf` for a fit with no residual degrees of freedom left. Each of those has
+  # to become `NA_integer_` rather than a warning from `as.integer()`.
   df <- stats::df.residual(object$fit)
   if (length(df) != 1L || !is.numeric(df) || !is.finite(df)) {
     return(NA_integer_)
   }
-  as.integer(df)
+
+  # A whole number comes back as an integer, the type a count of parameters
+  # spent one at a time has. Anything else is the fit's own answer: a fractional
+  # count is what a penalized or smooth term spends, and truncating it would
+  # report a fit that spent more parameters than it did. A whole number past the
+  # largest integer stays a double for the reason `as.integer()` cannot take it,
+  # which is that the conversion gives `NA` and a warning.
+  if (df == trunc(df) && abs(df) <= .Machine$integer.max) as.integer(df) else df
 }
 
 #' @rdname ipw-accessors

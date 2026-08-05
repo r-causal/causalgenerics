@@ -63,10 +63,12 @@ package attached it. A result that records no such matrix raises an error of
 class \code{causalgenerics_no_vcov} rather than returning one built from the
 standard errors, which would report the effects as uncorrelated. In the
 conditional reading it returns the corrected covariance of the outcome
-model's coefficients. An outcome model that was never wrapped raises an error
-of class \code{causalgenerics_no_conditional_vcov}, and a wrapped model that no
-longer carries the covariance raises an error of class
-\code{causalgenerics_no_vcov_ipw_model}.
+model's coefficients, in the order \code{coef()} reports them whatever order it was
+attached in. An outcome model that was never wrapped raises an error of class
+\code{causalgenerics_no_conditional_vcov}, a wrapped model that no longer carries
+the covariance raises an error of class \code{causalgenerics_no_vcov_ipw_model},
+and a covariance whose labels cannot be paired with the coefficients raises an
+error of class \code{causalgenerics_conditional_vcov_mismatch}.
 
 \code{confint()} returns a matrix with one row per effect \code{parm} selects, in the
 order \code{parm} gives them, and two columns holding the lower and upper limit.
@@ -166,8 +168,18 @@ builds the result. An outcome model that carries the wrapper class with no
 covariance behind it raises an error of class
 \code{causalgenerics_no_vcov_ipw_model}, since a model that is already wrapped has
 nothing to gain from being wrapped again and the object itself is what is
-wrong. Both carry the general class \code{causalgenerics_no_vcov}. \code{coef()} needs
-no such block and reports the coefficients either way.
+wrong. All of these carry the general class \code{causalgenerics_no_vcov}. \code{coef()}
+needs no such block and reports the coefficients either way.
+
+The block and the coefficients are paired by name, and the block is reported
+in coefficient order whatever order it was attached in, so the variance read
+beside a coefficient is that coefficient's. A block whose labels cannot be
+paired with the coefficients raises an error of class
+\code{causalgenerics_conditional_vcov_mismatch}. A block of another size, one
+labelled with the parameter names of a stacked system, and a model whose
+coefficients carry no names are the three ways the pairing fails. Reading such
+a block by position instead would report the covariance of other parameters
+under this model's coefficient names.
 
 \code{nobs()}, \code{df.residual()}, \code{weights()}, \code{model.frame()}, and \code{estimand()}
 describe the fit rather than a surface of it, so they answer the same way in

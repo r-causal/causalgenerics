@@ -1,5 +1,22 @@
 # causalgenerics (development version)
 
+* The conditional reading pairs the corrected covariance with the outcome
+  model's coefficients by name. A block a fitting package attached in the order
+  of its own stacked system is reported in coefficient order, so the variance
+  read beside a coefficient is that coefficient's, and `print()` writes each
+  standard error against the coefficient it belongs to. A block whose labels
+  cannot be paired with the coefficients is refused with an error of class
+  `causalgenerics_conditional_vcov_mismatch`. A block of another size, one
+  labelled with the parameter names of a stacked system, and a model whose
+  coefficients carry no names are the three ways the pairing fails, and reading
+  such a block by position would report the covariance of other parameters under
+  this model's coefficient names.
+
+* `print()` on a conditional result whose outcome model reports no coefficients
+  says so in place of the table, rather than writing an empty one. The
+  covariance is not asked for on that path, since a table with no rows has no
+  use for one.
+
 * `vcov()` on a model wrapped by `new_ipw_model()` raises an error of class
   `causalgenerics_no_vcov_ipw_model` when the wrapper no longer carries a
   covariance, rather than returning `NULL`. The class and the attribute go on

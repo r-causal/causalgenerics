@@ -689,6 +689,8 @@ test_that("print() pairs each coefficient with its own standard error", {
   # and nothing in the output says they were crossed.
   res <- conditional_result(vcov = reversed_outcome_vcov())
 
+  expect_snapshot(print(res))
+
   out <- capture.output(print(res))
 
   # The block's diagonal is 0.25 for the intercept and 0.0625 for the slope, so
@@ -796,6 +798,14 @@ test_that("print() refuses a conditional block labelled for other parameters", {
     class = "causalgenerics_conditional_vcov_mismatch"
   )
   expect_error(capture.output(print(res)), class = "causalgenerics_no_vcov")
+
+  # The frame the condition names is the method the caller invoked, which is
+  # what the accessors' conditions name too. The covariance is asked for inside
+  # a `tryCatch()` here, so a call resolved when the helper's own default was
+  # forced would name `doTryCatch()`: an internal frame of base R, in neither
+  # this package nor the code the caller wrote.
+  cnd <- tryCatch(capture.output(print(res)), error = identity)
+  expect_identical(conditionCall(cnd), quote(print.ipw(res)))
 })
 
 test_that("print() says a conditional result has no coefficients to tabulate", {

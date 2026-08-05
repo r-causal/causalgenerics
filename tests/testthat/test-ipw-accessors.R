@@ -1172,6 +1172,10 @@ test_that("vcov() refuses a conditional block of the wrong size", {
 
   expect_error(vcov(res), class = "causalgenerics_conditional_vcov_mismatch")
   expect_error(vcov(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
 })
 
 test_that("vcov() refuses a conditional block it cannot pair by name", {

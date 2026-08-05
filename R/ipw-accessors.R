@@ -57,8 +57,18 @@
 #' covariance behind it raises an error of class
 #' `causalgenerics_no_vcov_ipw_model`, since a model that is already wrapped has
 #' nothing to gain from being wrapped again and the object itself is what is
-#' wrong. Both carry the general class `causalgenerics_no_vcov`. `coef()` needs
-#' no such block and reports the coefficients either way.
+#' wrong. All of these carry the general class `causalgenerics_no_vcov`. `coef()`
+#' needs no such block and reports the coefficients either way.
+#'
+#' The block and the coefficients are paired by name, and the block is reported
+#' in coefficient order whatever order it was attached in, so the variance read
+#' beside a coefficient is that coefficient's. A block whose labels cannot be
+#' paired with the coefficients raises an error of class
+#' `causalgenerics_conditional_vcov_mismatch`. A block of another size, one
+#' labelled with the parameter names of a stacked system, and a model whose
+#' coefficients carry no names are the three ways the pairing fails. Reading such
+#' a block by position instead would report the covariance of other parameters
+#' under this model's coefficient names.
 #'
 #' `nobs()`, `df.residual()`, `weights()`, `model.frame()`, and `estimand()`
 #' describe the fit rather than a surface of it, so they answer the same way in
@@ -92,10 +102,12 @@
 #' class `causalgenerics_no_vcov` rather than returning one built from the
 #' standard errors, which would report the effects as uncorrelated. In the
 #' conditional reading it returns the corrected covariance of the outcome
-#' model's coefficients. An outcome model that was never wrapped raises an error
-#' of class `causalgenerics_no_conditional_vcov`, and a wrapped model that no
-#' longer carries the covariance raises an error of class
-#' `causalgenerics_no_vcov_ipw_model`.
+#' model's coefficients, in the order `coef()` reports them whatever order it was
+#' attached in. An outcome model that was never wrapped raises an error of class
+#' `causalgenerics_no_conditional_vcov`, a wrapped model that no longer carries
+#' the covariance raises an error of class `causalgenerics_no_vcov_ipw_model`,
+#' and a covariance whose labels cannot be paired with the coefficients raises an
+#' error of class `causalgenerics_conditional_vcov_mismatch`.
 #'
 #' `confint()` returns a matrix with one row per effect `parm` selects, in the
 #' order `parm` gives them, and two columns holding the lower and upper limit.
@@ -393,18 +405,59 @@ estimand.ipw <- function(x, ...) {
 #' uncertainty the coefficients do not have. The guard therefore runs before the
 #' model is asked anything, since asking is the mistake.
 #'
+#' The block and the coefficients are paired by name, which is what
+#' [new_ipw_model()] leaves to be done here: the constructor checks that both
+#' margins are labelled rather than what the labels say, since only the fitting
+#' package knows which block of its stacked system belongs to which model. A
+#' block labelled with the same names in another order is reported in
+#' coefficient order, so the variance a caller reads beside a coefficient is that
+#' coefficient's. Anything the labels cannot be paired with is refused: a block
+#' of another size, one naming other parameters, and a model whose coefficients
+#' carry no names at all. Falling back on the positions in any of those cases
+#' would report the covariance of something else under this model's coefficient
+#' names, which is the one answer a caller has no way to check.
+#'
 #' @param model The result's `outcome_mod`.
 #' @param call The call to report the error against, which is the accessor's
 #'   rather than this helper's.
 #'
-#' @return The corrected covariance matrix, as the fitting package attached it.
+#' @return The corrected covariance matrix, in coefficient order.
 #'
 #' @noRd
 conditional_vcov <- function(model, call = sys.call(-1)) {
   if (!inherits(model, "ipw_model")) {
     stop_no_conditional_vcov(call = call)
   }
-  stats::vcov(model)
+  covariance <- stats::vcov(model)
+
+  labels <- names(stats::coef(model))
+  block_labels <- rownames(covariance)
+
+  # The size is checked alongside the names because a larger block can hold
+  # every coefficient name and more. Indexing that one by name alone would take
+  # the corner of it and answer with the covariance of two coefficients of a
+  # different fit.
+  paired <- !is.null(labels) &&
+    identical(dim(covariance), c(length(labels), length(labels))) &&
+    setequal(block_labels, labels) &&
+    setequal(colnames(covariance), labels)
+
+  if (!paired) {
+    stop_conditional_vcov_mismatch(block_labels, labels, call = call)
+  }
+
+  # A block already in coefficient order comes back as the fitting package
+  # attached it, rather than through an indexing that would rebuild the same
+  # matrix.
+  if (
+    identical(block_labels, labels) && identical(colnames(covariance), labels)
+  ) {
+    return(covariance)
+  }
+
+  # Both margins, since a matrix reordered down one and not the other is no
+  # longer the covariance of anything.
+  covariance[labels, labels, drop = FALSE]
 }
 
 #' The rows of a reported surface a `parm` argument selects

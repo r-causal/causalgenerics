@@ -90,3 +90,47 @@ stop_no_conditional_vcov <- function(call = sys.call(-1)) {
     call = call
   ))
 }
+
+# Signal that the corrected covariance an outcome model carries cannot be paired
+# with the coefficients it is meant to report. The classes follow
+# `stop_no_conditional_vcov()`, whose general class this one also carries, and
+# deliberately not its specific one: that condition says the fitting package
+# attached no block and is answered by wrapping the model, and this one is
+# raised for a model that is wrapped already. The label sets are fields as well
+# as parts of the message, so a handler reports them without parsing the
+# sentence for them. A model whose coefficients carry no names is one of the
+# ways the pairing fails, and the clause that would list them says so rather
+# than listing an empty set, which would read as a model reporting no
+# coefficients at all.
+stop_conditional_vcov_mismatch <- function(
+  block_labels,
+  coef_labels,
+  call = sys.call(-1)
+) {
+  reported <- if (is.null(coef_labels)) {
+    "reports unnamed coefficients"
+  } else {
+    paste0(
+      "reports coefficients named ",
+      toString(encodeString(coef_labels, quote = '"'))
+    )
+  }
+  message <- paste0(
+    "The conditional covariance is labelled ",
+    toString(encodeString(block_labels, quote = '"')),
+    " and the outcome model ",
+    reported,
+    "; the package that produced the result attaches the block labelled by ",
+    "coefficient name with `new_ipw_model()`."
+  )
+  stop(errorCondition(
+    message,
+    block_labels = block_labels,
+    coef_labels = coef_labels,
+    class = c(
+      "causalgenerics_conditional_vcov_mismatch",
+      "causalgenerics_no_vcov"
+    ),
+    call = call
+  ))
+}

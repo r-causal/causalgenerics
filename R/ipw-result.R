@@ -57,15 +57,24 @@
 #' conditional reading tabulates the outcome model's coefficients, under
 #' `Conditional estimates (outcome model):`, with the standard errors implied by
 #' the corrected covariance a fitting package attaches through [new_ipw_model()].
+#' Which coefficient each entry of that block belongs to is what its labels say
+#' rather than its row order, so a block attached in another order still prints
+#' each standard error beside the coefficient it belongs to.
+#'
 #' An outcome model a fitting package never wrapped is still printed: the
 #' coefficients are written on their own, followed by a note saying that no
 #' covariance from the joint estimation is recorded, rather than beside the
 #' standard errors the model computed for itself. An outcome model that carries
 #' the [new_ipw_model()] class with no covariance behind it is refused instead,
-#' with an error of class `causalgenerics_no_vcov_ipw_model`. The note answers a
-#' package that has not adopted the contract by telling the reader to wrap the
-#' model, and that advice has already been taken here: the object is what is
+#' with an error of class `causalgenerics_no_vcov_ipw_model`, and one whose block
+#' cannot be paired with its coefficients with an error of class
+#' `causalgenerics_conditional_vcov_mismatch`. The note answers a package that
+#' has not adopted the contract by telling the reader to wrap the model, and that
+#' advice has already been taken in both of those cases: the object is what is
 #' wrong, not the package that produced it.
+#'
+#' An outcome model that reports no coefficients has no rows to tabulate under
+#' that heading, and the printed form says so in place of the table.
 #'
 #' # The covariance of the effects
 #'
@@ -283,12 +292,17 @@ print_marginal_estimates <- function(estimates) {
 #' ones.
 #'
 #' A model carrying the `ipw_model` class with no covariance behind it is refused
-#' instead, and the error travels out of `print()`. The note has nothing to tell
-#' that caller: it answers a package that has not adopted the contract by saying
-#' to wrap the model, and this model is wrapped. What is wrong is the object
+#' instead, and the error travels out of `print()`. So is one whose block cannot
+#' be paired with its coefficients. The note has nothing to tell either caller:
+#' it answers a package that has not adopted the contract by saying to wrap the
+#' model, and both of these models are wrapped. What is wrong is the object
 #' itself, which no constructor here could have produced, and an object in that
 #' state should fail the same way wherever it is met rather than reading as a
 #' result with one part missing.
+#'
+#' A model that reports no coefficients has no rows to tabulate under this
+#' heading whatever covariance it carries, so it is told in a sentence and the
+#' covariance is never asked for.
 #'
 #' @param model The result's `outcome_mod`.
 #'
@@ -297,9 +311,30 @@ print_marginal_estimates <- function(estimates) {
 #' @noRd
 #' @importFrom stats coef pnorm printCoefmat
 print_conditional_estimates <- function(model) {
+  # Taken here rather than left to the helper's own default. The covariance is
+  # asked for inside `tryCatch()`, and a call the helper resolved from there
+  # would name one of `tryCatch()`'s internal frames instead of the method the
+  # caller invoked. Reading it eagerly, before anything else runs, is what makes
+  # a condition raised further down name `print.ipw()` the way the one an
+  # accessor raises names the accessor.
+  call <- sys.call(-1)
+
   cat("Conditional estimates (outcome model):\n")
 
   estimate <- stats::coef(model)
+
+  # A model with no coefficients has no rows to tabulate, and the reason the
+  # table is absent takes its place. The guard runs before the covariance is
+  # looked up, since a table with no rows has no use for one and reaching for it
+  # would refuse the result over a part of it nothing was going to read.
+  if (length(estimate) == 0L) {
+    cat(
+      "The outcome model reports no coefficients, so there is no\n",
+      "conditional table to print.\n",
+      sep = ""
+    )
+    return(invisible(NULL))
+  }
 
   # Asked for through the helper the accessors read it with, so that what counts
   # as a covariance this reading can report is settled in one place. Two
@@ -309,7 +344,7 @@ print_conditional_estimates <- function(model) {
   # `causalgenerics_no_vcov_ipw_model`, which is left to travel past this handler
   # and out of `print()`.
   covariance <- tryCatch(
-    conditional_vcov(model),
+    conditional_vcov(model, call = call),
     causalgenerics_no_conditional_vcov = function(cnd) NULL
   )
 

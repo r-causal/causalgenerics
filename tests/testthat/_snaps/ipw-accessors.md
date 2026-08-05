@@ -30,6 +30,14 @@
       Error in `estimand<-.default`:
       ! No `estimand<-()` method for an object of class <ipw>.
 
+# vcov() refuses a conditional block labelled for other parameters
+
+    Code
+      vcov(res)
+    Condition
+      Error in `vcov.ipw()`:
+      ! The conditional covariance is labelled "theta1", "theta2" and the outcome model reports coefficients named "(Intercept)", "z"; the package that produced the result attaches the block labelled by coefficient name with `new_ipw_model()`.
+
 # vcov() refuses the conditional mode without a corrected block
 
     Code

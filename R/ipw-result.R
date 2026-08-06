@@ -23,11 +23,36 @@
 #' table of the surface the result's presentation mode names. The section below
 #' describes the two modes and what each one tabulates.
 #'
-#' `as.data.frame()` returns the `estimates` component. With
-#' `exponentiate = TRUE` it moves the `log(rr)` and `log(or)` rows to their
-#' natural scale, exponentiating the point estimate and the confidence limits and
-#' relabelling the two effects `"rr"` and `"or"`. Standard errors, z statistics,
-#' and p-values stay on the log scale, where the inference is done.
+#' `as.data.frame()` reports the effect estimates as a tidier-shaped table
+#' rather than as a copy of the `estimates` component. Its columns are `term`,
+#' then `comparison` when the result names contrasts, then `estimate`,
+#' `std.error`, `statistic`, and `p.value`. Those are the names the tidier
+#' convention uses, so a fitting package's `tidy()` method is this table read as
+#' a tibble and nothing more. The `estimates` component itself is unchanged by
+#' any of what follows.
+#'
+#' `conf.int = TRUE` appends `conf.low` and `conf.high` after the other columns,
+#' and `conf.level` names the level they report. The level is an argument rather
+#' than a column, since a column would repeat one number down every row and be
+#' read as part of the table rather than as the level the two bounds beside it
+#' were built at. The bounds `estimates` stores are returned when every row of
+#' the frame records the level asked for. They need not be the normal pair: a
+#' bootstrap or profile interval is asymmetric about the estimate, and even a
+#' normal one rounded on its way into the frame is not the number recomputing
+#' gives. At any other level, and for a frame whose rows disagree about the
+#' level or record none, the bounds are the normal approximation built from the
+#' estimate and its standard error.
+#'
+#' With `exponentiate = TRUE` the `log(rr)` and `log(or)` rows move to their
+#' natural scale, exponentiating the point estimate and the confidence bounds and
+#' relabelling the two terms `"rr"` and `"or"`. Standard errors, statistics, and
+#' p-values stay on the log scale, where the inference is done, and the interval
+#' is settled before the scale is: bounds recomputed at another level are built
+#' on the log scale and exponentiated afterwards. The covariance described below
+#' travels on the returned table under the same `ipw_vcov` attribute while the
+#' rows are on the scale they were estimated on, and is dropped when
+#' `exponentiate = TRUE`, since a matrix left attached there would describe
+#' neither the table it sits on nor anything else.
 #'
 #' # The effect labels
 #'
@@ -128,8 +153,9 @@
 #'     [as_marginal()] and [as_conditional()].}
 #' }
 #'
-#'   `print()` returns its input invisibly. `as.data.frame()` returns the
-#'   `estimates` component as a data frame.
+#'   `print()` returns its input invisibly. `as.data.frame()` returns a plain
+#'   data frame of the effect estimates under the tidier column names described
+#'   above, with the confidence bounds appended when they are asked for.
 #'
 #' @seealso [ipw()], the generic these results come from, and [as_marginal()]
 #'   and [as_conditional()] for the presentation mode.
@@ -167,8 +193,11 @@
 #'
 #' res
 #'
-#' # The ratios on their natural scale.
-#' as.data.frame(res, exponentiate = TRUE)
+#' # The tidier-shaped table the result reports.
+#' as.data.frame(res)
+#'
+#' # With an interval, and the ratios on their natural scale.
+#' as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
 new_ipw <- function(
   estimand,
   wt_mod,
@@ -198,8 +227,7 @@ new_ipw <- function(
 }
 
 #' @param x An `ipw` object.
-#' @param ... Further arguments. `print()` ignores them; `as.data.frame()`
-#'   passes them to [base::as.data.frame()].
+#' @param ... Further arguments. Neither method reads them.
 #' @rdname new_ipw
 #' @export
 print.ipw <- function(x, ...) {
@@ -433,51 +461,196 @@ format_model_call <- function(mod) {
   paste(deparse(call), collapse = "\n")
 }
 
+#' @param row.names A character vector of row names for the returned table, or
+#'   `NULL` for the automatic ones.
+#' @param optional Accepted for the [base::as.data.frame()] generic. Every
+#'   column of the table is named, so there is nothing for it to make optional.
+#' @param conf.int If `TRUE`, append `conf.low` and `conf.high` columns after
+#'   the rest of the table. Default is `FALSE`.
+#' @param conf.level The confidence level the bounds report. At the level every
+#'   row of `estimates` records, the stored bounds are returned; at any other
+#'   level they are the normal approximation built from the estimate and its
+#'   standard error. Default is `0.95`.
 #' @param exponentiate If `TRUE`, exponentiate the log risk ratio and log odds
-#'   ratio to produce risk ratios and odds ratios on their natural scale. The
-#'   confidence interval bounds are also exponentiated. Standard errors, z
-#'   statistics, and p-values remain on the log scale. Default is `FALSE`.
-#' @param row.names,optional Passed to [base::as.data.frame()].
+#'   ratio to produce risk ratios and odds ratios on their natural scale,
+#'   relabelling the two terms `"rr"` and `"or"`. The confidence bounds move with
+#'   them. Standard errors, statistics, and p-values remain on the log scale, and
+#'   the `ipw_vcov` attribute is dropped rather than carried, since it describes
+#'   the estimates on the scale they were estimated on. Default is `FALSE`.
 #' @rdname new_ipw
 #' @export
 as.data.frame.ipw <- function(
   x,
   row.names = NULL,
-  optional = NULL,
-  exponentiate = FALSE,
-  ...
+  optional = FALSE,
+  ...,
+  conf.int = FALSE,
+  conf.level = 0.95,
+  exponentiate = FALSE
 ) {
-  df <- as.data.frame(
-    x$estimates,
-    row.names = row.names,
-    optional = optional,
-    ...
-  )
+  # All three are checked on every call rather than on the branch that reads
+  # them. `conf.level` means the same thing whether or not the bounds are
+  # reported, so a call naming a level no interval can be built at has said
+  # something wrong whichever way `conf.int` was set, and checking it only where
+  # it is read would accept that call now and refuse the same value the moment
+  # the bounds were asked for.
+  check_flag(conf.int, "conf.int")
+  check_conf_level(conf.level)
+  check_flag(exponentiate, "exponentiate")
 
-  if (!exponentiate) {
-    # Return as-is.
-    return(df)
+  estimates <- x$estimates
+
+  # `term` first, then the column naming the contrast it qualifies when the
+  # result reports one. A binary or continuous exposure has a single contrast,
+  # so a `comparison` column there would repeat one value down the table and
+  # read as a contrast that was named.
+  columns <- list(term = as.character(estimates$effect))
+  if ("comparison" %in% names(estimates)) {
+    columns$comparison <- estimates$comparison
+  }
+  columns$estimate <- estimates$estimate
+  columns$std.error <- estimates$std.err
+  columns$statistic <- estimates$z
+  columns$p.value <- estimates$p.value
+
+  # Built before the scale is changed, so that a recomputed bound is a half
+  # width on the log scale added to an estimate on the log scale.
+  bounds <- if (conf.int) interval_bounds(estimates, conf.level) else NULL
+
+  if (exponentiate) {
+    # The rows to move are the ones labelled `log(rr)` and `log(or)`, matched
+    # exactly so that a frame whose ratios are already on the natural scale is
+    # left alone rather than exponentiated a second time.
+    is_log_rr <- columns$term == "log(rr)"
+    is_log_or <- columns$term == "log(or)"
+    ratios <- is_log_rr | is_log_or
+
+    # Only the point estimate and the confidence bounds move to the natural
+    # scale. `std.error`, `statistic`, and `p.value` stay on the log scale,
+    # which is where the inference is done.
+    columns$estimate[ratios] <- exp(columns$estimate[ratios])
+    if (!is.null(bounds)) {
+      bounds$lower[ratios] <- exp(bounds$lower[ratios])
+      bounds$upper[ratios] <- exp(bounds$upper[ratios])
+    }
+
+    # The label names the scale, so it moves with the value it labels.
+    columns$term[is_log_rr] <- "rr"
+    columns$term[is_log_or] <- "or"
   }
 
-  # The rows to move are the ones labelled `log(rr)` and `log(or)`, matched
-  # exactly so that a frame whose ratios are already on the natural scale is left
-  # alone rather than exponentiated a second time.
-  is_log_rr <- df$effect == "log(rr)"
-  is_log_or <- df$effect == "log(or)"
+  # Last, after the columns the table always carries, so that asking for an
+  # interval adds to the table rather than rearranging it.
+  if (!is.null(bounds)) {
+    columns$conf.low <- bounds$lower
+    columns$conf.high <- bounds$upper
+  }
 
-  rows_to_expo <- is_log_rr | is_log_or
+  df <- data.frame(columns, row.names = row.names, stringsAsFactors = FALSE)
 
-  # Only the point estimate and the confidence limits move to the natural scale.
-  df$estimate[rows_to_expo] <- exp(df$estimate[rows_to_expo])
-  df$ci.lower[rows_to_expo] <- exp(df$ci.lower[rows_to_expo])
-  df$ci.upper[rows_to_expo] <- exp(df$ci.upper[rows_to_expo])
-
-  # The labels name the scale, so they move with the values.
-  df$effect[is_log_rr] <- "rr"
-  df$effect[is_log_or] <- "or"
-
-  # `std.err`, `z`, and `p.value` stay on the log scale, which is where the
-  # significance testing is done.
+  # The covariance belongs to the estimates rather than to a column of them, so
+  # it travels on the table under the attribute the `new_ipw()` contract names
+  # it under. A result whose method attached none carries none: assigning `NULL`
+  # sets no attribute, which is the right answer rather than an accident.
+  if (!exponentiate) {
+    attr(df, "ipw_vcov") <- attr(estimates, "ipw_vcov", exact = TRUE)
+  }
 
   df
+}
+
+#' The confidence bounds `as.data.frame()` reports
+#'
+#' The stored level is a property of the frame rather than of a row. The bounds
+#' `estimates` records come back only when every row of it was reported at the
+#' level asked for, since a table mixing stored bounds with recomputed ones
+#' would report two intervals under one pair of column headings. A frame with no
+#' `conf.level` column says nothing about what its bounds describe, so there is
+#' no level for the stored pair to be returned at and the approximation is built
+#' for whatever was asked for.
+#'
+#' The bounds are one half width added and subtracted, rather than a bound from
+#' each tail: `qnorm()` is not exactly antisymmetric, and taking the lower bound
+#' from the lower tail would put the two a little apart from each other.
+#'
+#' @param estimates The `estimates` component of an `ipw` object.
+#' @param conf.level The level the bounds report.
+#'
+#' @return A list of two numeric vectors, `lower` and `upper`.
+#'
+#' @noRd
+#' @importFrom stats qnorm
+interval_bounds <- function(estimates, conf.level) {
+  stored <- estimates$conf.level
+  if (!is.null(stored) && isTRUE(all(stored == conf.level))) {
+    return(list(lower = estimates$ci.lower, upper = estimates$ci.upper))
+  }
+
+  half_width <- stats::qnorm(1 - (1 - conf.level) / 2) * estimates$std.err
+  list(
+    lower = estimates$estimate - half_width,
+    upper = estimates$estimate + half_width
+  )
+}
+
+#' Refuse an argument that is not a flag
+#'
+#' A number and a string both take the true branch of a bare `if`, and a missing
+#' logical errors from the `if` itself with a message about the condition rather
+#' than about the argument the caller wrote. All three are refused here, so that
+#' what an argument had to be is said once and in the same words wherever it is
+#' said.
+#'
+#' @param value The argument as the caller supplied it.
+#' @param arg The argument's name, which the message reports.
+#' @param call The call to report the error against, which is the method's
+#'   rather than this helper's.
+#'
+#' @return `value`, invisibly, when it is a flag.
+#'
+#' @noRd
+check_flag <- function(value, arg, call = sys.call(-1)) {
+  is_flag <- is.logical(value) && length(value) == 1L && !is.na(value)
+
+  if (!is_flag) {
+    stop_invalid_argument(
+      arg,
+      "be a single logical value, either `TRUE` or `FALSE`",
+      call = call
+    )
+  }
+
+  invisible(value)
+}
+
+#' Refuse a confidence level that is not a probability
+#'
+#' The bounds of the open interval are refused along with everything outside it:
+#' the normal approximation gives no finite pair of numbers at level 0 or 1. A
+#' vector of levels names several intervals where the table reports one, and a
+#' missing level names none.
+#'
+#' @param conf.level The argument as the caller supplied it.
+#' @param call The call to report the error against, which is the method's
+#'   rather than this helper's.
+#'
+#' @return `conf.level`, invisibly, when it is a probability.
+#'
+#' @noRd
+check_conf_level <- function(conf.level, call = sys.call(-1)) {
+  is_level <- is.numeric(conf.level) &&
+    length(conf.level) == 1L &&
+    !is.na(conf.level) &&
+    conf.level > 0 &&
+    conf.level < 1
+
+  if (!is_level) {
+    stop_invalid_argument(
+      "conf.level",
+      "be a single number greater than 0 and less than 1",
+      call = call
+    )
+  }
+
+  invisible(conf.level)
 }

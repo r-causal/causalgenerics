@@ -185,3 +185,27 @@
       Error in `print.ipw()`:
       ! `effects` must be a single string, either "marginal" or "conditional".
 
+# the as.data.frame() argument errors state the contract
+
+    Code
+      as.data.frame(res, conf.level = 95)
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! `conf.level` must be a single number greater than 0 and less than 1.
+
+---
+
+    Code
+      as.data.frame(res, conf.int = NA)
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! `conf.int` must be a single logical value, either `TRUE` or `FALSE`.
+
+---
+
+    Code
+      as.data.frame(res, exponentiate = 1)
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! `exponentiate` must be a single logical value, either `TRUE` or `FALSE`.
+

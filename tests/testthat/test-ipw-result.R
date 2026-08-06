@@ -1441,6 +1441,19 @@ test_that("as.data.frame() carries the covariance the result stores", {
     covariance
   )
 
+  # Including at a level the frame does not store, where the bounds are built
+  # here rather than read off. Recomputing an interval says nothing about the
+  # covariance of the rows either: the estimates are the ones the result holds
+  # whichever level the bounds beside them report.
+  expect_identical(
+    attr(
+      as.data.frame(res, conf.int = TRUE, conf.level = 0.9),
+      "ipw_vcov",
+      exact = TRUE
+    ),
+    covariance
+  )
+
   # A result whose method attached none reports none rather than a matrix built
   # from the standard errors, which would report the effects as uncorrelated.
   expect_null(attr(as.data.frame(ipw_result(binary_estimates())), "ipw_vcov"))
@@ -1544,6 +1557,12 @@ test_that("as.data.frame() takes row.names and optional positionally", {
     as.data.frame(res, optional = TRUE, conf.int = TRUE),
     as.data.frame(res, conf.int = TRUE)
   )
+
+  # Partial matching reaches only the arguments before the dots, so an
+  # abbreviation of one that sits after them is swallowed by the dots rather
+  # than matched. `expon` is therefore not `exponentiate`, and a table asked for
+  # that way is the table asked for with no arguments at all.
+  expect_identical(as.data.frame(res, expon = TRUE), as.data.frame(res))
 })
 
 test_that("as.data.frame() ignores further arguments", {

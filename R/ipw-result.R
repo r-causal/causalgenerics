@@ -687,13 +687,22 @@ check_flag <- function(value, arg, call = sys.call(-1)) {
 #' missing level names none.
 #'
 #' @param conf.level The argument as the caller supplied it.
+#' @param arg The name the caller's function gives the argument, which the
+#'   message and the error's keyed class report. Every surface that reports
+#'   bounds refuses the same values, and the one that differs between them is
+#'   what the caller wrote at the call site: a message about `conf.level` for a
+#'   caller who wrote `conf_level` names an argument the call does not have.
 #' @param call The call to report the error against, which is the method's
 #'   rather than this helper's.
 #'
 #' @return `conf.level`, invisibly, when it is a probability.
 #'
 #' @noRd
-check_conf_level <- function(conf.level, call = sys.call(-1)) {
+check_conf_level <- function(
+  conf.level,
+  arg = "conf.level",
+  call = sys.call(-1)
+) {
   is_level <- is.numeric(conf.level) &&
     length(conf.level) == 1L &&
     !is.na(conf.level) &&
@@ -702,7 +711,7 @@ check_conf_level <- function(conf.level, call = sys.call(-1)) {
 
   if (!is_level) {
     stop_invalid_argument(
-      "conf.level",
+      arg,
       "be a single number greater than 0 and less than 1",
       call = call
     )

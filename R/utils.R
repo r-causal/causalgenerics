@@ -39,6 +39,108 @@ stop_invalid_argument <- function(arg, must, call = sys.call(-1)) {
   ))
 }
 
+# Signal that the results being pooled disagree about something they have to
+# agree on. The classes follow `stop_invalid_argument()`: one keyed to the field
+# they disagree about, for tests and for handlers that care about one kind of
+# disagreement, and one general class for callers that want any refusal to pool.
+# The distinct values are a field as well as part of the message, so a handler
+# reports them without parsing the sentence for them, and they are a list rather
+# than a vector because the effect labels a result reports are themselves a
+# vector.
+stop_pool_mismatch <- function(field, values, call = sys.call(-1)) {
+  message <- paste0(
+    pool_field_label(field),
+    " must be the same in every result, but they report ",
+    format_series(vapply(values, format_pool_value, character(1))),
+    "."
+  )
+  stop(errorCondition(
+    message,
+    field = field,
+    values = values,
+    class = c(
+      paste0("causalgenerics_pool_mismatch_", field),
+      "causalgenerics_pool_mismatch"
+    ),
+    call = call
+  ))
+}
+
+# What the results disagreed about, as the message names it. The field names are
+# the pooled result's own, and four of the six are a component of it, but a
+# message reading "`effects` must be the same" would name a field where the
+# reader is thinking about a property of their analysis.
+pool_field_label <- function(field) {
+  switch(
+    field,
+    estimand = "The estimand",
+    se_method = "The standard error method",
+    effects = "The presentation mode",
+    labels = "The effects reported",
+    conf_level = "The confidence level",
+    outcome_link = "The outcome model's link"
+  )
+}
+
+# One of those values, written the way the message reports it. Strings are
+# quoted, since an estimand and a link are read back as the labels they are, and
+# a set of several values is parenthesized so that the commas separating one
+# result's effects are not read as separating one result from the next.
+#
+# Recording nothing is one of the values a result can disagree on: an estimates
+# frame with no `conf.level` column, or one whose rows disagree about the level,
+# names no level for the pooled bounds to be reported at. It is written as a
+# word, since an empty pair of parentheses in the middle of the sentence reads
+# as a formatting fault rather than as the absence it reports.
+format_pool_value <- function(value) {
+  if (length(value) == 0L) {
+    return("none")
+  }
+
+  written <- if (is.character(value)) {
+    encodeString(value, quote = '"')
+  } else {
+    format(value, trim = TRUE)
+  }
+  if (length(written) == 1L) {
+    return(written)
+  }
+  paste0("(", toString(written), ")")
+}
+
+# Join written items into a phrase rather than a list. `toString()` alone ends a
+# sentence on "they report "ate", "att"", which reads as though it had been cut
+# off; the conjunction is what makes the last item the last one.
+format_series <- function(x) {
+  if (length(x) < 2L) {
+    return(paste0(x, collapse = ""))
+  }
+  if (length(x) == 2L) {
+    return(paste(x, collapse = " and "))
+  }
+  paste0(toString(x[-length(x)]), ", and ", x[[length(x)]])
+}
+
+# Signal that nothing in the results says how much data the complete-data
+# analysis had, so the pooled degrees of freedom are the large-sample ones. This
+# is a warning rather than an error because the pooling is still done and the
+# answer is still the honest one for a large sample; it is said out loud because
+# the intervals it gives are the narrowest the adjustment can produce, which is
+# the direction a reader is least likely to question. The class is keyed to the
+# assumption, and there is no general warning class in this package for it to
+# join.
+warn_pool_large_sample <- function(call = sys.call(-1)) {
+  warning(warningCondition(
+    paste0(
+      "No result reports the residual degrees of freedom of its complete-data ",
+      "analysis, so a large sample is assumed; pass `dfcom` to name the count ",
+      "the analyses were fitted with."
+    ),
+    class = "causalgenerics_pool_large_sample",
+    call = call
+  ))
+}
+
 # Signal that an object records no covariance to report. The classes follow
 # `stop_no_method()`: one keyed to the class of the object, for tests and for
 # handlers that care about one kind of object, and one general class for callers

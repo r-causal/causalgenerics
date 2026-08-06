@@ -1,5 +1,22 @@
 # causalgenerics (development version)
 
+* New `pool_ipw()` combines the `ipw` results fitted to each of a set of
+  multiply imputed datasets into one result, by Rubin's rules, and returns it
+  under the new class `ipw_pooled`. It takes a plain list of results or the
+  `mira` object `mice::with()` returns, which it recognizes by class and reads
+  through its `analyses` element, so mice is not a dependency. Each result
+  already carries a standard error that accounts for the weights having been
+  estimated, and pooling those adds the uncertainty the imputation contributed.
+  The pooled degrees of freedom carry the Barnard-Rubin small-sample
+  adjustment, so the statistic, the p-value, and the bounds are referred to t
+  rather than to the normal; the complete-data degrees of freedom are read off
+  the results when `dfcom` does not name them, and a large sample is assumed
+  with a warning when nothing reports them. Results that disagree about their
+  estimand, standard error method, presentation mode, reported effects, stored
+  confidence level, or outcome model link are refused with an error of class
+  `causalgenerics_pool_mismatch` rather than averaged. The ratio effects are
+  pooled on the log scale they were estimated on.
+
 * Breaking change: the column a categorical `ipw` result names its contrasts
   with is `contrast`, in the `estimates` frame `new_ipw()` takes and in the
   table `as.data.frame()` reports. It was `comparison`. Both things that read

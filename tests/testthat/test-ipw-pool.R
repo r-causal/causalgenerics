@@ -346,6 +346,8 @@ test_that("pool_ipw() refuses a `fits` argument that is not a list", {
   expect_error(pool_ipw(1:3), class = "causalgenerics_invalid_argument")
   expect_error(pool_ipw("a"), class = "causalgenerics_invalid_argument_fits")
   expect_error(pool_ipw(NULL), class = "causalgenerics_invalid_argument_fits")
+
+  expect_snapshot(error = TRUE, pool_ipw(1:3))
 })
 
 test_that("pool_ipw() refuses elements that are not results", {
@@ -371,6 +373,10 @@ test_that("pool_ipw() refuses elements that are not results", {
   cnd <- tryCatch(pool_ipw(two_bad), error = identity)
   expect_match(conditionMessage(cnd), "\\b2\\b")
   expect_match(conditionMessage(cnd), "\\b3\\b")
+
+  expect_snapshot(error = TRUE, pool_ipw(fits[[1]]))
+  expect_snapshot(error = TRUE, pool_ipw(one_bad))
+  expect_snapshot(error = TRUE, pool_ipw(two_bad))
 })
 
 test_that("pool_ipw() refuses fewer than two results", {
@@ -389,6 +395,9 @@ test_that("pool_ipw() refuses fewer than two results", {
     pool_ipw(structure(list(analyses = fits[1]), class = "mira")),
     class = "causalgenerics_invalid_argument_fits"
   )
+
+  expect_snapshot(error = TRUE, pool_ipw(list()))
+  expect_snapshot(error = TRUE, pool_ipw(fits[1]))
 })
 
 test_that("pool_ipw() reads a mira the way it reads a list", {
@@ -422,6 +431,8 @@ test_that("pool_ipw() refuses results targeting different estimands", {
   cnd <- tryCatch(pool_ipw(fits), error = identity)
   expect_identical(cnd$field, "estimand")
   expect_setequal(unlist(cnd$values), c("ate", "att"))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits))
 })
 
 test_that("pool_ipw() refuses results whose standard errors differ in kind", {
@@ -440,6 +451,8 @@ test_that("pool_ipw() refuses results whose standard errors differ in kind", {
   cnd <- tryCatch(pool_ipw(fits), error = identity)
   expect_identical(cnd$field, "se_method")
   expect_setequal(unlist(cnd$values), c("linearization", "mestimation"))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits))
 })
 
 test_that("pool_ipw() refuses results recording different presentation modes", {
@@ -453,6 +466,8 @@ test_that("pool_ipw() refuses results recording different presentation modes", {
   cnd <- tryCatch(pool_ipw(fits), error = identity)
   expect_identical(cnd$field, "effects")
   expect_setequal(unlist(cnd$values), c("marginal", "conditional"))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits))
 })
 
 test_that("pool_ipw() names the mode a mismatched set does not", {
@@ -498,6 +513,8 @@ test_that("pool_ipw() refuses results reporting different effects", {
   cnd <- tryCatch(pool_ipw(fits), error = identity)
   expect_identical(cnd$field, "labels")
   expect_true("log(or) d vs a" %in% unlist(cnd$values))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits))
 })
 
 test_that("pool_ipw() refuses results reporting effects in different orders", {
@@ -545,6 +562,8 @@ test_that("pool_ipw() refuses stored levels that disagree with no level named", 
 
   named <- pool_ipw(fits, conf_level = 0.95)
   expect_true(all(named$estimates$conf.level == 0.95))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits))
 })
 
 test_that("pool_ipw() refuses outcome models fitted on different links", {
@@ -568,6 +587,8 @@ test_that("pool_ipw() refuses outcome models fitted on different links", {
   cnd <- tryCatch(pool_ipw(fits), error = identity)
   expect_identical(cnd$field, "outcome_link")
   expect_setequal(unlist(cnd$values), c("logit", "identity"))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits))
 })
 
 # ---- the arguments -----------------------------------------------------------
@@ -602,6 +623,8 @@ test_that("pool_ipw() refuses an `effects` value that names no reading", {
     pool_ipw(fits, effects = NA_character_),
     class = "causalgenerics_invalid_argument_effects"
   )
+
+  expect_snapshot(error = TRUE, pool_ipw(fits, effects = "fixed"))
 })
 
 test_that("pool_ipw() refuses a `conf_level` that is not a probability", {
@@ -629,6 +652,36 @@ test_that("pool_ipw() refuses a `conf_level` that is not a probability", {
   )))
 
   expect_no_error(pool_ipw(fits, conf_level = 0.8))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits, conf_level = 2))
+})
+
+test_that("pool_ipw() refuses a dfcom that is not a count", {
+  # A missing count is the one worth refusing loudest. It is not an error
+  # anywhere it is used: it travels through the small-sample adjustment into an
+  # `NaN` degrees of freedom, and from there into an `NaN` bound and an `NaN`
+  # p-value for every effect, with nothing in the returned result to say where
+  # it came from.
+  fits <- pool_binary_fits()
+
+  for (value in list("18", c(18, 20), NA_real_, NA, list(18), character())) {
+    expect_error(
+      pool_ipw(fits, dfcom = value),
+      class = "causalgenerics_invalid_argument_dfcom"
+    )
+  }
+  expect_error(
+    pool_ipw(fits, dfcom = NA_real_),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  # `Inf` is the large-sample assumption written out and the value the fallback
+  # itself reaches, so it is a count this argument takes rather than one of the
+  # non-finite values refused above.
+  expect_no_error(pool_ipw(fits, dfcom = Inf))
+  expect_no_error(pool_ipw(fits, dfcom = 18L))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits, dfcom = "18"))
 })
 
 test_that("pool_ipw() refuses arguments it has no name for", {
@@ -654,6 +707,9 @@ test_that("pool_ipw() refuses arguments it has no name for", {
   expect_no_error(
     pool_ipw(fits, effects = "marginal", dfcom = 12, conf_level = 0.9)
   )
+
+  expect_snapshot(error = TRUE, pool_ipw(fits, "conditional"))
+  expect_snapshot(error = TRUE, pool_ipw(fits, effect = "conditional"))
 })
 
 # ---- Rubin's rules -----------------------------------------------------------
@@ -872,6 +928,38 @@ test_that("pool_ipw() keys a categorical result by effect and contrast", {
   )
   expect_equal(res$estimates$estimate, rubin_column(expected, "estimate"))
   expect_equal(res$estimates$std.err, rubin_column(expected, "std.err"))
+})
+
+test_that("pool_ipw() pools a legacy contrast column as the canonical one", {
+  # A result stored against an earlier version of the contract names the column
+  # holding its contrasts `comparison`. The labels the pooling groups by are
+  # read through the same helper the accessors read them with, so such a result
+  # is keyed exactly as one built now is: it pools with the same rows in the
+  # same order and reports them under the canonical heading. The two results are
+  # the same object rather than merely the same numbers, which is what says the
+  # older spelling is read as an alias rather than as a shape of its own.
+  canonical <- pool_categorical_fits(vcov = TRUE)
+  legacy <- lapply(canonical, function(fit) {
+    names(fit$estimates)[names(fit$estimates) == "contrast"] <- "comparison"
+    fit
+  })
+
+  expect_identical(names(legacy[[1]]$estimates)[[2]], "comparison")
+  # The rename is the only difference, covariance attribute included, so the
+  # comparison below is about the column name and not about two fixtures that
+  # drifted apart.
+  expect_identical(
+    attr(legacy[[1]]$estimates, "ipw_vcov", exact = TRUE),
+    attr(canonical[[1]]$estimates, "ipw_vcov", exact = TRUE)
+  )
+
+  res <- pool_ipw(legacy, dfcom = 17)
+
+  expect_identical(res, pool_ipw(canonical, dfcom = 17))
+  expect_true("contrast" %in% names(res$estimates))
+  expect_false("comparison" %in% names(res$estimates))
+  expect_identical(res$estimates$contrast, rep(c("b vs a", "c vs a"), each = 3))
+  expect_identical(res$pooling$contrast, res$estimates$contrast)
 })
 
 test_that("pool_ipw() pools the stored values on the scale they were stored", {
@@ -1161,6 +1249,14 @@ test_that("pool_ipw() assumes a large sample when nothing reports a df", {
   # is the widest one, so it is said out loud rather than taken silently: the
   # intervals it gives are narrower than the ones a real complete-data count
   # would give, which is the direction a reader would not question.
+  # The suite is run under `options(warn = 2)` so that a stray warning fails it,
+  # and this is the one test whose subject is a warning. `expect_warning()`
+  # muffles before that option converts anything, but `expect_snapshot()` does
+  # not, so the snapshot below would record an error rather than the warning it
+  # is there to pin. The option is restored to its default for this block only;
+  # the warning is still asserted, by class and by message.
+  withr::local_options(warn = 0)
+
   local_s3_method("nobs", "cg_pool_bare", function(object, ...) 20L)
   bare <- structure(list(), class = "cg_pool_bare")
   fits <- pool_fits_varying("outcome_mod", list(bare, bare, bare))
@@ -1190,6 +1286,8 @@ test_that("pool_ipw() assumes a large sample when nothing reports a df", {
   # Naming a count answers the question, so the warning belongs to the fallback
   # rather than to the fits.
   expect_no_warning(pool_ipw(fits, dfcom = 17))
+
+  expect_snapshot(pooled <- pool_ipw(fits))
 })
 
 # ---- the pooled result -------------------------------------------------------
@@ -1332,6 +1430,36 @@ test_that("pool_ipw() pools the outcome coefficients in the conditional mode", {
   expect_false(any(res$estimates$effect %in% pool_binary_labels()))
 })
 
+test_that("pool_ipw() pools the corrected blocks in the conditional mode", {
+  # Every result in this reading carries a covariance by construction, since the
+  # standard errors were taken from its diagonal, so the pooled block is
+  # attached rather than withheld. It combines the same way the marginal one
+  # does, and its margins are named by coefficient rather than by effect: a
+  # caller reading a variance out by the name `coef()` gave in this mode has to
+  # get that coefficient's.
+  models <- pool_conditional_models()
+  fits <- pool_conditional_fits()
+  labels <- names(coef(models[[1]]))
+  estimate <- t(vapply(models, coef, numeric(2)))
+  within <- lapply(models, vcov)
+  expected <- Reduce(`+`, within) / 3 + (1 + 1 / 3) * stats::cov(estimate)
+  dimnames(expected) <- list(labels, labels)
+
+  res <- pool_ipw(fits, dfcom = 18)
+  covariance <- attr(res$estimates, "ipw_vcov", exact = TRUE)
+
+  expect_equal(covariance, expected)
+  expect_identical(dimnames(covariance), list(labels, labels))
+  expect_identical(dim(covariance), c(2L, 2L))
+  # The diagonal is the square of the pooled standard errors, since the two are
+  # the same combination of the same numbers.
+  expect_equal(diag(covariance), res$estimates$std.err^2, ignore_attr = TRUE)
+  # Not the effect labels, which is what the other reading would have named it
+  # with, and not the average of the corrected blocks on its own either.
+  expect_false(any(labels %in% pool_binary_labels()))
+  expect_false(isTRUE(all.equal(covariance, Reduce(`+`, within) / 3)))
+})
+
 test_that("pool_ipw() reads the mode the results record", {
   # With no mode named at the call site the stored one decides, the same way it
   # does for the accessors. Naming the mode a set already records is the same
@@ -1368,4 +1496,6 @@ test_that("pool_ipw() refuses the conditional mode without corrected blocks", {
   expect_no_error(stats::vcov(fits[[1]]$outcome_mod))
   # The marginal reading of the same results is unaffected.
   expect_no_error(pool_ipw(fits))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits, effects = "conditional"))
 })

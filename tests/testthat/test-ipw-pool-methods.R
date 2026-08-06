@@ -298,6 +298,8 @@ printed_numbers <- function(out, label) {
 test_that("print() summarizes a pooled binary result", {
   res <- pooled_binary()
 
+  expect_snapshot(print(res))
+
   out <- capture.output(print(res))
 
   expect_match(
@@ -340,6 +342,8 @@ test_that("print() keys pooled rows by effect and contrast", {
   # reading `1.000000` and `2.000000` beside the real estimates.
   res <- pooled_categorical()
 
+  expect_snapshot(print(res))
+
   out <- capture.output(print(res))
 
   for (label in pool_categorical_labels()) {
@@ -355,6 +359,8 @@ test_that("print() names the conditional reading of a pooled result", {
   # shown. A reader handed the table alone would otherwise take a pooled
   # `(Intercept)` for a causal effect.
   res <- pooled_conditional()
+
+  expect_snapshot(print(res))
 
   out <- capture.output(print(res))
 
@@ -597,6 +603,38 @@ test_that("confint() returns the stored bounds at the stored level", {
   )))
 })
 
+test_that("confint() reads the stored level row by row", {
+  # `confint()` keeps the rule row by row, which is what `confint()` on an
+  # unpooled result does: a matrix of limits is read a row at a time and says
+  # which level it is at in its column names, so a row reported at that level
+  # can answer with what it stored while its neighbours are rebuilt.
+  #
+  # `as.data.frame()` is deliberately the other way, all or nothing across the
+  # frame, and the test of that is with the rest of the tidier-shaped table
+  # below. A table is read as a table, and the level is an argument to the call
+  # rather than a column of it, so a table whose rows came from two rules would
+  # have nothing on it to say so.
+  res <- pooled_stored_interval()
+  res$estimates$conf.level <- c(0.9, 0.95, 0.9)
+  estimates <- res$estimates
+
+  ci <- confint(res, level = 0.9)
+  half_width <- stats::qt(0.95, estimates$df) * estimates$std.err
+
+  # The two rows that record 0.9 come back as stored.
+  expect_identical(unname(ci[c(1, 3), 1]), estimates$ci.lower[c(1, 3)])
+  expect_identical(unname(ci[c(1, 3), 2]), estimates$ci.upper[c(1, 3)])
+  # The row that records 0.95 is rebuilt at the level asked for.
+  expect_equal(ci[2, 1], estimates$estimate[2] - half_width[2])
+  expect_equal(ci[2, 2], estimates$estimate[2] + half_width[2])
+  # The stored bounds are asymmetric about the estimate, so no rebuild produces
+  # them and the first half cannot pass by coincidence.
+  expect_false(isTRUE(all.equal(
+    unname(ci[c(1, 3), 1]),
+    (estimates$estimate - half_width)[c(1, 3)]
+  )))
+})
+
 test_that("confint() labels its columns the way stats does", {
   res <- pooled_binary()
 
@@ -777,6 +815,52 @@ test_that("as.data.frame() reports the tidier-shaped pooled table", {
   # The storage names are gone, so code reading the table by them is reading a
   # column that is not there rather than the wrong one.
   expect_false(any(c("effect", "std.err", "z", "conf.level") %in% names(df)))
+})
+
+test_that("as.data.frame() sets the row names from row.names", {
+  res <- pooled_binary()
+
+  df <- as.data.frame(res, row.names = c("first", "second", "third"))
+
+  expect_identical(rownames(df), c("first", "second", "third"))
+
+  # The same table otherwise. It is compared a column at a time rather than
+  # whole, because selecting columns from a data frame drops the `ipw_vcov`
+  # attribute and the covariance is not what this test is about; that it travels
+  # on the returned table at all is asserted above.
+  plain <- as.data.frame(res)
+  expect_identical(names(df), names(plain))
+  for (column in names(plain)) {
+    expect_identical(df[[column]], plain[[column]], info = column)
+  }
+})
+
+test_that("as.data.frame() takes row.names and optional positionally", {
+  # The generic in \pkg{base} takes `row.names` and `optional` in that order
+  # before its dots, and this method matches it, so a positional call written
+  # against the generic means here what it means there. The three arguments this
+  # method adds sit after the dots and are named at every call site, which is
+  # what keeps a second positional argument from being read as one of them.
+  res <- pooled_binary()
+
+  expect_identical(
+    as.data.frame(res, c("first", "second", "third")),
+    as.data.frame(res, row.names = c("first", "second", "third"))
+  )
+
+  # Every column this method builds is named, so there is nothing for `optional`
+  # to make optional. It is accepted for the generic's sake and changes nothing.
+  expect_identical(as.data.frame(res, NULL, TRUE), as.data.frame(res))
+  expect_identical(
+    as.data.frame(res, optional = TRUE, conf.int = TRUE),
+    as.data.frame(res, conf.int = TRUE)
+  )
+
+  # Partial matching reaches only the arguments before the dots, so an
+  # abbreviation of one that sits after them is swallowed by the dots rather
+  # than matched. `expon` is therefore not `exponentiate`, and a table asked for
+  # that way is the table asked for with no arguments at all.
+  expect_identical(as.data.frame(res, expon = TRUE), as.data.frame(res))
 })
 
 test_that("as.data.frame() names the contrast column of a pooled table", {
@@ -1051,11 +1135,33 @@ test_that("as.data.frame() refuses to exponentiate an identity-link table", {
     class = "causalgenerics_invalid_argument"
   )
 
+  # A class of its own in front of the two above. The keyed class is the one
+  # `check_flag()` raises for an `exponentiate` that is not a flag, so a handler
+  # written for this refusal alone has nothing to match on among those two, and
+  # the specific class is that. The link is a field as well as part of the
+  # message.
+  expect_error(
+    as.data.frame(res, exponentiate = TRUE),
+    class = "causalgenerics_exponentiate_link"
+  )
+
   cnd <- tryCatch(
     as.data.frame(res, exponentiate = TRUE),
     error = identity
   )
   expect_match(conditionMessage(cnd), "identity", fixed = TRUE)
+  expect_identical(cnd$link, "identity")
+  expect_identical(cnd$exponentiable, c("logit", "log"))
+
+  # Not the refusal a malformed argument gets, which shares the keyed class.
+  type_refusal <- tryCatch(
+    as.data.frame(res, exponentiate = "yes"),
+    error = identity
+  )
+  expect_false(inherits(type_refusal, "causalgenerics_exponentiate_link"))
+  expect_s3_class(type_refusal, "causalgenerics_invalid_argument_exponentiate")
+
+  expect_snapshot(error = TRUE, as.data.frame(res, exponentiate = TRUE))
 
   # The table itself is still readable, and the refusal is about the one
   # argument rather than about the result.

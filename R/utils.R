@@ -121,6 +121,40 @@ format_series <- function(x) {
   paste0(toString(x[-length(x)]), ", and ", x[[length(x)]])
 }
 
+# Signal that a conditional table was asked to exponentiate coefficients that
+# are not on a scale an exponential undoes. The marginal reading picks the rows
+# to move out by label, so there is always a well-defined subset of them; a
+# conditional reading has no such labels, and the outcome model's link settles
+# the question for the whole table at once.
+#
+# Three classes rather than the usual two. The keyed class is the one
+# `check_flag()` already raises for an `exponentiate` that is not a flag, so a
+# caller who wants only this refusal has nothing to match on among those two;
+# the specific class in front of them is that. The keyed class stays so that a
+# handler written for anything wrong with this argument catches both, which is
+# what the specific-then-general shape means everywhere else here.
+stop_exponentiate_link <- function(link, exponentiable, call = sys.call(-1)) {
+  message <- paste0(
+    "`exponentiate` needs coefficients on a scale an exponential undoes, and ",
+    "the outcome models were fitted with the ",
+    encodeString(link, quote = '"'),
+    " link, whose coefficients are not on one; only the ",
+    format_series(encodeString(exponentiable, quote = '"')),
+    " links exponentiate in the conditional reading."
+  )
+  stop(errorCondition(
+    message,
+    link = link,
+    exponentiable = exponentiable,
+    class = c(
+      "causalgenerics_exponentiate_link",
+      "causalgenerics_invalid_argument_exponentiate",
+      "causalgenerics_invalid_argument"
+    ),
+    call = call
+  ))
+}
+
 # Signal that nothing in the results says how much data the complete-data
 # analysis had, so the pooled degrees of freedom are the large-sample ones. This
 # is a warning rather than an error because the pooling is still done and the

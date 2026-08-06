@@ -576,15 +576,23 @@ pool_surface <- function(fit, effects, call = sys.call(-1)) {
   )
 }
 
-#' The confidence level a result's estimates frame records
+#' The confidence level an estimates frame records
 #'
 #' The stored level is a property of the frame rather than of a row, which is
-#' the same reading `interval_bounds()` makes of it. A frame whose rows disagree
-#' about the level names no one level for the pooled bounds to be reported at,
-#' and neither does a frame with no such column, so both give `NULL` and are
-#' answered by the default or by a level named at the call site.
+#' the same reading `interval_bounds()` and `pooled_interval_bounds()` both make
+#' of it. A frame whose rows disagree about the level names no one level for the
+#' bounds to be reported at, and neither does a frame with no such column, so
+#' both give `NULL` and are answered by the default or by a level named at the
+#' call site.
 #'
-#' @param estimates The `estimates` component of an `ipw` object.
+#' Both sides of the pooling read the frame this way, so they read it through
+#' one helper. [pool_ipw()] asks it what level the results it is pooling agree
+#' on, and `as.data.frame()` on the pooled result asks it what level the frame it
+#' is reporting was built at. Two copies would be two places for that reading to
+#' drift.
+#'
+#' @param estimates The `estimates` component of an `ipw` or an `ipw_pooled`
+#'   object.
 #'
 #' @return A single number, or `NULL`.
 #'

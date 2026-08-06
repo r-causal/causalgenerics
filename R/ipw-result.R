@@ -299,17 +299,35 @@ ipw_effects_label <- function(effects) {
 #' @importFrom stats printCoefmat
 print_marginal_estimates <- function(estimates) {
   cat("Marginal estimates:\n")
+  print_effect_table(estimates)
+}
 
-  # The rows are keyed by effect label, and the character columns the labels are
-  # built from are dropped from the numeric matrix printCoefmat() formats. Both
-  # spellings of the contrast column go, rather than whichever one
-  # `ipw_contrast_column()` reads: the question here is which columns must not
-  # reach `printCoefmat()`, which is every character column the frame might
-  # carry, and not which one the labels are built from. A frame carrying both
-  # would otherwise keep the unread one, and that does not error. It is
-  # factor-coded by `data.matrix()` into the first numeric position, which shifts
-  # every column along one and leaves `cs.ind` and `tst.ind` naming the wrong
-  # ones, so the standard errors are formatted as a test statistic.
+#' Write an estimates frame as a coefficient table
+#'
+#' The rows are keyed by effect label, and the character columns the labels are
+#' built from are dropped from the numeric matrix `printCoefmat()` formats. Both
+#' spellings of the contrast column go, rather than whichever one
+#' `ipw_contrast_column()` reads: the question here is which columns must not
+#' reach `printCoefmat()`, which is every character column the frame might
+#' carry, and not which one the labels are built from. A frame carrying both
+#' would otherwise keep the unread one, and that does not error. It is
+#' factor-coded by `data.matrix()` into the first numeric position, which shifts
+#' every column along one and leaves `cs.ind` and `tst.ind` naming the wrong
+#' ones, so the standard errors are formatted as a test statistic.
+#'
+#' The estimate and its standard error are the first two columns of every frame
+#' this writes and the statistic is the third, whether that statistic is
+#' referred to the normal or to t, so one set of column roles serves the pooled
+#' table and the unpooled one alike.
+#'
+#' @param estimates An `estimates` frame, from an `ipw` or an `ipw_pooled`
+#'   result.
+#'
+#' @return `NULL`, invisibly. Called for the table it writes.
+#'
+#' @noRd
+#' @importFrom stats printCoefmat
+print_effect_table <- function(estimates) {
   numbers <- estimates[
     setdiff(names(estimates), c("effect", "contrast", "comparison"))
   ]

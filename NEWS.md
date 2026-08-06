@@ -1,5 +1,24 @@
 # causalgenerics (development version)
 
+* A pooled result carries the methods a fitted model answers to: `print()`,
+  `coef()`, `vcov()`, `confint()`, `nobs()`, and `as.data.frame()`. Every one of
+  them refers the inference to t on each effect's own pooled degrees of freedom
+  rather than to the normal, which is what the Barnard-Rubin adjustment leaves
+  and can be in single figures when there are few imputations. `print()` reports
+  the estimand, the reading, how many imputations went in, and the complete-data
+  degrees of freedom, then tabulates the pooled effects; the pooling diagnostics
+  stay in the `pooling` component rather than crowding that table.
+  `as.data.frame()` reports the tidier-shaped table, with a `df` column after
+  the statistic so the statistic beside it can be referred to something, and its
+  `conf.level` defaults to the level the result records rather than to 0.95.
+  `exponentiate = TRUE` moves the `log(rr)` and `log(or)` rows of a marginal
+  table to their natural scale as it does for an unpooled result; on a
+  conditional table it moves every coefficient when the outcome models were
+  fitted with a `logit` or `log` link, relabelling nothing, and raises an error
+  of class `causalgenerics_exponentiate_link` on any other link. There is
+  deliberately no `df.residual()` method: residual degrees of freedom belong to
+  one fit, and the per-effect pooled count is in the table.
+
 * New `pool_ipw()` combines the `ipw` results fitted to each of a set of
   multiply imputed datasets into one result, by Rubin's rules, and returns it
   under the new class `ipw_pooled`. It takes a plain list of results or the

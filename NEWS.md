@@ -1,8 +1,56 @@
 # causalgenerics (development version)
 
+* A pooled result carries the methods a fitted model answers to: `print()`,
+  `coef()`, `vcov()`, `confint()`, `nobs()`, and `as.data.frame()`. Every one of
+  them refers the inference to t on each effect's own pooled degrees of freedom
+  rather than to the normal, which is what the Barnard-Rubin adjustment leaves
+  and can be in single figures when there are few imputations. `print()` reports
+  the estimand, the reading, how many imputations went in, and the complete-data
+  degrees of freedom, then tabulates the pooled effects; the pooling diagnostics
+  stay in the `pooling` component rather than crowding that table.
+  `as.data.frame()` reports the tidier-shaped table, with a `df` column after
+  the statistic so the statistic beside it can be referred to something, and its
+  `conf.level` defaults to the level the result records rather than to 0.95.
+  `exponentiate = TRUE` moves the `log(rr)` and `log(or)` rows of a marginal
+  table to their natural scale as it does for an unpooled result; on a
+  conditional table it moves every coefficient when the outcome models were
+  fitted with a `logit` or `log` link, relabelling nothing, and raises an error
+  of class `causalgenerics_exponentiate_link` on any other link. There is
+  deliberately no `df.residual()` method: residual degrees of freedom belong to
+  one fit, and the per-effect pooled count is in the table.
+
+* New `pool_ipw()` combines the `ipw` results fitted to each of a set of
+  multiply imputed datasets into one result, by Rubin's rules, and returns it
+  under the new class `ipw_pooled`. It takes a plain list of results or the
+  `mira` object `mice::with()` returns, which it recognizes by class and reads
+  through its `analyses` element, so mice is not a dependency. Each result
+  already carries a standard error that accounts for the weights having been
+  estimated, and pooling those adds the uncertainty the imputation contributed.
+  The pooled degrees of freedom carry the Barnard-Rubin small-sample
+  adjustment, so the statistic, the p-value, and the bounds are referred to t
+  rather than to the normal; the complete-data degrees of freedom are read off
+  the results when `dfcom` does not name them, and a large sample is assumed
+  with a warning when nothing reports them. Results that disagree about their
+  estimand, standard error method, presentation mode, reported effects, stored
+  confidence level, or outcome model link are refused with an error of class
+  `causalgenerics_pool_mismatch` rather than averaged. The ratio effects are
+  pooled on the log scale they were estimated on.
+
+* Breaking change: the column a categorical `ipw` result names its contrasts
+  with is `contrast`, in the `estimates` frame `new_ipw()` takes and in the
+  table `as.data.frame()` reports. It was `comparison`. Both things that read
+  the table by column name spell it the new way: `mice::pool()` groups the rows
+  it pools by a closed whitelist of names that holds `contrast` and not
+  `comparison`, and marginaleffects heads the same column `contrast`, so a
+  table under the old name lost the contrast it was keyed by and did not stack
+  with one of theirs. A stored result whose frame carries the old name is still
+  read: the older spelling is an alias wherever the column is read, so such a
+  result labels its rows and reports its table exactly as one built now does. A
+  package supplying an `ipw()` method writes `contrast`.
+
 * Breaking change: `as.data.frame()` on an `ipw` result returns the
   tidier-shaped table of its effect estimates rather than a copy of the
-  `estimates` component. The columns are `term`, `comparison` when the result
+  `estimates` component. The columns are `term`, `contrast` when the result
   names contrasts, `estimate`, `std.error`, `statistic`, and `p.value`, so the
   storage names `effect`, `std.err`, and `z` no longer appear and code reading
   the table by those names has to be updated. The interval is opt-in through the

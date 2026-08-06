@@ -37,7 +37,7 @@
       ---
       Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
-# print() keys rows by effect and comparison for a categorical result
+# print() keys rows by effect and contrast for a categorical result
 
     Code
       print(res)

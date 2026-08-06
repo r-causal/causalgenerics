@@ -11,7 +11,7 @@
 # here needs a real estimator, and this package holds no model-fitting
 # dependency to build one with.
 
-# A binary-exposure estimates frame: one row per effect measure, no `comparison`
+# A binary-exposure estimates frame: one row per effect measure, no `contrast`
 # column. The risk difference is on the raw scale and the two ratios are on the
 # log scale, which is what makes `exponentiate` mean anything.
 binary_estimates <- function() {
@@ -27,9 +27,13 @@ binary_estimates <- function() {
   )
 }
 
-# A categorical-exposure estimates frame. The effect labels repeat across
-# contrasts, so a `comparison` column sits immediately after `effect` and names
-# the non-reference and reference level of each one.
+# A categorical-exposure estimates frame as an earlier version of the contract
+# stored one. The effect labels repeat across contrasts, so a column sits
+# immediately after `effect` naming the non-reference and reference level of each
+# one, and this vintage calls that column `comparison`. It is read directly only
+# by the three tests at the foot of this file that are about a frame stored under
+# the older name; every other categorical assertion is written against the
+# canonical frame below.
 categorical_estimates <- function() {
   data.frame(
     effect = rep(c("rd", "log(rr)", "log(or)"), times = 2),
@@ -49,6 +53,18 @@ categorical_estimates <- function() {
       0.0002717
     )
   )
+}
+
+# The same frame with the column naming its contrasts called `contrast`, which is
+# what the constructor's contract calls it and what the result layer reports it
+# under. This is the categorical frame every assertion outside the legacy tests
+# is written against. It is derived from the frame above rather than written out
+# again, so that the two differ in the column name and in nothing else. The
+# section at the foot of this file says why the name matters.
+contrast_estimates <- function() {
+  estimates <- categorical_estimates()
+  names(estimates)[names(estimates) == "comparison"] <- "contrast"
+  estimates
 }
 
 # A continuous-outcome estimates frame. There is only a difference in means, so
@@ -499,11 +515,11 @@ test_that("print() summarizes a binary-exposure result", {
   expect_match(out, "^Signif\\. codes:", all = FALSE)
 })
 
-test_that("print() keys rows by effect and comparison for a categorical result", {
+test_that("print() keys rows by effect and contrast for a categorical result", {
   # The categorical shape is the only place the two print paths differ. Row
-  # labels become `effect` and `comparison` together, and both character columns
+  # labels become `effect` and `contrast` together, and both character columns
   # have to be gone before `printCoefmat()` sees the frame.
-  res <- ipw_result(categorical_estimates())
+  res <- ipw_result(contrast_estimates())
 
   expect_snapshot(print(res))
 
@@ -514,10 +530,10 @@ test_that("print() keys rows by effect and comparison for a categorical result",
   expect_match(out, "^log\\(or\\) c vs a +0\\.676435 ", all = FALSE)
 
   # Dropping `effect` alone is the failure worth guarding against, because it
-  # does not error: `printCoefmat()` sends the character `comparison` column
+  # does not error: `printCoefmat()` sends the character `contrast` column
   # through `data.matrix()`, which factor-codes it into a column reading
   # `1.000000` and `2.000000` alongside the real estimates.
-  expect_false(any(grepl("comparison", out, fixed = TRUE)))
+  expect_false(any(grepl("contrast", out, fixed = TRUE)))
   expect_false(any(grepl("effect", out, fixed = TRUE)))
 
   # With six rows the stars do not fit beside the estimates and
@@ -1114,7 +1130,7 @@ test_that("as.data.frame() renames the estimates into the tidier columns", {
   )
 
   # The label of a row is its term, and the label is what the frame's `effect`
-  # column holds. The comparison a categorical result reports is a column of its
+  # column holds. The contrast a categorical result reports is a column of its
   # own rather than part of this one.
   expect_type(df$term, "character")
   expect_identical(df$term, c("rd", "log(rr)", "log(or)"))
@@ -1138,28 +1154,33 @@ test_that("as.data.frame() renames the estimates into the tidier columns", {
   )
 })
 
-test_that("as.data.frame() puts comparison after term for a categorical result", {
+test_that("as.data.frame() puts contrast after term for a categorical result", {
   # A categorical exposure reports each effect measure once per contrast, so the
   # term alone names several rows the same thing. The column naming the contrast
-  # follows the term it qualifies rather than sitting among the numbers.
-  estimates <- categorical_estimates()
+  # follows the term it qualifies rather than sitting among the numbers, and it
+  # is the only column that names it: a table carrying two spellings of one
+  # quantity would let a caller read the same column twice under two names.
+  estimates <- contrast_estimates()
   res <- ipw_result(estimates)
 
   df <- as.data.frame(res)
 
   expect_identical(
     names(df),
-    c("term", "comparison", "estimate", "std.error", "statistic", "p.value")
+    c("term", "contrast", "estimate", "std.error", "statistic", "p.value")
   )
+  expect_identical(names(df)[1:2], c("term", "contrast"))
+  expect_false("comparison" %in% names(df))
+
   expect_identical(df$term, rep(c("rd", "log(rr)", "log(or)"), times = 2))
-  expect_identical(df$comparison, estimates$comparison)
+  expect_identical(df$contrast, estimates$contrast)
   expect_identical(df$estimate, estimates$estimate)
   expect_identical(df$std.error, estimates$std.err)
 })
 
-test_that("as.data.frame() omits comparison when the result reports none", {
+test_that("as.data.frame() omits contrast when the result reports none", {
   # A binary or continuous exposure has one contrast, so there is nothing for a
-  # comparison column to say. It is absent rather than present and constant: a
+  # contrast column to say. It is absent rather than present and constant: a
   # column of one repeated value would stack with a categorical result's table
   # and read as a contrast that was named.
   df <- as.data.frame(ipw_result(continuous_estimates()))
@@ -1206,16 +1227,18 @@ test_that("as.data.frame(conf.int = TRUE) appends the bounds last", {
   expect_false("conf.level" %in% names(df))
 })
 
-test_that("as.data.frame(conf.int = TRUE) keeps comparison after term", {
+test_that("as.data.frame(conf.int = TRUE) keeps contrast after term", {
   # The bounds go on the end, so the categorical table adds them after the same
-  # five columns the binary one has and leaves the contrast where it was.
-  df <- as.data.frame(ipw_result(categorical_estimates()), conf.int = TRUE)
+  # six columns it already had and leaves the contrast where it was.
+  estimates <- contrast_estimates()
+
+  df <- as.data.frame(ipw_result(estimates), conf.int = TRUE)
 
   expect_identical(
     names(df),
     c(
       "term",
-      "comparison",
+      "contrast",
       "estimate",
       "std.error",
       "statistic",
@@ -1224,7 +1247,8 @@ test_that("as.data.frame(conf.int = TRUE) keeps comparison after term", {
       "conf.high"
     )
   )
-  expect_identical(df$comparison, categorical_estimates()$comparison)
+  expect_identical(df$contrast, estimates$contrast)
+  expect_false("comparison" %in% names(df))
 })
 
 test_that("as.data.frame(conf.int = TRUE) returns the stored bounds", {
@@ -1371,18 +1395,18 @@ test_that("as.data.frame(exponentiate = TRUE) moves the bounds it reports", {
   )
 })
 
-test_that("as.data.frame(exponentiate = TRUE) relabels every comparison", {
-  estimates <- categorical_estimates()
+test_that("as.data.frame(exponentiate = TRUE) keeps every contrast label", {
+  estimates <- contrast_estimates()
   res <- ipw_result(estimates)
 
   df <- as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
 
   expect_identical(df$term, rep(c("rd", "rr", "or"), times = 2))
 
-  # The comparison labels identify the contrast, not the scale, so they survive
-  # untouched and stay in place after the term.
-  expect_identical(df$comparison, estimates$comparison)
-  expect_identical(names(df)[1:2], c("term", "comparison"))
+  # The contrast labels identify the contrast, not the scale, so they survive
+  # untouched and stay in place after the term while the two ratio rows move.
+  expect_identical(df$contrast, estimates$contrast)
+  expect_identical(names(df)[1:2], c("term", "contrast"))
 
   ratios <- df$term %in% c("rr", "or")
   expect_identical(df$estimate[ratios], exp(estimates$estimate[ratios]))
@@ -1732,6 +1756,228 @@ test_that("the as.data.frame() argument errors state the contract", {
   expect_snapshot(error = TRUE, as.data.frame(res, conf.level = 95))
   expect_snapshot(error = TRUE, as.data.frame(res, conf.int = NA))
   expect_snapshot(error = TRUE, as.data.frame(res, exponentiate = 1))
+})
+
+# ---- the contrast column -----------------------------------------------------
+
+# The column a categorical result names its contrasts with is `contrast`, in the
+# `estimates` frame the constructor takes and in the tidier-shaped table
+# `as.data.frame()` reports. The sections above assert that name one surface at a
+# time, beside everything else each surface does. Why it is that name, and the
+# two claims about it that belong to no single surface, are here.
+#
+# Two things downstream read the table by column name and both spell it that way.
+# `mice::pool()` groups the rows it pools by a closed whitelist of column names
+# that holds `contrast` and not `comparison`, so a table under the other name
+# loses the contrast it was keyed by. And \pkg{marginaleffects} names the same
+# column `contrast`, so a table under the other name does not stack with one of
+# theirs.
+#
+# The first claim is that the labels the rows carry are not the column. A label
+# is `effect` and the contrast pasted together, such as `"rd b vs a"`, and those
+# strings are what `print()` writes down the side of its table and what `coef()`,
+# `vcov()`, and `confint()` name their results with. The column the labels are
+# built from is renamed and the labels themselves are not, so every one of those
+# surfaces reads the same before and after. That is the half a rename is most
+# likely to break quietly.
+#
+# The second is that a frame stored under the older name is still read as one
+# that names contrasts. The comment further down says what that buys and what it
+# does not, and the three tests after it are what hold it.
+
+# The labels the rows of both categorical fixtures carry, since the column name
+# is not part of a label. They are written out rather than pasted together: the
+# label rule is what these assertions are for, so restating it with the `paste()`
+# the implementation uses would assert nothing.
+contrast_labels <- function() {
+  c(
+    "rd b vs a",
+    "log(rr) b vs a",
+    "log(or) b vs a",
+    "rd c vs a",
+    "log(rr) c vs a",
+    "log(or) c vs a"
+  )
+}
+
+# The covariance of those six effects, in the shape a method attaches it: a
+# square matrix labelled on both margins by effect label, with off-diagonal
+# entries, since effects computed from the same weighted means are correlated.
+contrast_vcov <- function() {
+  std_err <- contrast_estimates()$std.err
+  index <- seq_along(std_err)
+  covariance <- 0.9^abs(outer(index, index, "-")) * outer(std_err, std_err)
+  dimnames(covariance) <- list(contrast_labels(), contrast_labels())
+  covariance
+}
+
+test_that("the contrast column leaves the effect labels as they were", {
+  # Renaming the column renames no row. `"rd b vs a"` is the line `print()`
+  # writes, the name `coef()` gives, the dimname `vcov()` carries, and the row
+  # `confint()` both labels and matches a character `parm` against, and it was
+  # all four of those before the column was renamed as well.
+  covariance <- contrast_vcov()
+  res <- ipw_result(with_vcov(contrast_estimates(), covariance))
+
+  expect_identical(names(coef(res)), contrast_labels())
+  expect_identical(rownames(confint(res)), contrast_labels())
+  expect_identical(
+    dimnames(vcov(res)),
+    list(contrast_labels(), contrast_labels())
+  )
+
+  # Asserted against each other as well as against the literal, so that a change
+  # reaching one surface and not the rest is caught here rather than by a caller
+  # who reads a covariance out by the name `coef()` gave.
+  expect_identical(rownames(vcov(res)), names(coef(res)))
+  expect_identical(colnames(vcov(res)), names(coef(res)))
+  expect_identical(rownames(confint(res)), names(coef(res)))
+
+  # The label selects a row as well as naming one, which is the surface a caller
+  # addresses `confint()` through.
+  expect_identical(
+    rownames(confint(res, parm = "log(or) c vs a")),
+    "log(or) c vs a"
+  )
+})
+
+# A frame stored by an earlier version of a fitting package names the same column
+# `comparison`, and results built against that contract are still results a
+# caller is holding. The frame is read the way `legacy_result()` above is read:
+# the older spelling is an alias for the canonical one rather than a shape the
+# result layer has no reading for.
+#
+# What the alias buys is only on the way in. Every surface on the way out is the
+# canonical one whichever name the stored frame used, so a caller cannot tell
+# from a table, a label, or a printed row which vintage of frame produced it.
+# That is the whole of the guarantee, and each half of it needs its own
+# assertion: a frame whose column the reader does not recognize reaches the
+# output surfaces as no contrast at all, and the damage is silent rather than
+# loud. `as.data.frame()` drops the column, leaving six rows whose terms repeat
+# in pairs, which is exactly the shape `mice::pool()` groups across; and the
+# labels collapse to three names used twice, which `coef()` and `confint()`
+# report as duplicates and which `print()` cannot use as row names at all.
+#
+# The three tests below are that guarantee, one output surface each. Every one of
+# them is built from a frame of the older vintage and asserts the canonical
+# answer, so a reader that lost the alias fails them whichever way it lost it.
+
+test_that("as.data.frame() reports a stored comparison column as contrast", {
+  # The column name is the caller's contract, and it is the canonical one for a
+  # frame of either vintage. A table that reported the stored spelling would
+  # hand `mice::pool()` a column outside the whitelist it groups by and would
+  # not stack with a table built from a frame that used the other name.
+  estimates <- categorical_estimates()
+  res <- ipw_result(estimates)
+
+  df <- as.data.frame(res)
+
+  expect_identical(
+    names(df),
+    c("term", "contrast", "estimate", "std.error", "statistic", "p.value")
+  )
+  expect_identical(names(df)[1:2], c("term", "contrast"))
+  expect_false("comparison" %in% names(df))
+
+  expect_identical(df$contrast, estimates$comparison)
+  expect_identical(df$term, rep(c("rd", "log(rr)", "log(or)"), times = 2))
+
+  # The table is the one the canonical frame gives, down to the covariance it
+  # carries. Which column name the result was built with is not a fact about the
+  # table, so there is nothing in it for a caller to branch on.
+  expect_identical(df, as.data.frame(ipw_result(contrast_estimates())))
+})
+
+test_that("a stored comparison column keeps the effect labels as they were", {
+  # The labels are built from the contrast whatever the column holding it is
+  # called, so they are the six full ones rather than three names used twice.
+  # Duplicated labels are the failure this guards against: `coef()` would return
+  # two elements answering to `"rd"`, and `confint(parm = "rd b vs a")` would
+  # refuse a label the result reports.
+  covariance <- contrast_vcov()
+  res <- ipw_result(with_vcov(categorical_estimates(), covariance))
+
+  expect_identical(names(coef(res)), contrast_labels())
+  expect_identical(rownames(confint(res)), contrast_labels())
+  expect_identical(
+    dimnames(vcov(res)),
+    list(contrast_labels(), contrast_labels())
+  )
+
+  expect_identical(anyDuplicated(names(coef(res))), 0L)
+  expect_identical(rownames(vcov(res)), names(coef(res)))
+  expect_identical(rownames(confint(res)), names(coef(res)))
+  expect_identical(
+    rownames(confint(res, parm = "log(or) c vs a")),
+    "log(or) c vs a"
+  )
+})
+
+test_that("print() keys rows by effect and a stored comparison column", {
+  # Row labels are the same six, and both character columns are gone before
+  # `printCoefmat()` sees the frame. A reader that did not know the stored
+  # spelling would leave that column in the numeric matrix and would have three
+  # row names to give six rows, which `printCoefmat()` cannot be handed at all.
+  legacy <- ipw_result(categorical_estimates())
+
+  out <- capture.output(print(legacy))
+
+  expect_match(out, "^rd b vs a +0\\.081945 ", all = FALSE)
+  expect_match(out, "^log\\(rr\\) b vs a +0\\.168870 ", all = FALSE)
+  expect_match(out, "^log\\(or\\) c vs a +0\\.676435 ", all = FALSE)
+
+  expect_false(any(grepl("comparison", out, fixed = TRUE)))
+  expect_false(any(grepl("contrast", out, fixed = TRUE)))
+  expect_false(any(grepl("effect", out, fixed = TRUE)))
+
+  # The printed form is the canonical frame's line for line. The assertions above
+  # say what each row reads; this one says there is nothing anywhere else in the
+  # output to tell the two vintages apart.
+  canonical <- ipw_result(contrast_estimates())
+  expect_identical(out, capture.output(print(canonical)))
+})
+
+# A frame carrying both columns is no vintage anything wrote. It is what a caller
+# produces by adding the canonical column to a stored frame without taking the
+# old one away, and the two can disagree. The canonical name wins, so such a
+# frame reports what its `contrast` column says and the stray column reaches no
+# surface at all.
+#
+# Dropping only the column that was read is the failure this guards against, and
+# like the others in this section it does not error. The stray one survives into
+# the frame `printCoefmat()` formats, where `data.matrix()` factor-codes it into
+# the first numeric position, shifting every column along one so that `cs.ind`
+# and `tst.ind` name the wrong ones and the standard errors are formatted as a
+# test statistic.
+
+test_that("a frame carrying both columns is read under the canonical name", {
+  canonical <- contrast_estimates()
+
+  # The stray column holds labels naming no contrast the result has, and sits
+  # immediately after the canonical one, which is the position that does the most
+  # damage if it survives. A surface reading the wrong column is then caught by
+  # what it reports rather than only by the name it reports it under.
+  both <- canonical
+  both$comparison <- rep(c("x vs y", "z vs y"), each = 3)
+  both <- both[append(names(canonical), "comparison", after = 2L)]
+
+  res <- ipw_result(both)
+  expected <- ipw_result(canonical)
+
+  df <- as.data.frame(res)
+
+  expect_identical(names(df)[1:2], c("term", "contrast"))
+  expect_false("comparison" %in% names(df))
+  expect_identical(df$contrast, canonical$contrast)
+  expect_identical(df, as.data.frame(expected))
+
+  expect_identical(names(coef(res)), contrast_labels())
+  expect_identical(rownames(confint(res)), contrast_labels())
+
+  out <- capture.output(print(res))
+
+  expect_identical(out, capture.output(print(expected)))
+  expect_false(any(grepl("x vs y", out, fixed = TRUE)))
 })
 
 # ---- registration and export -------------------------------------------------

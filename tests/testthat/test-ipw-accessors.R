@@ -32,7 +32,7 @@
 
 # ---- fixtures ----------------------------------------------------------------
 
-# A binary-exposure estimates frame: one row per effect measure, no `comparison`
+# A binary-exposure estimates frame: one row per effect measure, no `contrast`
 # column, so the effect labels stand alone.
 binary_estimates <- function() {
   data.frame(
@@ -47,9 +47,12 @@ binary_estimates <- function() {
   )
 }
 
-# A categorical-exposure estimates frame. The effect labels repeat across
-# contrasts, so a `comparison` column sits immediately after `effect` and names
-# the non-reference and reference level of each one.
+# A categorical-exposure estimates frame as an earlier version of the contract
+# stored one. The effect labels repeat across contrasts, so a column sits
+# immediately after `effect` naming the non-reference and reference level of each
+# one, and this vintage calls that column `comparison`. It is here to derive the
+# canonical frame below from; the tests that are about the older name live in
+# `test-ipw-result.R`, where the surfaces that read the column are.
 categorical_estimates <- function() {
   data.frame(
     effect = rep(c("rd", "log(rr)", "log(or)"), times = 2),
@@ -69,6 +72,18 @@ categorical_estimates <- function() {
       0.0002717
     )
   )
+}
+
+# The same frame with the column naming its contrasts called `contrast`, which is
+# what the constructor's contract calls it and the name `mice::pool()` and
+# \pkg{marginaleffects} both read the tidier surface by. This is the categorical
+# frame every assertion below is written against. It is derived from the frame
+# above rather than written out again, so that the two differ in the column name
+# and in nothing else.
+contrast_estimates <- function() {
+  estimates <- categorical_estimates()
+  names(estimates)[names(estimates) == "comparison"] <- "contrast"
+  estimates
 }
 
 # A continuous-outcome estimates frame: a difference in means and nothing else,
@@ -156,7 +171,7 @@ binary_vcov <- function() {
 }
 
 categorical_vcov <- function() {
-  effects_vcov(categorical_estimates()$std.err, categorical_labels())
+  effects_vcov(contrast_estimates()$std.err, categorical_labels())
 }
 
 continuous_vcov <- function() {
@@ -405,11 +420,11 @@ test_that("coef() returns the estimates named by effect", {
   )
 })
 
-test_that("coef() keys a categorical result by effect and comparison", {
+test_that("coef() keys a categorical result by effect and contrast", {
   # The effect labels repeat across contrasts, so `effect` alone would name
-  # three of the six rows twice over and a caller could not tell which
-  # comparison an estimate belonged to. The label is the two columns together.
-  res <- ipw_result(categorical_estimates())
+  # three of the six rows twice over and a caller could not tell which contrast
+  # an estimate belonged to. The label is the two columns together.
+  res <- ipw_result(contrast_estimates())
 
   expect_identical(
     coef(res),
@@ -437,7 +452,7 @@ test_that("coef() names its result the way print() labels its rows", {
   # together; nothing else here would notice.
   for (estimates in list(
     binary_estimates(),
-    categorical_estimates(),
+    contrast_estimates(),
     continuous_estimates()
   )) {
     res <- ipw_result(estimates)
@@ -469,7 +484,7 @@ test_that("vcov() returns the covariance attached to the estimates", {
 
 test_that("vcov() returns the covariance of a categorical result", {
   covariance <- categorical_vcov()
-  res <- ipw_result(categorical_estimates(), vcov = covariance)
+  res <- ipw_result(contrast_estimates(), vcov = covariance)
 
   expect_identical(vcov(res), covariance)
   expect_identical(dim(vcov(res)), c(6L, 6L))
@@ -488,7 +503,7 @@ test_that("coef(), vcov(), and confint() agree on the effect labels", {
   # The three surfaces are used together: a caller who reads a covariance out by
   # name expects the name to be the one `coef()` gave. Each is asserted against
   # a literal above; this is the assertion that they are the same literal.
-  res <- ipw_result(categorical_estimates(), vcov = categorical_vcov())
+  res <- ipw_result(contrast_estimates(), vcov = categorical_vcov())
   labels <- names(coef(res))
 
   expect_identical(rownames(vcov(res)), labels)
@@ -693,9 +708,9 @@ test_that("confint() gives a numeric parm its ordinary subscript meaning", {
 })
 
 test_that("confint() selects a categorical row by its full label", {
-  # The label is effect and comparison together, so `parm = "rd"` names nothing
-  # in a categorical result even though `rd` is a value of the `effect` column.
-  estimates <- categorical_estimates()
+  # The label is effect and contrast together, so `parm = "rd"` names nothing in
+  # a categorical result even though `rd` is a value of the `effect` column.
+  estimates <- contrast_estimates()
   res <- ipw_result(estimates)
 
   ci <- confint(res, parm = "rd c vs a")

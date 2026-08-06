@@ -89,7 +89,13 @@ numeric matrix with dimnames on both margins.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p><code>new_ipw_model()</code> returns <code>model</code> with <code>"ipw_model"</code> prepended to its
 class vector and <code>vcov</code> attached as the <code>ipw_vcov</code> attribute. Everything
-else about the model is untouched. <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> returns that matrix.</p>
+else about the model is untouched. <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> returns that matrix, and raises
+an error of class <code>causalgenerics_no_vcov_ipw_model</code>, and of the general
+class <code>causalgenerics_no_vcov</code>, when the attribute is absent. The
+constructor puts the class and the attribute on together, so a model
+carrying the class with nothing behind it passed through code that dropped
+its attributes and kept its class, and the covariance the model computed for
+itself is not a substitute for the one it lost.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

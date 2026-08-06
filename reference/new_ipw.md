@@ -24,7 +24,15 @@ new_ipw(
 print(x, ...)
 
 # S3 method for class 'ipw'
-as.data.frame(x, row.names = NULL, optional = NULL, exponentiate = FALSE, ...)
+as.data.frame(
+  x,
+  row.names = NULL,
+  optional = FALSE,
+  ...,
+  conf.int = FALSE,
+  conf.level = 0.95,
+  exponentiate = FALSE
+)
 ```
 
 ## Arguments
@@ -67,23 +75,41 @@ as.data.frame(x, row.names = NULL, optional = NULL, exponentiate = FALSE, ...)
 
 - ...:
 
-  Further arguments. [`print()`](https://rdrr.io/r/base/print.html)
-  ignores them;
-  [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) passes
-  them to
-  [`base::as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html).
+  Further arguments. Neither method reads them.
 
-- row.names, optional:
+- row.names:
 
-  Passed to
-  [`base::as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html).
+  A character vector of row names for the returned table, or `NULL` for
+  the automatic ones.
+
+- optional:
+
+  Accepted for the
+  [`base::as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html)
+  generic. Every column of the table is named, so there is nothing for
+  it to make optional.
+
+- conf.int:
+
+  If `TRUE`, append `conf.low` and `conf.high` columns after the rest of
+  the table. Default is `FALSE`.
+
+- conf.level:
+
+  The confidence level the bounds report. At the level every row of
+  `estimates` records, the stored bounds are returned; at any other
+  level they are the normal approximation built from the estimate and
+  its standard error. Default is `0.95`.
 
 - exponentiate:
 
   If `TRUE`, exponentiate the log risk ratio and log odds ratio to
-  produce risk ratios and odds ratios on their natural scale. The
-  confidence interval bounds are also exponentiated. Standard errors, z
-  statistics, and p-values remain on the log scale. Default is `FALSE`.
+  produce risk ratios and odds ratios on their natural scale,
+  relabelling the two terms `"rr"` and `"or"`. The confidence bounds
+  move with them. Standard errors, statistics, and p-values remain on
+  the log scale, and the `ipw_vcov` attribute is dropped rather than
+  carried, since it describes the estimates on the scale they were
+  estimated on. Default is `FALSE`.
 
 ## Value
 
@@ -135,8 +161,10 @@ seven components, in this order.
 
 [`print()`](https://rdrr.io/r/base/print.html) returns its input
 invisibly.
-[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) returns
-the `estimates` component as a data frame.
+[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) returns a
+plain data frame of the effect estimates under the tidier column names
+described above, with the confidence bounds appended when they are asked
+for.
 
 ## Details
 
@@ -161,12 +189,39 @@ the call of each component model, then the table of the surface the
 result's presentation mode names. The section below describes the two
 modes and what each one tabulates.
 
-[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) returns
-the `estimates` component. With `exponentiate = TRUE` it moves the
-`log(rr)` and `log(or)` rows to their natural scale, exponentiating the
-point estimate and the confidence limits and relabelling the two effects
-`"rr"` and `"or"`. Standard errors, z statistics, and p-values stay on
-the log scale, where the inference is done.
+[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) reports
+the effect estimates as a tidier-shaped table rather than as a copy of
+the `estimates` component. Its columns are `term`, then `comparison`
+when the result names contrasts, then `estimate`, `std.error`,
+`statistic`, and `p.value`. Those are the names the tidier convention
+uses, so a fitting package's `tidy()` method is this table read as a
+tibble and nothing more. The `estimates` component itself is unchanged
+by any of what follows.
+
+`conf.int = TRUE` appends `conf.low` and `conf.high` after the other
+columns, and `conf.level` names the level they report. The level is an
+argument rather than a column, since a column would repeat one number
+down every row and be read as part of the table rather than as the level
+the two bounds beside it were built at. The bounds `estimates` stores
+are returned when every row of the frame records the level asked for.
+They need not be the normal pair: a bootstrap or profile interval is
+asymmetric about the estimate, and even a normal one rounded on its way
+into the frame is not the number recomputing gives. At any other level,
+and for a frame whose rows disagree about the level or record none, the
+bounds are the normal approximation built from the estimate and its
+standard error.
+
+With `exponentiate = TRUE` the `log(rr)` and `log(or)` rows move to
+their natural scale, exponentiating the point estimate and the
+confidence bounds and relabelling the two terms `"rr"` and `"or"`.
+Standard errors, statistics, and p-values stay on the log scale, where
+the inference is done, and the interval is settled before the scale is:
+bounds recomputed at another level are built on the log scale and
+exponentiated afterwards. The covariance described below travels on the
+returned table under the same `ipw_vcov` attribute while the rows are on
+the scale they were estimated on, and is dropped when
+`exponentiate = TRUE`, since a matrix left attached there would describe
+neither the table it sits on nor anything else.
 
 ## The effect labels
 
@@ -205,10 +260,26 @@ model's coefficients, under `Conditional estimates (outcome model):`,
 with the standard errors implied by the corrected covariance a fitting
 package attaches through
 [`new_ipw_model()`](https://r-causal.github.io/causalgenerics/reference/new_ipw_model.md).
-An outcome model that carries no such covariance is still printed: the
+Which coefficient each entry of that block belongs to is what its labels
+say rather than its row order, so a block attached in another order
+still prints each standard error beside the coefficient it belongs to.
+
+An outcome model a fitting package never wrapped is still printed: the
 coefficients are written on their own, followed by a note saying that no
 covariance from the joint estimation is recorded, rather than beside the
-standard errors the model computed for itself.
+standard errors the model computed for itself. An outcome model that
+carries the
+[`new_ipw_model()`](https://r-causal.github.io/causalgenerics/reference/new_ipw_model.md)
+class with no covariance behind it is refused instead, with an error of
+class `causalgenerics_no_vcov_ipw_model`, and one whose block cannot be
+paired with its coefficients with an error of class
+`causalgenerics_conditional_vcov_mismatch`. The note answers a package
+that has not adopted the contract by telling the reader to wrap the
+model, and that advice has already been taken in both of those cases:
+the object is what is wrong, not the package that produced it.
+
+An outcome model that reports no coefficients has no rows to tabulate
+under that heading, and the printed form says so in place of the table.
 
 ## The covariance of the effects
 
@@ -283,10 +354,17 @@ res
 #> ---
 #> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
-# The ratios on their natural scale.
-as.data.frame(res, exponentiate = TRUE)
-#>   effect estimate  std.err      z ci.lower ci.upper conf.level p.value
-#> 1     rd 0.199882 0.092425 2.1626 0.018732 0.381032       0.95 0.03057
-#> 2     rr 1.751397 0.273519 2.0489 1.024624 2.993676       0.95 0.04047
-#> 3     or 2.406836 0.418661 2.0979 1.059453 5.467782       0.95 0.03591
+# The tidier-shaped table the result reports.
+as.data.frame(res)
+#>      term estimate std.error statistic p.value
+#> 1      rd 0.199882  0.092425    2.1626 0.03057
+#> 2 log(rr) 0.560414  0.273519    2.0489 0.04047
+#> 3 log(or) 0.878313  0.418661    2.0979 0.03591
+
+# With an interval, and the ratios on their natural scale.
+as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
+#>   term estimate std.error statistic p.value conf.low conf.high
+#> 1   rd 0.199882  0.092425    2.1626 0.03057 0.018732  0.381032
+#> 2   rr 1.751397  0.273519    2.0489 0.04047 1.024624  2.993676
+#> 3   or 2.406836  0.418661    2.0979 0.03591 1.059453  5.467782
 ```

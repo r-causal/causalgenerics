@@ -12,9 +12,11 @@ vcov() returns the covariance of those estimates.
 confint() returns their confidence limits.
 nobs() returns the number of observations the outcome model was fitted
 on.
-df.residual() returns the residual degrees of freedom of the fitted
-variance object.
+df.residual() returns the residual degrees of freedom the fitted variance
+object reports.
 weights() returns the weights the outcome model was fitted with.
+model.frame() returns the outcome model's model frame.
+estimand() returns the estimand the weights targeted.
 
 "><meta property="og:description" content="The accessors a fitted model answers to, defined for the class new_ipw()
 constructs.
@@ -23,9 +25,11 @@ vcov() returns the covariance of those estimates.
 confint() returns their confidence limits.
 nobs() returns the number of observations the outcome model was fitted
 on.
-df.residual() returns the residual degrees of freedom of the fitted
-variance object.
+df.residual() returns the residual degrees of freedom the fitted variance
+object reports.
 weights() returns the weights the outcome model was fitted with.
+model.frame() returns the outcome model's model frame.
+estimand() returns the estimand the weights targeted.
 
 "></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -68,9 +72,11 @@ constructs.</p><ul><li><p><code><a href="https://rdrr.io/r/stats/coef.html" clas
 <li><p><code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> returns their confidence limits.</p></li>
 <li><p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code> returns the number of observations the outcome model was fitted
 on.</p></li>
-<li><p><code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code> returns the residual degrees of freedom of the fitted
-variance object.</p></li>
+<li><p><code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code> returns the residual degrees of freedom the fitted variance
+object reports.</p></li>
 <li><p><code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code> returns the weights the outcome model was fitted with.</p></li>
+<li><p><code><a href="https://rdrr.io/r/stats/model.frame.html" class="external-link">model.frame()</a></code> returns the outcome model's model frame.</p></li>
+<li><p><code><a href="causal-weights.html">estimand()</a></code> returns the estimand the weights targeted.</p></li>
 </ul></div>
 
     <div class="section level2">
@@ -91,7 +97,13 @@ variance object.</p></li>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S3 method for class 'ipw'</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights</a></span><span class="op">(</span><span class="va">object</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S3 method for class 'ipw'</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/model.frame.html" class="external-link">model.frame</a></span><span class="op">(</span><span class="va">formula</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S3 method for class 'ipw'</span></span>
+<span><span class="fu"><a href="causal-weights.html">estimand</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -123,6 +135,16 @@ them.</p></dd>
 <dd><p>The confidence level. At the level the result stores, its own
 limits are returned; at any other level they are recomputed.</p></dd>
 
+
+<dt id="arg-formula">formula<a class="anchor" aria-label="anchor" href="#arg-formula"></a></dt>
+<dd><p>An <code>ipw</code> object. The <code><a href="https://rdrr.io/r/stats/model.frame.html" class="external-link">model.frame()</a></code> generic in <span class="pkg">stats</span>
+names its first argument <code>formula</code>, and the method matches it.</p></dd>
+
+
+<dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
+<dd><p>An <code>ipw</code> object. The <code><a href="causal-weights.html">estimand()</a></code> generic names its first argument
+<code>x</code>, and the method matches it.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -136,8 +158,12 @@ package attached it. A result that records no such matrix raises an error of
 class <code>causalgenerics_no_vcov</code> rather than returning one built from the
 standard errors, which would report the effects as uncorrelated. In the
 conditional reading it returns the corrected covariance of the outcome
-model's coefficients, and an outcome model that carries none raises an error
-of class <code>causalgenerics_no_conditional_vcov</code>.</p>
+model's coefficients, in the order <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> reports them whatever order it was
+attached in. An outcome model that was never wrapped raises an error of class
+<code>causalgenerics_no_conditional_vcov</code>, a wrapped model that no longer carries
+the covariance raises an error of class <code>causalgenerics_no_vcov_ipw_model</code>,
+and a covariance whose labels cannot be paired with the coefficients raises an
+error of class <code>causalgenerics_conditional_vcov_mismatch</code>.</p>
 <p><code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> returns a matrix with one row per effect <code>parm</code> selects, in the
 order <code>parm</code> gives them, and two columns holding the lower and upper limit.
 The rows are named by effect label and the columns by the two tail
@@ -154,12 +180,28 @@ reading, and when the result's own field does.</p>
 <p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code> returns a single integer, the number of observations the outcome
 model was fitted on, which is the number the estimates were computed from and
 not necessarily the number the weighting model saw.</p>
-<p><code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code> returns a single integer, or <code>NA_integer_</code> when the result
-records no fitted variance object or that object reports no residual degrees
-of freedom.</p>
+<p><code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code> returns the residual degrees of freedom the fitted variance
+object reports, as an integer when that number is a whole one an integer can
+hold and as the double the object gave when it is not. A fractional count is
+what a penalized or smooth fit spends, and it comes back as it stands rather
+than truncated to a count the fit did not spend. <code>NA_integer_</code> comes back
+when the result records no fitted variance object or that object reports no
+residual degrees of freedom.</p>
 <p><code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code> returns the outcome model's weights as its model frame stores
 them, so a concrete weight class such as <code>psw</code> comes back as itself, or
 <code>NULL</code> when the outcome model was fitted unweighted.</p>
+<p><code><a href="https://rdrr.io/r/stats/model.frame.html" class="external-link">model.frame()</a></code> returns the outcome model's model frame, which is the data
+the reported estimates were computed from. The <code>(weights)</code> column a weighted
+frame carries is deliberately dropped, since tooling that reads the columns
+of a frame as the variables a model was fitted on, such as prediction and
+averaging packages, would otherwise treat the estimation weights as one of
+them; <code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code> is where those are reported. A model whose own method has
+no frame to give raises that model's error rather than one of this package's.</p>
+<p><code><a href="causal-weights.html">estimand()</a></code> returns the estimand the result records, which is the one the
+weights the estimates were computed under targeted. There is deliberately no
+<code>estimand&lt;-()</code> method for a result: assigning a new estimand would relabel
+those estimates rather than recompute them, so a caller who writes the
+assignment is told that no method exists.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -168,8 +210,8 @@ registering <code>coef.ipw()</code> would collide in the shared S3 method table,
 caller writing against a result would then get whichever package was
 installed last rather than the contract.</p>
 <p>Everything they read is part of the <code><a href="new_ipw.html">new_ipw()</a></code> contract: the <code>estimates</code>
-frame, the <code>ipw_vcov</code> attribute attached to it, <code>outcome_mod</code>, <code>fit</code>, and the
-<code>effects</code> field the section below describes.
+frame, the <code>ipw_vcov</code> attribute attached to it, <code>estimand</code>, <code>outcome_mod</code>,
+<code>fit</code>, and the <code>effects</code> field the section below describes.
 They never branch on <code>se_method</code>, since the fields they read already hold the
 result of whatever computation that names, and they reach into <code>fit</code> only
 through ordinary S3 dispatch. A package whose variance object is a bare list
@@ -192,14 +234,29 @@ estimation that the fitting package attached with <code><a href="new_ipw_model.h
 the one the outcome model computed for itself. A model fitted as though its
 weights were fixed understates its uncertainty, because the weights were
 estimated from the same data, so there is nothing to fall back on when no
-corrected block is there. <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> raise an error of class
-<code>causalgenerics_no_conditional_vcov</code> instead, which the package that produced
-the result answers by wrapping the outcome model with <code><a href="new_ipw_model.html">new_ipw_model()</a></code>
-before it builds the result. <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code> needs no such block and reports the
-coefficients either way.</p>
-<p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code>, <code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code>, and <code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code> describe the fit rather than a
-surface of it, so they answer the same way in either reading and take no
-<code>effects</code> argument.</p>
+corrected block is there. <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code> and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> refuse the reading instead,
+and name which of the two ways the block can be missing they met. An outcome
+model that was never wrapped raises an error of class
+<code>causalgenerics_no_conditional_vcov</code>, which the package that produced the
+result answers by wrapping the outcome model with <code><a href="new_ipw_model.html">new_ipw_model()</a></code> before it
+builds the result. An outcome model that carries the wrapper class with no
+covariance behind it raises an error of class
+<code>causalgenerics_no_vcov_ipw_model</code>, since a model that is already wrapped has
+nothing to gain from being wrapped again and the object itself is what is
+wrong. All of these carry the general class <code>causalgenerics_no_vcov</code>. <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code>
+needs no such block and reports the coefficients either way.</p>
+<p>The block and the coefficients are paired by name, and the block is reported
+in coefficient order whatever order it was attached in, so the variance read
+beside a coefficient is that coefficient's. A block whose labels cannot be
+paired with the coefficients raises an error of class
+<code>causalgenerics_conditional_vcov_mismatch</code>. A block of another size, one
+labelled with the parameter names of a stacked system, and a model whose
+coefficients carry no names are the three ways the pairing fails. Reading such
+a block by position instead would report the covariance of other parameters
+under this model's coefficient names.</p>
+<p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code>, <code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code>, <code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code>, <code><a href="https://rdrr.io/r/stats/model.frame.html" class="external-link">model.frame()</a></code>, and <code><a href="causal-weights.html">estimand()</a></code>
+describe the fit rather than a surface of it, so they answer the same way in
+either reading and take no <code>effects</code> argument.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -275,6 +332,20 @@ surface of it, so they answer the same way in either reading and take no
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights</a></span><span class="op">(</span><span class="va">res</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1.785796 2.272594 1.785796 2.272594 1.785796 2.083669</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># The data the estimates were computed from, without the `(weights)` column</span></span></span>
+<span class="r-in"><span><span class="co"># the fitting machinery stored beside the variables the formula named.</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/model.frame.html" class="external-link">model.frame</a></span><span class="op">(</span><span class="va">res</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   y z</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 0 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 1 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 1 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 0 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 1 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6 0 1</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="fu"><a href="causal-weights.html">estimand</a></span><span class="op">(</span><span class="va">res</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "ate"</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># The conditional reading reports the outcome model's coefficient surface</span></span></span>
 <span class="r-in"><span><span class="co"># rather than the effects.</span></span></span>

@@ -37,6 +37,8 @@ their own.
   [`nobs(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
   [`df.residual(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
   [`weights(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+  [`model.frame(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
+  [`estimand(`*`<ipw>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
   : Model accessors for an inverse probability weighted result
 - [`new_causal_wts()`](https://r-causal.github.io/causalgenerics/reference/new_causal_wts.md)
   : Construct a causal weight vector

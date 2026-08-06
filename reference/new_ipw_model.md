@@ -46,7 +46,13 @@ vcov(object, ...)
 `new_ipw_model()` returns `model` with `"ipw_model"` prepended to its
 class vector and `vcov` attached as the `ipw_vcov` attribute. Everything
 else about the model is untouched.
-[`vcov()`](https://rdrr.io/r/stats/vcov.html) returns that matrix.
+[`vcov()`](https://rdrr.io/r/stats/vcov.html) returns that matrix, and
+raises an error of class `causalgenerics_no_vcov_ipw_model`, and of the
+general class `causalgenerics_no_vcov`, when the attribute is absent.
+The constructor puts the class and the attribute on together, so a model
+carrying the class with nothing behind it passed through code that
+dropped its attributes and kept its class, and the covariance the model
+computed for itself is not a substitute for the one it lost.
 
 ## Details
 

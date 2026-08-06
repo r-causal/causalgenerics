@@ -17,10 +17,16 @@ constructs.
   observations the outcome model was fitted on.
 
 - [`df.residual()`](https://rdrr.io/r/stats/df.residual.html) returns
-  the residual degrees of freedom of the fitted variance object.
+  the residual degrees of freedom the fitted variance object reports.
 
 - [`weights()`](https://rdrr.io/r/stats/weights.html) returns the
   weights the outcome model was fitted with.
+
+- [`model.frame()`](https://rdrr.io/r/stats/model.frame.html) returns
+  the outcome model's model frame.
+
+- [`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+  returns the estimand the weights targeted.
 
 ## Usage
 
@@ -42,6 +48,12 @@ df.residual(object, ...)
 
 # S3 method for class 'ipw'
 weights(object, ...)
+
+# S3 method for class 'ipw'
+model.frame(formula, ...)
+
+# S3 method for class 'ipw'
+estimand(x, ...)
 ```
 
 ## Arguments
@@ -71,6 +83,18 @@ weights(object, ...)
   The confidence level. At the level the result stores, its own limits
   are returned; at any other level they are recomputed.
 
+- formula:
+
+  An `ipw` object. The
+  [`model.frame()`](https://rdrr.io/r/stats/model.frame.html) generic in
+  stats names its first argument `formula`, and the method matches it.
+
+- x:
+
+  An `ipw` object. The
+  [`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+  generic names its first argument `x`, and the method matches it.
+
 ## Value
 
 [`coef()`](https://rdrr.io/r/stats/coef.html) returns a named numeric
@@ -85,8 +109,14 @@ that records no such matrix raises an error of class
 `causalgenerics_no_vcov` rather than returning one built from the
 standard errors, which would report the effects as uncorrelated. In the
 conditional reading it returns the corrected covariance of the outcome
-model's coefficients, and an outcome model that carries none raises an
-error of class `causalgenerics_no_conditional_vcov`.
+model's coefficients, in the order
+[`coef()`](https://rdrr.io/r/stats/coef.html) reports them whatever
+order it was attached in. An outcome model that was never wrapped raises
+an error of class `causalgenerics_no_conditional_vcov`, a wrapped model
+that no longer carries the covariance raises an error of class
+`causalgenerics_no_vcov_ipw_model`, and a covariance whose labels cannot
+be paired with the coefficients raises an error of class
+`causalgenerics_conditional_vcov_mismatch`.
 
 [`confint()`](https://rdrr.io/r/stats/confint.html) returns a matrix
 with one row per effect `parm` selects, in the order `parm` gives them,
@@ -113,14 +143,36 @@ the number of observations the outcome model was fitted on, which is the
 number the estimates were computed from and not necessarily the number
 the weighting model saw.
 
-[`df.residual()`](https://rdrr.io/r/stats/df.residual.html) returns a
-single integer, or `NA_integer_` when the result records no fitted
-variance object or that object reports no residual degrees of freedom.
+[`df.residual()`](https://rdrr.io/r/stats/df.residual.html) returns the
+residual degrees of freedom the fitted variance object reports, as an
+integer when that number is a whole one an integer can hold and as the
+double the object gave when it is not. A fractional count is what a
+penalized or smooth fit spends, and it comes back as it stands rather
+than truncated to a count the fit did not spend. `NA_integer_` comes
+back when the result records no fitted variance object or that object
+reports no residual degrees of freedom.
 
 [`weights()`](https://rdrr.io/r/stats/weights.html) returns the outcome
 model's weights as its model frame stores them, so a concrete weight
 class such as `psw` comes back as itself, or `NULL` when the outcome
 model was fitted unweighted.
+
+[`model.frame()`](https://rdrr.io/r/stats/model.frame.html) returns the
+outcome model's model frame, which is the data the reported estimates
+were computed from. The `(weights)` column a weighted frame carries is
+deliberately dropped, since tooling that reads the columns of a frame as
+the variables a model was fitted on, such as prediction and averaging
+packages, would otherwise treat the estimation weights as one of them;
+[`weights()`](https://rdrr.io/r/stats/weights.html) is where those are
+reported. A model whose own method has no frame to give raises that
+model's error rather than one of this package's.
+
+[`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+returns the estimand the result records, which is the one the weights
+the estimates were computed under targeted. There is deliberately no
+`estimand<-()` method for a result: assigning a new estimand would
+relabel those estimates rather than recompute them, so a caller who
+writes the assignment is told that no method exists.
 
 ## Details
 
@@ -133,12 +185,12 @@ was installed last rather than the contract.
 Everything they read is part of the
 [`new_ipw()`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
 contract: the `estimates` frame, the `ipw_vcov` attribute attached to
-it, `outcome_mod`, `fit`, and the `effects` field the section below
-describes. They never branch on `se_method`, since the fields they read
-already hold the result of whatever computation that names, and they
-reach into `fit` only through ordinary S3 dispatch. A package whose
-variance object is a bare list rather than a fitted model therefore uses
-them unchanged.
+it, `estimand`, `outcome_mod`, `fit`, and the `effects` field the
+section below describes. They never branch on `se_method`, since the
+fields they read already hold the result of whatever computation that
+names, and they reach into `fit` only through ordinary S3 dispatch. A
+package whose variance object is a bare list rather than a fitted model
+therefore uses them unchanged.
 
 Rows are named by the effect labels the
 [`new_ipw()`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
@@ -171,19 +223,37 @@ though its weights were fixed understates its uncertainty, because the
 weights were estimated from the same data, so there is nothing to fall
 back on when no corrected block is there.
 [`vcov()`](https://rdrr.io/r/stats/vcov.html) and
-[`confint()`](https://rdrr.io/r/stats/confint.html) raise an error of
-class `causalgenerics_no_conditional_vcov` instead, which the package
-that produced the result answers by wrapping the outcome model with
+[`confint()`](https://rdrr.io/r/stats/confint.html) refuse the reading
+instead, and name which of the two ways the block can be missing they
+met. An outcome model that was never wrapped raises an error of class
+`causalgenerics_no_conditional_vcov`, which the package that produced
+the result answers by wrapping the outcome model with
 [`new_ipw_model()`](https://r-causal.github.io/causalgenerics/reference/new_ipw_model.md)
-before it builds the result.
-[`coef()`](https://rdrr.io/r/stats/coef.html) needs no such block and
-reports the coefficients either way.
+before it builds the result. An outcome model that carries the wrapper
+class with no covariance behind it raises an error of class
+`causalgenerics_no_vcov_ipw_model`, since a model that is already
+wrapped has nothing to gain from being wrapped again and the object
+itself is what is wrong. All of these carry the general class
+`causalgenerics_no_vcov`. [`coef()`](https://rdrr.io/r/stats/coef.html)
+needs no such block and reports the coefficients either way.
+
+The block and the coefficients are paired by name, and the block is
+reported in coefficient order whatever order it was attached in, so the
+variance read beside a coefficient is that coefficient's. A block whose
+labels cannot be paired with the coefficients raises an error of class
+`causalgenerics_conditional_vcov_mismatch`. A block of another size, one
+labelled with the parameter names of a stacked system, and a model whose
+coefficients carry no names are the three ways the pairing fails.
+Reading such a block by position instead would report the covariance of
+other parameters under this model's coefficient names.
 
 [`nobs()`](https://rdrr.io/r/stats/nobs.html),
-[`df.residual()`](https://rdrr.io/r/stats/df.residual.html), and
-[`weights()`](https://rdrr.io/r/stats/weights.html) describe the fit
-rather than a surface of it, so they answer the same way in either
-reading and take no `effects` argument.
+[`df.residual()`](https://rdrr.io/r/stats/df.residual.html),
+[`weights()`](https://rdrr.io/r/stats/weights.html),
+[`model.frame()`](https://rdrr.io/r/stats/model.frame.html), and
+[`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+describe the fit rather than a surface of it, so they answer the same
+way in either reading and take no `effects` argument.
 
 ## See also
 
@@ -260,6 +330,20 @@ df.residual(res)
 
 head(weights(res))
 #> [1] 1.785796 2.272594 1.785796 2.272594 1.785796 2.083669
+
+# The data the estimates were computed from, without the `(weights)` column
+# the fitting machinery stored beside the variables the formula named.
+head(model.frame(res))
+#>   y z
+#> 1 0 0
+#> 2 1 1
+#> 3 1 0
+#> 4 0 1
+#> 5 1 0
+#> 6 0 1
+
+estimand(res)
+#> [1] "ate"
 
 # The conditional reading reports the outcome model's coefficient surface
 # rather than the effects.

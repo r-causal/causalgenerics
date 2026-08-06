@@ -71,6 +71,17 @@ categorical_estimates <- function() {
   )
 }
 
+# The categorical frame with the column naming its contrasts called `contrast`,
+# which is the name the result layer reports it under and the one `mice::pool()`
+# and \pkg{marginaleffects} both read the tidier surface by. It is derived from
+# the frame above rather than written out again, so that the two differ in the
+# column name and in nothing else.
+contrast_estimates <- function() {
+  estimates <- categorical_estimates()
+  names(estimates)[names(estimates) == "comparison"] <- "contrast"
+  estimates
+}
+
 # A continuous-outcome estimates frame: a difference in means and nothing else,
 # so every accessor has to work on a single row.
 continuous_estimates <- function() {
@@ -494,6 +505,33 @@ test_that("coef(), vcov(), and confint() agree on the effect labels", {
   expect_identical(rownames(vcov(res)), labels)
   expect_identical(colnames(vcov(res)), labels)
   expect_identical(rownames(confint(res)), labels)
+})
+
+test_that("the contrast column leaves the effect labels as they were", {
+  # The column a categorical result names its contrasts with is `contrast`. The
+  # labels built from it are the strings they always were, so renaming the
+  # column renames no row: a caller who reads a covariance out by the name
+  # `coef()` gave still gets the entry that name has always meant.
+  covariance <- categorical_vcov()
+  res <- ipw_result(contrast_estimates(), vcov = covariance)
+
+  expect_identical(
+    coef(res),
+    c(
+      "rd b vs a" = 0.081945,
+      "log(rr) b vs a" = 0.168870,
+      "log(or) b vs a" = 0.328762,
+      "rd c vs a" = 0.166939,
+      "log(rr) c vs a" = 0.318293,
+      "log(or) c vs a" = 0.676435
+    )
+  )
+  expect_identical(names(coef(res)), categorical_labels())
+
+  expect_identical(vcov(res), covariance)
+  expect_identical(rownames(vcov(res)), names(coef(res)))
+  expect_identical(colnames(vcov(res)), names(coef(res)))
+  expect_identical(rownames(confint(res)), names(coef(res)))
 })
 
 test_that("vcov() errors when no covariance was attached", {

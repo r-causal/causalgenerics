@@ -4,7 +4,7 @@
       vcov(res)
     Condition
       Error in `vcov.ipw()`:
-      ! This `ipw` result records no covariance of the effects it reports; refit it with a current version of the package that produced it.
+      ! This `ipw` object records no covariance to report; the package that produced it attaches one when it supports the `ipw_vcov` contract.
 
 # confint() errors on labels the result does not have
 
@@ -21,6 +21,30 @@
     Condition
       Error in `confint.ipw()`:
       ! `parm` must name effects the result reports, which are "rd", "log(rr)", "log(or)".
+
+# confint() errors on positions the result does not have
+
+    Code
+      confint(res, parm = 99)
+    Condition
+      Error in `confint.ipw()`:
+      ! `parm` must index effects the result reports, numbered 1 to 3.
+
+# estimand<-() has no method for a result
+
+    Code
+      estimand(res) <- "att"
+    Condition
+      Error in `estimand<-.default`:
+      ! No `estimand<-()` method for an object of class <ipw>.
+
+# vcov() refuses a conditional block labelled for other parameters
+
+    Code
+      vcov(res)
+    Condition
+      Error in `vcov.ipw()`:
+      ! The conditional covariance is labelled "theta1", "theta2" and the outcome model reports coefficients named "(Intercept)", "z"; the package that produced the result attaches the block labelled by coefficient name with `new_ipw_model()`.
 
 # vcov() refuses the conditional mode without a corrected block
 

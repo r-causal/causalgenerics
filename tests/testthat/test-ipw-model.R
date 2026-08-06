@@ -117,6 +117,40 @@ test_that("vcov() on a wrapped model returns the corrected covariance", {
   expect_false(identical(vcov(wrapped), stats::vcov(mod)))
 })
 
+test_that("vcov() errors when a wrapped model carries no covariance", {
+  # The class and the attribute go on together, and `new_ipw_model()` cannot
+  # produce one without the other: it validates the matrix before it prepends
+  # the class. An object carrying the class with nothing behind it came from
+  # somewhere else, such as a class vector assembled by hand, or a model that
+  # passed through code which dropped its attributes and kept its class, and the
+  # method is where that is found out. Handing the attribute back as it was
+  # found answers `NULL`, and `NULL` travels: the standard errors taken from it
+  # are an empty vector, and the limits built from those come back as `NA` with
+  # nothing said about why.
+  mod <- outcome_model()
+  stripped <- new_ipw_model(mod, corrected_vcov(mod))
+  attr(stripped, "ipw_vcov") <- NULL
+
+  # The class is still there, so dispatch reaches this method, which is what
+  # makes the case worth guarding: the method runs and has nothing to report.
+  expect_identical(class(stripped), c("ipw_model", "glm", "lm"))
+
+  expect_error(vcov(stripped), class = "causalgenerics_no_vcov_ipw_model")
+  expect_error(vcov(stripped), class = "causalgenerics_no_vcov")
+
+  # Keyed to the component model rather than to the result, so a handler can
+  # tell a model that carries no block from a result that records none.
+  cnd <- tryCatch(vcov(stripped), error = identity)
+  expect_identical(cnd$result, "ipw_model")
+
+  # The fixture is discriminating: the model's own covariance is reachable
+  # through inheritance, and it is the answer this class exists to replace, so
+  # a method that fell back rather than refused would have one to give.
+  expect_no_error(stats::vcov(mod))
+
+  expect_snapshot(error = TRUE, vcov(stripped))
+})
+
 test_that("a wrapped model still works through inheritance", {
   # Nothing is registered for `ipw_model` beyond `vcov()`, so every other
   # generic walks past it to the model's own methods. This is what the class

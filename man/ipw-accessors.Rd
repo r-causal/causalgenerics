@@ -8,6 +8,8 @@
 \alias{nobs.ipw}
 \alias{df.residual.ipw}
 \alias{weights.ipw}
+\alias{model.frame.ipw}
+\alias{estimand.ipw}
 \title{Model accessors for an inverse probability weighted result}
 \usage{
 \method{coef}{ipw}(object, ..., effects = NULL)
@@ -21,6 +23,10 @@
 \method{df.residual}{ipw}(object, ...)
 
 \method{weights}{ipw}(object, ...)
+
+\method{model.frame}{ipw}(formula, ...)
+
+\method{estimand}{ipw}(x, ...)
 }
 \arguments{
 \item{object}{An \code{ipw} object.}
@@ -38,6 +44,12 @@ them.}
 
 \item{level}{The confidence level. At the level the result stores, its own
 limits are returned; at any other level they are recomputed.}
+
+\item{formula}{An \code{ipw} object. The \code{model.frame()} generic in \pkg{stats}
+names its first argument \code{formula}, and the method matches it.}
+
+\item{x}{An \code{ipw} object. The \code{estimand()} generic names its first argument
+\code{x}, and the method matches it.}
 }
 \value{
 \code{coef()} returns a named numeric vector of effect estimates, one element per
@@ -51,8 +63,12 @@ package attached it. A result that records no such matrix raises an error of
 class \code{causalgenerics_no_vcov} rather than returning one built from the
 standard errors, which would report the effects as uncorrelated. In the
 conditional reading it returns the corrected covariance of the outcome
-model's coefficients, and an outcome model that carries none raises an error
-of class \code{causalgenerics_no_conditional_vcov}.
+model's coefficients, in the order \code{coef()} reports them whatever order it was
+attached in. An outcome model that was never wrapped raises an error of class
+\code{causalgenerics_no_conditional_vcov}, a wrapped model that no longer carries
+the covariance raises an error of class \code{causalgenerics_no_vcov_ipw_model},
+and a covariance whose labels cannot be paired with the coefficients raises an
+error of class \code{causalgenerics_conditional_vcov_mismatch}.
 
 \code{confint()} returns a matrix with one row per effect \code{parm} selects, in the
 order \code{parm} gives them, and two columns holding the lower and upper limit.
@@ -73,13 +89,31 @@ reading, and when the result's own field does.
 model was fitted on, which is the number the estimates were computed from and
 not necessarily the number the weighting model saw.
 
-\code{df.residual()} returns a single integer, or \code{NA_integer_} when the result
-records no fitted variance object or that object reports no residual degrees
-of freedom.
+\code{df.residual()} returns the residual degrees of freedom the fitted variance
+object reports, as an integer when that number is a whole one an integer can
+hold and as the double the object gave when it is not. A fractional count is
+what a penalized or smooth fit spends, and it comes back as it stands rather
+than truncated to a count the fit did not spend. \code{NA_integer_} comes back
+when the result records no fitted variance object or that object reports no
+residual degrees of freedom.
 
 \code{weights()} returns the outcome model's weights as its model frame stores
 them, so a concrete weight class such as \code{psw} comes back as itself, or
 \code{NULL} when the outcome model was fitted unweighted.
+
+\code{model.frame()} returns the outcome model's model frame, which is the data
+the reported estimates were computed from. The \code{(weights)} column a weighted
+frame carries is deliberately dropped, since tooling that reads the columns
+of a frame as the variables a model was fitted on, such as prediction and
+averaging packages, would otherwise treat the estimation weights as one of
+them; \code{weights()} is where those are reported. A model whose own method has
+no frame to give raises that model's error rather than one of this package's.
+
+\code{estimand()} returns the estimand the result records, which is the one the
+weights the estimates were computed under targeted. There is deliberately no
+\verb{estimand<-()} method for a result: assigning a new estimand would relabel
+those estimates rather than recompute them, so a caller who writes the
+assignment is told that no method exists.
 }
 \description{
 The accessors a fitted model answers to, defined for the class \code{\link[=new_ipw]{new_ipw()}}
@@ -90,9 +124,11 @@ constructs.
 \item \code{confint()} returns their confidence limits.
 \item \code{nobs()} returns the number of observations the outcome model was fitted
 on.
-\item \code{df.residual()} returns the residual degrees of freedom of the fitted
-variance object.
+\item \code{df.residual()} returns the residual degrees of freedom the fitted variance
+object reports.
 \item \code{weights()} returns the weights the outcome model was fitted with.
+\item \code{model.frame()} returns the outcome model's model frame.
+\item \code{estimand()} returns the estimand the weights targeted.
 }
 }
 \details{
@@ -102,8 +138,8 @@ caller writing against a result would then get whichever package was
 installed last rather than the contract.
 
 Everything they read is part of the \code{\link[=new_ipw]{new_ipw()}} contract: the \code{estimates}
-frame, the \code{ipw_vcov} attribute attached to it, \code{outcome_mod}, \code{fit}, and the
-\code{effects} field the section below describes.
+frame, the \code{ipw_vcov} attribute attached to it, \code{estimand}, \code{outcome_mod},
+\code{fit}, and the \code{effects} field the section below describes.
 They never branch on \code{se_method}, since the fields they read already hold the
 result of whatever computation that names, and they reach into \code{fit} only
 through ordinary S3 dispatch. A package whose variance object is a bare list
@@ -127,15 +163,31 @@ estimation that the fitting package attached with \code{\link[=new_ipw_model]{ne
 the one the outcome model computed for itself. A model fitted as though its
 weights were fixed understates its uncertainty, because the weights were
 estimated from the same data, so there is nothing to fall back on when no
-corrected block is there. \code{vcov()} and \code{confint()} raise an error of class
-\code{causalgenerics_no_conditional_vcov} instead, which the package that produced
-the result answers by wrapping the outcome model with \code{\link[=new_ipw_model]{new_ipw_model()}}
-before it builds the result. \code{coef()} needs no such block and reports the
-coefficients either way.
+corrected block is there. \code{vcov()} and \code{confint()} refuse the reading instead,
+and name which of the two ways the block can be missing they met. An outcome
+model that was never wrapped raises an error of class
+\code{causalgenerics_no_conditional_vcov}, which the package that produced the
+result answers by wrapping the outcome model with \code{\link[=new_ipw_model]{new_ipw_model()}} before it
+builds the result. An outcome model that carries the wrapper class with no
+covariance behind it raises an error of class
+\code{causalgenerics_no_vcov_ipw_model}, since a model that is already wrapped has
+nothing to gain from being wrapped again and the object itself is what is
+wrong. All of these carry the general class \code{causalgenerics_no_vcov}. \code{coef()}
+needs no such block and reports the coefficients either way.
 
-\code{nobs()}, \code{df.residual()}, and \code{weights()} describe the fit rather than a
-surface of it, so they answer the same way in either reading and take no
-\code{effects} argument.
+The block and the coefficients are paired by name, and the block is reported
+in coefficient order whatever order it was attached in, so the variance read
+beside a coefficient is that coefficient's. A block whose labels cannot be
+paired with the coefficients raises an error of class
+\code{causalgenerics_conditional_vcov_mismatch}. A block of another size, one
+labelled with the parameter names of a stacked system, and a model whose
+coefficients carry no names are the three ways the pairing fails. Reading such
+a block by position instead would report the covariance of other parameters
+under this model's coefficient names.
+
+\code{nobs()}, \code{df.residual()}, \code{weights()}, \code{model.frame()}, and \code{estimand()}
+describe the fit rather than a surface of it, so they answer the same way in
+either reading and take no \code{effects} argument.
 }
 
 \examples{
@@ -193,6 +245,12 @@ nobs(res)
 df.residual(res)
 
 head(weights(res))
+
+# The data the estimates were computed from, without the `(weights)` column
+# the fitting machinery stored beside the variables the formula named.
+head(model.frame(res))
+
+estimand(res)
 
 # The conditional reading reports the outcome model's coefficient surface
 # rather than the effects.

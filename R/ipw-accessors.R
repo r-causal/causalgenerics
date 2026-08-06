@@ -9,9 +9,11 @@
 #' * `confint()` returns their confidence limits.
 #' * `nobs()` returns the number of observations the outcome model was fitted
 #'   on.
-#' * `df.residual()` returns the residual degrees of freedom of the fitted
-#'   variance object.
+#' * `df.residual()` returns the residual degrees of freedom the fitted variance
+#'   object reports.
 #' * `weights()` returns the weights the outcome model was fitted with.
+#' * `model.frame()` returns the outcome model's model frame.
+#' * `estimand()` returns the estimand the weights targeted.
 #'
 #' @details
 #' These methods live here for the reason `print()` does. Two packages each
@@ -20,8 +22,8 @@
 #' installed last rather than the contract.
 #'
 #' Everything they read is part of the [new_ipw()] contract: the `estimates`
-#' frame, the `ipw_vcov` attribute attached to it, `outcome_mod`, `fit`, and the
-#' `effects` field the section below describes.
+#' frame, the `ipw_vcov` attribute attached to it, `estimand`, `outcome_mod`,
+#' `fit`, and the `effects` field the section below describes.
 #' They never branch on `se_method`, since the fields they read already hold the
 #' result of whatever computation that names, and they reach into `fit` only
 #' through ordinary S3 dispatch. A package whose variance object is a bare list
@@ -46,17 +48,37 @@
 #' the one the outcome model computed for itself. A model fitted as though its
 #' weights were fixed understates its uncertainty, because the weights were
 #' estimated from the same data, so there is nothing to fall back on when no
-#' corrected block is there. `vcov()` and `confint()` raise an error of class
-#' `causalgenerics_no_conditional_vcov` instead, which the package that produced
-#' the result answers by wrapping the outcome model with [new_ipw_model()]
-#' before it builds the result. `coef()` needs no such block and reports the
-#' coefficients either way.
+#' corrected block is there. `vcov()` and `confint()` refuse the reading instead,
+#' and name which of the two ways the block can be missing they met. An outcome
+#' model that was never wrapped raises an error of class
+#' `causalgenerics_no_conditional_vcov`, which the package that produced the
+#' result answers by wrapping the outcome model with [new_ipw_model()] before it
+#' builds the result. An outcome model that carries the wrapper class with no
+#' covariance behind it raises an error of class
+#' `causalgenerics_no_vcov_ipw_model`, since a model that is already wrapped has
+#' nothing to gain from being wrapped again and the object itself is what is
+#' wrong. All of these carry the general class `causalgenerics_no_vcov`. `coef()`
+#' needs no such block and reports the coefficients either way.
 #'
-#' `nobs()`, `df.residual()`, and `weights()` describe the fit rather than a
-#' surface of it, so they answer the same way in either reading and take no
-#' `effects` argument.
+#' The block and the coefficients are paired by name, and the block is reported
+#' in coefficient order whatever order it was attached in, so the variance read
+#' beside a coefficient is that coefficient's. A block whose labels cannot be
+#' paired with the coefficients raises an error of class
+#' `causalgenerics_conditional_vcov_mismatch`. A block of another size, one
+#' labelled with the parameter names of a stacked system, and a model whose
+#' coefficients carry no names are the three ways the pairing fails. Reading such
+#' a block by position instead would report the covariance of other parameters
+#' under this model's coefficient names.
+#'
+#' `nobs()`, `df.residual()`, `weights()`, `model.frame()`, and `estimand()`
+#' describe the fit rather than a surface of it, so they answer the same way in
+#' either reading and take no `effects` argument.
 #'
 #' @param object An `ipw` object.
+#' @param formula An `ipw` object. The `model.frame()` generic in \pkg{stats}
+#'   names its first argument `formula`, and the method matches it.
+#' @param x An `ipw` object. The `estimand()` generic names its first argument
+#'   `x`, and the method matches it.
 #' @param parm The rows to report an interval for, given either as the labels
 #'   of the reported surface or as their positions in it. Missing means all of
 #'   them.
@@ -80,8 +102,12 @@
 #' class `causalgenerics_no_vcov` rather than returning one built from the
 #' standard errors, which would report the effects as uncorrelated. In the
 #' conditional reading it returns the corrected covariance of the outcome
-#' model's coefficients, and an outcome model that carries none raises an error
-#' of class `causalgenerics_no_conditional_vcov`.
+#' model's coefficients, in the order `coef()` reports them whatever order it was
+#' attached in. An outcome model that was never wrapped raises an error of class
+#' `causalgenerics_no_conditional_vcov`, a wrapped model that no longer carries
+#' the covariance raises an error of class `causalgenerics_no_vcov_ipw_model`,
+#' and a covariance whose labels cannot be paired with the coefficients raises an
+#' error of class `causalgenerics_conditional_vcov_mismatch`.
 #'
 #' `confint()` returns a matrix with one row per effect `parm` selects, in the
 #' order `parm` gives them, and two columns holding the lower and upper limit.
@@ -102,13 +128,31 @@
 #' model was fitted on, which is the number the estimates were computed from and
 #' not necessarily the number the weighting model saw.
 #'
-#' `df.residual()` returns a single integer, or `NA_integer_` when the result
-#' records no fitted variance object or that object reports no residual degrees
-#' of freedom.
+#' `df.residual()` returns the residual degrees of freedom the fitted variance
+#' object reports, as an integer when that number is a whole one an integer can
+#' hold and as the double the object gave when it is not. A fractional count is
+#' what a penalized or smooth fit spends, and it comes back as it stands rather
+#' than truncated to a count the fit did not spend. `NA_integer_` comes back
+#' when the result records no fitted variance object or that object reports no
+#' residual degrees of freedom.
 #'
 #' `weights()` returns the outcome model's weights as its model frame stores
 #' them, so a concrete weight class such as `psw` comes back as itself, or
 #' `NULL` when the outcome model was fitted unweighted.
+#'
+#' `model.frame()` returns the outcome model's model frame, which is the data
+#' the reported estimates were computed from. The `(weights)` column a weighted
+#' frame carries is deliberately dropped, since tooling that reads the columns
+#' of a frame as the variables a model was fitted on, such as prediction and
+#' averaging packages, would otherwise treat the estimation weights as one of
+#' them; `weights()` is where those are reported. A model whose own method has
+#' no frame to give raises that model's error rather than one of this package's.
+#'
+#' `estimand()` returns the estimand the result records, which is the one the
+#' weights the estimates were computed under targeted. There is deliberately no
+#' `estimand<-()` method for a result: assigning a new estimand would relabel
+#' those estimates rather than recompute them, so a caller who writes the
+#' assignment is told that no method exists.
 #'
 #' @seealso [new_ipw()] for the result class and the fields these methods read.
 #'
@@ -167,6 +211,12 @@
 #' df.residual(res)
 #'
 #' head(weights(res))
+#'
+#' # The data the estimates were computed from, without the `(weights)` column
+#' # the fitting machinery stored beside the variables the formula named.
+#' head(model.frame(res))
+#'
+#' estimand(res)
 #'
 #' # The conditional reading reports the outcome model's coefficient surface
 #' # rather than the effects.
@@ -314,14 +364,21 @@ df.residual.ipw <- function(object, ...) {
 
   # A variance object is whatever the fitting package records, so the generic
   # may have nothing for it. `df.residual.default()` gives `NULL` for a bare
-  # list, and a registered method is free to answer with a double, an empty
-  # vector, or `Inf` for a fit with no residual degrees of freedom left. Each of
-  # those has to become `NA_integer_` rather than a warning from `as.integer()`.
+  # list, and a registered method is free to answer with an empty vector or
+  # `Inf` for a fit with no residual degrees of freedom left. Each of those has
+  # to become `NA_integer_` rather than a warning from `as.integer()`.
   df <- stats::df.residual(object$fit)
   if (length(df) != 1L || !is.numeric(df) || !is.finite(df)) {
     return(NA_integer_)
   }
-  as.integer(df)
+
+  # A whole number comes back as an integer, the type a count of parameters
+  # spent one at a time has. Anything else is the fit's own answer: a fractional
+  # count is what a penalized or smooth term spends, and truncating it would
+  # report a fit that spent more parameters than it did. A whole number past the
+  # largest integer stays a double for the reason `as.integer()` cannot take it,
+  # which is that the conversion gives `NA` and a warning.
+  if (df == trunc(df) && abs(df) <= .Machine$integer.max) as.integer(df) else df
 }
 
 #' @rdname ipw-accessors
@@ -329,6 +386,24 @@ df.residual.ipw <- function(object, ...) {
 #' @importFrom stats model.frame model.weights weights
 weights.ipw <- function(object, ...) {
   stats::model.weights(stats::model.frame(object$outcome_mod))
+}
+
+#' @rdname ipw-accessors
+#' @export
+#' @importFrom stats model.frame
+model.frame.ipw <- function(formula, ...) {
+  # Delegation and nothing else, so a model with no frame to give says so
+  # itself. The `(weights)` column is the one thing taken off: the formula never
+  # named it, and tooling that reads the columns of a frame as the variables a
+  # model was fitted on would take the estimation weights for one of them.
+  mf <- stats::model.frame(formula$outcome_mod)
+  mf[, setdiff(colnames(mf), "(weights)"), drop = FALSE]
+}
+
+#' @rdname ipw-accessors
+#' @export
+estimand.ipw <- function(x, ...) {
+  x$estimand
 }
 
 #' The covariance the conditional reading reports
@@ -341,18 +416,59 @@ weights.ipw <- function(object, ...) {
 #' uncertainty the coefficients do not have. The guard therefore runs before the
 #' model is asked anything, since asking is the mistake.
 #'
+#' The block and the coefficients are paired by name, which is what
+#' [new_ipw_model()] leaves to be done here: the constructor checks that both
+#' margins are labelled rather than what the labels say, since only the fitting
+#' package knows which block of its stacked system belongs to which model. A
+#' block labelled with the same names in another order is reported in
+#' coefficient order, so the variance a caller reads beside a coefficient is that
+#' coefficient's. Anything the labels cannot be paired with is refused: a block
+#' of another size, one naming other parameters, and a model whose coefficients
+#' carry no names at all. Falling back on the positions in any of those cases
+#' would report the covariance of something else under this model's coefficient
+#' names, which is the one answer a caller has no way to check.
+#'
 #' @param model The result's `outcome_mod`.
 #' @param call The call to report the error against, which is the accessor's
 #'   rather than this helper's.
 #'
-#' @return The corrected covariance matrix, as the fitting package attached it.
+#' @return The corrected covariance matrix, in coefficient order.
 #'
 #' @noRd
 conditional_vcov <- function(model, call = sys.call(-1)) {
   if (!inherits(model, "ipw_model")) {
     stop_no_conditional_vcov(call = call)
   }
-  stats::vcov(model)
+  covariance <- stats::vcov(model)
+
+  labels <- names(stats::coef(model))
+  block_labels <- rownames(covariance)
+
+  # The size is checked alongside the names because a larger block can hold
+  # every coefficient name and more. Indexing that one by name alone would take
+  # the corner of it and answer with the covariance of two coefficients of a
+  # different fit.
+  paired <- !is.null(labels) &&
+    identical(dim(covariance), c(length(labels), length(labels))) &&
+    setequal(block_labels, labels) &&
+    setequal(colnames(covariance), labels)
+
+  if (!paired) {
+    stop_conditional_vcov_mismatch(block_labels, labels, call = call)
+  }
+
+  # A block already in coefficient order comes back as the fitting package
+  # attached it, rather than through an indexing that would rebuild the same
+  # matrix.
+  if (
+    identical(block_labels, labels) && identical(colnames(covariance), labels)
+  ) {
+    return(covariance)
+  }
+
+  # Both margins, since a matrix reordered down one and not the other is no
+  # longer the covariance of anything.
+  covariance[labels, labels, drop = FALSE]
 }
 
 #' The rows of a reported surface a `parm` argument selects

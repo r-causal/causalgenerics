@@ -39,18 +39,20 @@ stop_invalid_argument <- function(arg, must, call = sys.call(-1)) {
   ))
 }
 
-# Signal that a result records no covariance of the effects it reports. The
-# classes follow `stop_no_method()`: one keyed to the result class, for tests and
-# for handlers that care about one kind of result, and one general class for
-# callers that want any missing covariance. There is no fallback to offer, since
-# the standard errors a result stores give the diagonal of that matrix and say
-# nothing about the rest of it.
+# Signal that an object records no covariance to report. The classes follow
+# `stop_no_method()`: one keyed to the class of the object, for tests and for
+# handlers that care about one kind of object, and one general class for callers
+# that want any missing covariance. The helper answers for a result and for a
+# component model of one alike, so the message names the object rather than the
+# result and points at the `ipw_vcov` contract both of them carry a covariance
+# under. There is no fallback to offer, since the standard errors a result
+# stores give the diagonal of that matrix and say nothing about the rest of it.
 stop_no_vcov <- function(result, call = sys.call(-1)) {
   message <- paste0(
     "This `",
     result,
-    "` result records no covariance of the effects it reports; refit it with a ",
-    "current version of the package that produced it."
+    "` object records no covariance to report; the package that produced it ",
+    "attaches one when it supports the `ipw_vcov` contract."
   )
   stop(errorCondition(
     message,
@@ -83,6 +85,50 @@ stop_no_conditional_vcov <- function(call = sys.call(-1)) {
     message,
     class = c(
       "causalgenerics_no_conditional_vcov",
+      "causalgenerics_no_vcov"
+    ),
+    call = call
+  ))
+}
+
+# Signal that the corrected covariance an outcome model carries cannot be paired
+# with the coefficients it is meant to report. The classes follow
+# `stop_no_conditional_vcov()`, whose general class this one also carries, and
+# deliberately not its specific one: that condition says the fitting package
+# attached no block and is answered by wrapping the model, and this one is
+# raised for a model that is wrapped already. The label sets are fields as well
+# as parts of the message, so a handler reports them without parsing the
+# sentence for them. A model whose coefficients carry no names is one of the
+# ways the pairing fails, and the clause that would list them says so rather
+# than listing an empty set, which would read as a model reporting no
+# coefficients at all.
+stop_conditional_vcov_mismatch <- function(
+  block_labels,
+  coef_labels,
+  call = sys.call(-1)
+) {
+  reported <- if (is.null(coef_labels)) {
+    "reports unnamed coefficients"
+  } else {
+    paste0(
+      "reports coefficients named ",
+      toString(encodeString(coef_labels, quote = '"'))
+    )
+  }
+  message <- paste0(
+    "The conditional covariance is labelled ",
+    toString(encodeString(block_labels, quote = '"')),
+    " and the outcome model ",
+    reported,
+    "; the package that produced the result attaches the block labelled by ",
+    "coefficient name with `new_ipw_model()`."
+  )
+  stop(errorCondition(
+    message,
+    block_labels = block_labels,
+    coef_labels = coef_labels,
+    class = c(
+      "causalgenerics_conditional_vcov_mismatch",
       "causalgenerics_no_vcov"
     ),
     call = call

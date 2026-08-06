@@ -18,7 +18,15 @@ new_ipw(
 
 \method{print}{ipw}(x, ...)
 
-\method{as.data.frame}{ipw}(x, row.names = NULL, optional = NULL, exponentiate = FALSE, ...)
+\method{as.data.frame}{ipw}(
+  x,
+  row.names = NULL,
+  optional = FALSE,
+  ...,
+  conf.int = FALSE,
+  conf.level = 0.95,
+  exponentiate = FALSE
+)
 }
 \arguments{
 \item{estimand}{The causal estimand the method targeted, such as \code{"ate"} or
@@ -43,15 +51,28 @@ marginal effects.}
 
 \item{x}{An \code{ipw} object.}
 
-\item{...}{Further arguments. \code{print()} ignores them; \code{as.data.frame()}
-passes them to \code{\link[base:as.data.frame]{base::as.data.frame()}}.}
+\item{...}{Further arguments. Neither method reads them.}
 
-\item{row.names, optional}{Passed to \code{\link[base:as.data.frame]{base::as.data.frame()}}.}
+\item{row.names}{A character vector of row names for the returned table, or
+\code{NULL} for the automatic ones.}
+
+\item{optional}{Accepted for the \code{\link[base:as.data.frame]{base::as.data.frame()}} generic. Every
+column of the table is named, so there is nothing for it to make optional.}
+
+\item{conf.int}{If \code{TRUE}, append \code{conf.low} and \code{conf.high} columns after
+the rest of the table. Default is \code{FALSE}.}
+
+\item{conf.level}{The confidence level the bounds report. At the level every
+row of \code{estimates} records, the stored bounds are returned; at any other
+level they are the normal approximation built from the estimate and its
+standard error. Default is \code{0.95}.}
 
 \item{exponentiate}{If \code{TRUE}, exponentiate the log risk ratio and log odds
-ratio to produce risk ratios and odds ratios on their natural scale. The
-confidence interval bounds are also exponentiated. Standard errors, z
-statistics, and p-values remain on the log scale. Default is \code{FALSE}.}
+ratio to produce risk ratios and odds ratios on their natural scale,
+relabelling the two terms \code{"rr"} and \code{"or"}. The confidence bounds move with
+them. Standard errors, statistics, and p-values remain on the log scale, and
+the \code{ipw_vcov} attribute is dropped rather than carried, since it describes
+the estimates on the scale they were estimated on. Default is \code{FALSE}.}
 }
 \value{
 \code{new_ipw()} returns an S3 object of class \code{ipw}: a list of the
@@ -80,8 +101,9 @@ coefficient surface; both surfaces exist on every result. See
 \code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}}.}
 }
 
-\code{print()} returns its input invisibly. \code{as.data.frame()} returns the
-\code{estimates} component as a data frame.
+\code{print()} returns its input invisibly. \code{as.data.frame()} returns a plain
+data frame of the effect estimates under the tidier column names described
+above, with the confidence bounds appended when they are asked for.
 }
 \description{
 \code{new_ipw()} is the low-level constructor for the object that every \code{\link[=ipw]{ipw()}}
@@ -106,11 +128,36 @@ mode.
 table of the surface the result's presentation mode names. The section below
 describes the two modes and what each one tabulates.
 
-\code{as.data.frame()} returns the \code{estimates} component. With
-\code{exponentiate = TRUE} it moves the \code{log(rr)} and \code{log(or)} rows to their
-natural scale, exponentiating the point estimate and the confidence limits and
-relabelling the two effects \code{"rr"} and \code{"or"}. Standard errors, z statistics,
-and p-values stay on the log scale, where the inference is done.
+\code{as.data.frame()} reports the effect estimates as a tidier-shaped table
+rather than as a copy of the \code{estimates} component. Its columns are \code{term},
+then \code{comparison} when the result names contrasts, then \code{estimate},
+\code{std.error}, \code{statistic}, and \code{p.value}. Those are the names the tidier
+convention uses, so a fitting package's \code{tidy()} method is this table read as
+a tibble and nothing more. The \code{estimates} component itself is unchanged by
+any of what follows.
+
+\code{conf.int = TRUE} appends \code{conf.low} and \code{conf.high} after the other columns,
+and \code{conf.level} names the level they report. The level is an argument rather
+than a column, since a column would repeat one number down every row and be
+read as part of the table rather than as the level the two bounds beside it
+were built at. The bounds \code{estimates} stores are returned when every row of
+the frame records the level asked for. They need not be the normal pair: a
+bootstrap or profile interval is asymmetric about the estimate, and even a
+normal one rounded on its way into the frame is not the number recomputing
+gives. At any other level, and for a frame whose rows disagree about the
+level or record none, the bounds are the normal approximation built from the
+estimate and its standard error.
+
+With \code{exponentiate = TRUE} the \code{log(rr)} and \code{log(or)} rows move to their
+natural scale, exponentiating the point estimate and the confidence bounds and
+relabelling the two terms \code{"rr"} and \code{"or"}. Standard errors, statistics, and
+p-values stay on the log scale, where the inference is done, and the interval
+is settled before the scale is: bounds recomputed at another level are built
+on the log scale and exponentiated afterwards. The covariance described below
+travels on the returned table under the same \code{ipw_vcov} attribute while the
+rows are on the scale they were estimated on, and is dropped when
+\code{exponentiate = TRUE}, since a matrix left attached there would describe
+neither the table it sits on nor anything else.
 }
 \section{The effect labels}{
 Every row of \code{estimates} has a label, and it is the label rather than the
@@ -139,10 +186,24 @@ the effect estimates the result stores, under \verb{Marginal estimates:}. The
 conditional reading tabulates the outcome model's coefficients, under
 \verb{Conditional estimates (outcome model):}, with the standard errors implied by
 the corrected covariance a fitting package attaches through \code{\link[=new_ipw_model]{new_ipw_model()}}.
-An outcome model that carries no such covariance is still printed: the
+Which coefficient each entry of that block belongs to is what its labels say
+rather than its row order, so a block attached in another order still prints
+each standard error beside the coefficient it belongs to.
+
+An outcome model a fitting package never wrapped is still printed: the
 coefficients are written on their own, followed by a note saying that no
 covariance from the joint estimation is recorded, rather than beside the
-standard errors the model computed for itself.
+standard errors the model computed for itself. An outcome model that carries
+the \code{\link[=new_ipw_model]{new_ipw_model()}} class with no covariance behind it is refused instead,
+with an error of class \code{causalgenerics_no_vcov_ipw_model}, and one whose block
+cannot be paired with its coefficients with an error of class
+\code{causalgenerics_conditional_vcov_mismatch}. The note answers a package that
+has not adopted the contract by telling the reader to wrap the model, and that
+advice has already been taken in both of those cases: the object is what is
+wrong, not the package that produced it.
+
+An outcome model that reports no coefficients has no rows to tabulate under
+that heading, and the printed form says so in place of the table.
 }
 
 \section{The covariance of the effects}{
@@ -188,8 +249,11 @@ res <- new_ipw(
 
 res
 
-# The ratios on their natural scale.
-as.data.frame(res, exponentiate = TRUE)
+# The tidier-shaped table the result reports.
+as.data.frame(res)
+
+# With an interval, and the ratios on their natural scale.
+as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
 }
 \seealso{
 \code{\link[=ipw]{ipw()}}, the generic these results come from, and \code{\link[=as_marginal]{as_marginal()}}

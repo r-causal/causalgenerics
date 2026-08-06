@@ -111,6 +111,28 @@
       (Intercept) -0.84730    0.86066 -0.9845   0.3249
       z            1.69460    1.21716  1.3923   0.1638
 
+# print() pairs each coefficient with its own standard error
+
+    Code
+      print(res)
+    Output
+      Inverse Probability Weight Estimator
+      Estimand: ATE 
+      Effects: conditional (outcome model) 
+      
+      Weight Estimator:
+        Call: glm(formula = z ~ x, family = binomial(), data = dat) 
+      
+      Outcome Model:
+        Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
+      
+      Conditional estimates (outcome model):
+                  Estimate Std. Error z value  Pr(>|z|)    
+      (Intercept)  -0.8473     0.5000 -1.6946   0.09015 .  
+      z             1.6946     0.2500  6.7784 1.215e-11 ***
+      ---
+      Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
 # print() reports a conditional result with no corrected covariance
 
     Code
@@ -136,6 +158,25 @@
       The package that produced it attaches one by wrapping the model with
       `new_ipw_model()`.
 
+# print() says a conditional result has no coefficients to tabulate
+
+    Code
+      print(res)
+    Output
+      Inverse Probability Weight Estimator
+      Estimand: ATE 
+      Effects: conditional (outcome model) 
+      
+      Weight Estimator:
+        Call: glm(formula = z ~ x, family = binomial(), data = dat) 
+      
+      Outcome Model:
+        Call: <cg_no_coef> 
+      
+      Conditional estimates (outcome model):
+      The outcome model reports no coefficients, so there is no
+      conditional table to print.
+
 # print() refuses a stored mode that is not a reading
 
     Code
@@ -143,4 +184,28 @@
     Condition
       Error in `print.ipw()`:
       ! `effects` must be a single string, either "marginal" or "conditional".
+
+# the as.data.frame() argument errors state the contract
+
+    Code
+      as.data.frame(res, conf.level = 95)
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! `conf.level` must be a single number greater than 0 and less than 1.
+
+---
+
+    Code
+      as.data.frame(res, conf.int = NA)
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! `conf.int` must be a single logical value, either `TRUE` or `FALSE`.
+
+---
+
+    Code
+      as.data.frame(res, exponentiate = 1)
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! `exponentiate` must be a single logical value, either `TRUE` or `FALSE`.
 

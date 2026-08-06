@@ -1,3 +1,11 @@
+# vcov() errors when a wrapped model carries no covariance
+
+    Code
+      vcov(stripped)
+    Condition
+      Error in `vcov.ipw_model()`:
+      ! This `ipw_model` object records no covariance to report; the package that produced it attaches one when it supports the `ipw_vcov` contract.
+
 # the covariance error states the contract
 
     Code

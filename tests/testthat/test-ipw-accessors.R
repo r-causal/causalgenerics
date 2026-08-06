@@ -1,16 +1,17 @@
 # The accessors give an `ipw` result the interface a fitted model has:
-# `coef()`, `vcov()`, `confint()`, `nobs()`, `df.residual()`, and `weights()`.
-# They live here for the same reason `print.ipw()` does. Two packages each
-# registering `coef.ipw()` would collide in the shared S3 method table, and a
-# caller writing against a result would then get whichever package was installed
-# last rather than the contract.
+# `coef()`, `vcov()`, `confint()`, `nobs()`, `df.residual()`, `weights()`, and
+# `model.frame()`, alongside `estimand()`, which reports the estimand the
+# weights targeted. They live here for the same reason `print.ipw()` does. Two
+# packages each registering `coef.ipw()` would collide in the shared S3 method
+# table, and a caller writing against a result would then get whichever package
+# was installed last rather than the contract.
 #
 # Everything the accessors read is part of the `new_ipw()` contract: the
-# `estimates` frame, the `ipw_vcov` attribute attached to it, `outcome_mod`, and
-# `fit`. They never branch on `se_method`, and they reach into `fit` only
-# through ordinary S3 dispatch. That is what lets a package whose variance
-# object is a bare list use them, and it is asserted directly below rather than
-# left to follow from the other tests.
+# `estimates` frame, the `ipw_vcov` attribute attached to it, `estimand`,
+# `outcome_mod`, and `fit`. They never branch on `se_method`, and they reach
+# into `fit` only through ordinary S3 dispatch. That is what lets a package
+# whose variance object is a bare list use them, and it is asserted directly
+# below rather than left to follow from the other tests.
 #
 # The estimates frames are written out literally, in the shape the `ipw()`
 # return contract documents, rather than produced by fitting a model. Nothing
@@ -25,8 +26,9 @@
 # above is written against. The conditional reading reports the outcome model's
 # coefficient surface, and its covariance is the corrected block a fitting
 # package attached with `new_ipw_model()`, never the one the outcome model
-# computed for itself. `nobs()`, `df.residual()`, and `weights()` describe the
-# fit rather than a surface of it, so they answer the same way in either mode.
+# computed for itself. `nobs()`, `df.residual()`, `weights()`, `model.frame()`,
+# and `estimand()` describe the fit rather than a surface of it, so they answer
+# the same way in either mode.
 
 # ---- fixtures ----------------------------------------------------------------
 
@@ -199,6 +201,82 @@ corrected_outcome_vcov <- function(mod = outcome_model()) {
   stats::vcov(mod) * 1.4
 }
 
+# The corrected block labelled in the reverse of the coefficient order, which is
+# the shape a fitting package produces when its stacked system holds the outcome
+# parameters the other way round. The labels are what say which coefficient each
+# entry belongs to, so a block read by position rather than by name reports the
+# intercept's variance for the slope and the slope's for the intercept. The two
+# diagonal entries are far apart and their square roots are exact doubles, which
+# is what lets the standard errors below be written down.
+reversed_outcome_vcov <- function() {
+  matrix(
+    c(0.0625, 0.03125, 0.03125, 0.25),
+    nrow = 2,
+    dimnames = list(c("z", "(Intercept)"), c("z", "(Intercept)"))
+  )
+}
+
+# That same block in coefficient order, written out rather than permuted from
+# the fixture above. The reordering is the claim, so restating it with the
+# indexing the implementation uses would assert nothing.
+coefficient_order_vcov <- function() {
+  matrix(
+    c(0.25, 0.03125, 0.03125, 0.0625),
+    nrow = 2,
+    dimnames = list(c("(Intercept)", "z"), c("(Intercept)", "z"))
+  )
+}
+
+# A block labelled with the parameter names of a stacked system rather than with
+# the model's coefficient names. `new_ipw_model()` takes it, deliberately: only
+# the fitting package knows which block of the sandwich belongs to which model,
+# so the constructor checks that both margins are labelled rather than what the
+# labels say. Where the block meets the coefficients is where the pairing has to
+# be made, and there is none to make here.
+theta_outcome_vcov <- function() {
+  matrix(
+    c(0.0625, 0.03125, 0.03125, 0.25),
+    nrow = 2,
+    dimnames = list(c("theta1", "theta2"), c("theta1", "theta2"))
+  )
+}
+
+# A three by three block for a model with two coefficients, labelled with both
+# coefficient names and one more. The extra term is what makes it discriminating:
+# indexing it by the coefficient names alone gives a two by two matrix, so an
+# implementation that only reordered would answer with the covariance of two
+# coefficients of a different fit.
+oversized_outcome_vcov <- function() {
+  matrix(
+    c(0.25, 0.03125, 0, 0.03125, 0.0625, 0, 0, 0, 0.5),
+    nrow = 3,
+    dimnames = list(
+      c("(Intercept)", "z", "x"),
+      c("(Intercept)", "z", "x")
+    )
+  )
+}
+
+# A conditional result whose outcome model reports its coefficients without
+# names, carrying a block that is labelled. The two cannot be paired at all:
+# there is nothing to match the labels against, and matching them by position is
+# what the labels exist to prevent. The class carries no `coef()` method of its
+# own, so the test that uses this registers one.
+unnamed_coef_result <- function() {
+  new_ipw(
+    estimand = "ate",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = new_ipw_model(
+      structure(list(), class = "cg_unnamed_coef"),
+      coefficient_order_vcov()
+    ),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "conditional"
+  )
+}
+
 # A variance object that is not a fitted model: a named parameter vector and its
 # covariance in a bare list, which is the shape an M-estimator from outside the
 # ecosystem can take. `df.residual()` has nothing for it and `$vcov` is right
@@ -250,6 +328,24 @@ ipw_result <- function(
   )
 }
 
+# A conditional result whose outcome model carries the wrapper class with no
+# covariance behind it. `new_ipw_model()` cannot produce one: it validates the
+# matrix before it prepends the class, so the two go on together. An object of
+# this shape was assembled some other way, and it is a different case from a
+# model that was never wrapped: that one is a fitting package which has not
+# adopted the contract, and this one is a model that claims to carry a block and
+# does not. The accessors have to tell the caller which of the two they met.
+stripped_wrapper_result <- function(estimates = binary_estimates()) {
+  res <- ipw_result(
+    estimates,
+    vcov = binary_vcov(),
+    outcome_vcov = corrected_outcome_vcov(),
+    effects = "conditional"
+  )
+  attr(res$outcome_mod, "ipw_vcov") <- NULL
+  res
+}
+
 # A result of the shape the constructor built before the mode existed: six
 # fields and no `effects`. Results stored from an earlier version of a fitting
 # package have this shape, as does one built by hand against the earlier
@@ -275,6 +371,27 @@ labels_a_printed_row <- function(out, label) {
   candidates <- out[startsWith(out, label)]
   remainder <- substring(candidates, nchar(label) + 1L)
   any(grepl("^ +-?[0-9]", remainder))
+}
+
+# The columns the outcome model's frame holds once the weights column is gone:
+# the response and the one term, as `ipw_data()` supplies them. Written out
+# rather than read back off the model, for the reason the effect labels are.
+# Which columns come back is the claim, and a comparison against the frame the
+# model stored would hold whichever ones they were.
+outcome_frame_columns <- function() {
+  data.frame(y = ipw_data()$y, z = ipw_data()$z)
+}
+
+# A model frame with its `terms` attribute removed.
+#
+# Selecting columns from a data frame drops that attribute, so a frame that had
+# no weights column to drop is not `identical()` to the one the model stored
+# even though every column, name, and row name agrees. Taking it off both sides
+# keeps the comparison an `expect_identical()` without asserting anything about
+# the attribute in either direction.
+without_terms <- function(frame) {
+  attr(frame, "terms") <- NULL
+  frame
 }
 
 # ---- coef.ipw() --------------------------------------------------------------
@@ -547,6 +664,34 @@ test_that("confint() selects rows by position", {
   )
 })
 
+test_that("confint() gives a numeric parm its ordinary subscript meaning", {
+  # Positions are indexed rather than matched, so a numeric `parm` reads the way
+  # a subscript reads everywhere else. Zero selects nothing and a negative
+  # position drops the row it names. An implementation that accepted only
+  # positive positions in range would refuse both, and a caller who reached for
+  # either would be told the surface does not have a row it does have.
+  estimates <- binary_estimates()
+  res <- ipw_result(estimates)
+
+  none <- confint(res, parm = 0)
+
+  expect_true(is.matrix(none))
+  expect_identical(dim(none), c(0L, 2L))
+  # An empty selection is still a labelled matrix, so a caller who built one
+  # from a filter that matched nothing can read its columns or bind it to
+  # another without treating the case apart.
+  expect_identical(colnames(none), c("2.5 %", "97.5 %"))
+
+  dropped <- confint(res, parm = -1)
+
+  expect_identical(dim(dropped), c(2L, 2L))
+  expect_identical(rownames(dropped), c("log(rr)", "log(or)"))
+  expect_identical(
+    dropped[, 1],
+    setNames(estimates$ci.lower[c(2, 3)], c("log(rr)", "log(or)"))
+  )
+})
+
 test_that("confint() selects a categorical row by its full label", {
   # The label is effect and comparison together, so `parm = "rd"` names nothing
   # in a categorical result even though `rd` is a value of the `effect` column.
@@ -588,6 +733,46 @@ test_that("confint() errors on labels the result does not have", {
 
   expect_snapshot(error = TRUE, confint(res, parm = "rr"))
   expect_snapshot(error = TRUE, confint(res, parm = c("rd", "rr")))
+})
+
+test_that("confint() errors on positions the result does not have", {
+  # The other half of the same guard. A position past the last row indexes
+  # nothing, and letting it through would give back a row of `NA` limits under
+  # an `NA` label, which reads as an effect that was estimated and came out
+  # unknown rather than as a subscript that named nothing. The message names the
+  # range rather than the labels, since a caller who wrote a number is working
+  # from the positions.
+  res <- ipw_result(binary_estimates())
+
+  expect_error(
+    confint(res, parm = 99),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  expect_error(
+    confint(res, parm = 99),
+    class = "causalgenerics_invalid_argument"
+  )
+  # A real position beside one past the end is refused as well, for the reason a
+  # mix of labels is: the position that matched does not make the request
+  # answerable.
+  expect_error(
+    confint(res, parm = c(1, 99)),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  # `NA` reaches this branch too, and it is the subscript that would go furthest
+  # unnoticed. A logical `NA` recycles to the length of the surface, so indexing
+  # with it gives one `NA` row per effect: a matrix of exactly the shape a
+  # caller expects, holding nothing.
+  expect_error(
+    confint(res, parm = NA),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  expect_error(
+    confint(res, parm = NA_integer_),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+
+  expect_snapshot(error = TRUE, confint(res, parm = 99))
 })
 
 # ---- nobs.ipw() and df.residual.ipw() ----------------------------------------
@@ -645,15 +830,18 @@ test_that("df.residual() is NA for a fit the generic has nothing for", {
 })
 
 test_that("df.residual() converts a fit's answer to an integer safely", {
-  # Two things a registered method can hand back that `as.integer()` alone
+  # The answers a registered method can hand back that `as.integer()` alone
   # mishandles. A whole number stored as a double has to come back as an
   # integer, and `Inf` has to come back as `NA_integer_` without the "NAs
-  # introduced by coercion" warning that `as.integer(Inf)` raises. A warning
+  # introduced by coercion" warning that `as.integer(Inf)` raises. A whole
+  # number past the largest integer raises that same warning, and it has to come
+  # back as the double it is, since the count itself is a real one. A warning
   # would surface as noise in every run of a suite downstream, so the guard is
   # asserted here rather than left to a code reading.
   local_s3_method("df.residual", "cg_double_df", function(object, ...) 12)
   local_s3_method("df.residual", "cg_infinite_df", function(object, ...) Inf)
   local_s3_method("df.residual", "cg_empty_df", function(object, ...) numeric())
+  local_s3_method("df.residual", "cg_huge_df", function(object, ...) 1e10)
 
   as_double <- ipw_result(
     binary_estimates(),
@@ -672,6 +860,35 @@ test_that("df.residual() converts a fit's answer to an integer safely", {
     fit = structure(list(), class = "cg_empty_df")
   )
   expect_identical(df.residual(empty), NA_integer_)
+
+  huge <- ipw_result(
+    binary_estimates(),
+    fit = structure(list(), class = "cg_huge_df")
+  )
+  expect_no_warning(expect_identical(df.residual(huge), 1e10))
+  expect_type(df.residual(huge), "double")
+})
+
+test_that("df.residual() reports a fractional answer as it stands", {
+  # Residual degrees of freedom are not always a whole number. A fit that spends
+  # a fractional count on penalized or smooth terms reports one, and so does a
+  # small-sample correction, so `12.4` is what the variance object has to say
+  # rather than an imprecise way of saying `12`. Truncating it reports a fit that
+  # spent 0.4 more parameters than it did, and nothing in the returned value
+  # would say the number had been altered on the way out.
+  #
+  # The whole-number cases are unchanged and are pinned in the test above, where
+  # `12` comes back as `12L` and `Inf` and `numeric()` come back as
+  # `NA_integer_`. This is the one answer that has no integer to become.
+  local_s3_method("df.residual", "cg_fractional_df", function(object, ...) 12.4)
+
+  res <- ipw_result(
+    binary_estimates(),
+    fit = structure(list(), class = "cg_fractional_df")
+  )
+
+  expect_identical(df.residual(res), 12.4)
+  expect_type(df.residual(res), "double")
 })
 
 # ---- weights.ipw() -----------------------------------------------------------
@@ -731,6 +948,125 @@ test_that("weights() is NULL for an unweighted outcome model", {
   )
 
   expect_null(weights(res))
+})
+
+# ---- model.frame.ipw() -------------------------------------------------------
+
+test_that("model.frame() drops the weights column from the outcome frame", {
+  # The frame a weighted model stores carries a `(weights)` column that the
+  # formula never named. It is the fitting machinery's bookkeeping rather than
+  # data the caller supplied, and `weights()` reports it already, so the frame
+  # comes back holding the columns the formula named and nothing else.
+  res <- ipw_result(binary_estimates())
+  stored <- stats::model.frame(res$outcome_mod)
+  mf <- model.frame(res)
+
+  expect_true("(weights)" %in% colnames(stored))
+  expect_false("(weights)" %in% colnames(mf))
+  expect_identical(colnames(mf), c("y", "z"))
+  expect_identical(nrow(mf), nrow(stored))
+  expect_identical(mf, outcome_frame_columns())
+})
+
+test_that("model.frame() returns every column of an unweighted frame", {
+  # An unweighted model frame has no weights column, so there is nothing to drop
+  # and the whole frame comes back. The `terms` attribute does not: selecting
+  # columns from a data frame drops it whether or not a column went with it, and
+  # it is taken off both sides here rather than asserted either way, since the
+  # claim is about the columns.
+  res <- ipw_result(binary_estimates(), wts = NULL)
+  stored <- stats::model.frame(res$outcome_mod)
+  mf <- model.frame(res)
+
+  expect_false("(weights)" %in% colnames(stored))
+  expect_identical(without_terms(mf), without_terms(stored))
+  expect_identical(mf, outcome_frame_columns())
+  expect_identical(nrow(mf), 20L)
+})
+
+test_that("model.frame() reads the outcome model wrapped or not", {
+  # The wrapper carries a corrected covariance and registers nothing else, so
+  # `model.frame()` walks past it to the model's own method the way `coef()`
+  # does, and the frame is the same either way.
+  wrapped <- ipw_result(
+    binary_estimates(),
+    outcome_vcov = corrected_outcome_vcov()
+  )
+  bare <- ipw_result(binary_estimates())
+
+  expect_s3_class(wrapped$outcome_mod, "ipw_model")
+  expect_false(inherits(bare$outcome_mod, "ipw_model"))
+  expect_identical(model.frame(wrapped), model.frame(bare))
+  expect_identical(model.frame(wrapped), outcome_frame_columns())
+})
+
+test_that("model.frame() lets the outcome model's error through", {
+  # Delegation and nothing else, with no guard for a model that has no frame to
+  # give. A model whose own method refuses says why it refuses, and an error of
+  # this package's own raised in front of it would replace the one explanation a
+  # caller can act on with one about a result that is not the problem.
+  local_s3_method("model.frame", "cg_no_frame", function(formula, ...) {
+    stop(errorCondition(
+      "this model records no model frame",
+      class = "cg_no_frame_error"
+    ))
+  })
+
+  res <- new_ipw(
+    estimand = "ate",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = structure(list(), class = "cg_no_frame"),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL
+  )
+
+  expect_error(model.frame(res), class = "cg_no_frame_error")
+  expect_error(
+    model.frame(res),
+    "this model records no model frame",
+    fixed = TRUE
+  )
+})
+
+# ---- estimand.ipw() ----------------------------------------------------------
+
+test_that("estimand() returns the estimand the result records", {
+  # The field rather than a constant. The two results here differ in it and in
+  # nothing else, so a method that answered `"ate"` for every result would pass
+  # the first assertion and fail the second.
+  expect_identical(estimand(ipw_result(binary_estimates())), "ate")
+
+  att <- new_ipw(
+    estimand = "att",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = outcome_model(),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL
+  )
+
+  expect_identical(estimand(att), "att")
+})
+
+test_that("estimand<-() has no method for a result", {
+  # The estimand a result records is a fact about the weights its method
+  # targeted and the estimates computed under them. Assigning a new one would
+  # relabel those numbers rather than recompute them, so there is no method for
+  # the replacement generic here and a caller who writes the assignment is told
+  # as much. The absence is deliberate, and this is what pins it.
+  res <- ipw_result(binary_estimates())
+
+  expect_error(
+    estimand(res) <- "att",
+    class = "causalgenerics_no_method_estimand<-"
+  )
+  expect_error(
+    estimand(res) <- "att",
+    class = "causalgenerics_no_method"
+  )
+
+  expect_snapshot(error = TRUE, estimand(res) <- "att")
 })
 
 # ---- the contract the accessors read -----------------------------------------
@@ -850,6 +1186,116 @@ test_that("vcov() reports the corrected block in the conditional mode", {
   expect_false(identical(vcov(res), binary_vcov()))
 })
 
+test_that("vcov() reorders a conditional block into coefficient order", {
+  # A fitting package labels the block from the stacked system it solved, and
+  # the order the parameters sit in there is its own. The labels are what pair
+  # the block with the coefficients, so the matrix comes back in the order
+  # `coef()` reports and a caller reading the diagonal alongside the
+  # coefficients gets each variance against the coefficient it belongs to.
+  #
+  # The test above is the other half of this: a block already in coefficient
+  # order comes back as attached, so the reordering is skipped rather than
+  # applied to a matrix that needs none.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = reversed_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_identical(vcov(res), coefficient_order_vcov())
+  expect_identical(
+    dimnames(vcov(res)),
+    list(conditional_labels(), conditional_labels())
+  )
+  expect_identical(names(coef(res)), rownames(vcov(res)))
+  # The variance each label names travels with it, which is what separates
+  # reordering the matrix from relabelling it. Relabelling would produce a
+  # matrix that satisfies every assertion about the dimnames while reporting
+  # the intercept's variance for the slope.
+  expect_identical(diag(vcov(res)), c("(Intercept)" = 0.25, "z" = 0.0625))
+  # The block as attached is a different matrix, so the assertions above are
+  # about the reordering rather than about a block that was already in order.
+  expect_false(identical(vcov(res), reversed_outcome_vcov()))
+})
+
+test_that("vcov() refuses a conditional block labelled for other parameters", {
+  # `new_ipw_model()` takes the block's labels on trust, since only the fitting
+  # package knows which block of the sandwich belongs to which model. The
+  # accessor is where they meet the coefficients, and labels that name a
+  # stacked system's parameters cannot be paired with them at all. Pairing by
+  # position instead would report a covariance of something else under this
+  # model's coefficient names, which is the one answer a caller has no way to
+  # check.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = theta_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_error(vcov(res), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
+
+  # Not the refusal the reading raises for a model that was never wrapped,
+  # which says the fitting package attached no block and is answered by
+  # wrapping the model. This model is wrapped and carries a block. The two
+  # conditions share the general class, so telling them apart is a claim about
+  # the specific one.
+  cnd <- tryCatch(vcov(res), error = identity)
+  expect_false(inherits(cnd, "causalgenerics_no_conditional_vcov"))
+
+  # The coefficients are the model's own and need no block to report, so the
+  # pairing is not something `coef()` has to make and this result is still one
+  # a caller can read the estimates of.
+  expect_identical(coef(res), coef(res$outcome_mod))
+
+  expect_snapshot(error = TRUE, vcov(res))
+})
+
+test_that("vcov() refuses a conditional block of the wrong size", {
+  # Three labels for two coefficients: the block of a model with another term
+  # in it. Both coefficient names are among its labels, so an implementation
+  # that indexed by name and stopped there would take the two by two corner and
+  # answer with it, which is the covariance of two coefficients of a different
+  # fit rather than of these.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = oversized_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  expect_error(vcov(res), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
+})
+
+test_that("vcov() refuses a conditional block it cannot pair by name", {
+  # A model whose coefficients have no names leaves the labels nothing to match
+  # against. The pairing is unverifiable rather than wrong, and assuming the
+  # positions are it would be the assumption the labels exist to replace.
+  local_s3_method("coef", "cg_unnamed_coef", function(object, ...) {
+    c(-0.847298, 1.694596)
+  })
+  res <- unnamed_coef_result()
+
+  expect_null(names(coef(res)))
+  expect_error(vcov(res), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
+})
+
 test_that("vcov() refuses the conditional mode without a corrected block", {
   # An outcome model that was not wrapped carries no covariance the two-step
   # estimation implies, and there is nothing to fall back on. The model has a
@@ -873,6 +1319,26 @@ test_that("vcov() refuses the conditional mode without a corrected block", {
   expect_no_error(stats::vcov(res$outcome_mod))
 
   expect_snapshot(error = TRUE, vcov(res))
+})
+
+test_that("vcov() refuses a conditional block the outcome model lost", {
+  # A wrapper carrying nothing is refused for its own reason. The guard on the
+  # class is passed, since the class is there, and the model itself is the one
+  # that has nothing to report.
+  res <- stripped_wrapper_result()
+
+  expect_identical(class(res$outcome_mod)[[1]], "ipw_model")
+
+  expect_error(vcov(res), class = "causalgenerics_no_vcov_ipw_model")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+
+  # Not the conditional error, which says the fitting package attached no block
+  # and is answered by wrapping the model. This model was wrapped, so that
+  # advice has nothing left to tell the caller to do, and the object is what is
+  # wrong. The two conditions share the general class, so telling them apart is
+  # a claim about the specific one.
+  cnd <- tryCatch(vcov(res), error = identity)
+  expect_false(inherits(cnd, "causalgenerics_no_conditional_vcov"))
 })
 
 test_that("confint() bounds the outcome coefficients in the conditional mode", {
@@ -906,6 +1372,46 @@ test_that("confint() bounds the outcome coefficients in the conditional mode", {
     ci[, 2],
     setNames(estimate + half_width, conditional_labels())
   )
+})
+
+test_that("confint() pairs a reordered block with its own coefficients", {
+  # The half width of a coefficient's interval is taken from that coefficient's
+  # variance, which is the entry the labels name rather than the entry in its
+  # position. The block's diagonal here is 0.25 for the intercept and 0.0625
+  # for the slope, so the standard errors are 0.5 and 0.25 exactly and the
+  # limits can be written down.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = reversed_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  ci <- confint(res)
+  estimate <- coef(res$outcome_mod)
+  half_width <- qnorm(1 - (1 - 0.95) / 2) * c(0.5, 0.25)
+
+  expect_identical(
+    dimnames(ci),
+    list(conditional_labels(), c("2.5 %", "97.5 %"))
+  )
+  expect_identical(
+    ci[, 1],
+    setNames(estimate - half_width, conditional_labels())
+  )
+  expect_identical(
+    ci[, 2],
+    setNames(estimate + half_width, conditional_labels())
+  )
+
+  # The pairing the positions give is a matrix of the same shape carrying the
+  # same labels, so nothing but the numbers tells the two apart. Here the
+  # intervals it gives are twice and half the width of the right ones.
+  crossed <- qnorm(1 - (1 - 0.95) / 2) * c(0.25, 0.5)
+  expect_false(identical(
+    ci[, 1],
+    setNames(estimate - crossed, conditional_labels())
+  ))
 })
 
 test_that("confint() recomputes in the conditional mode at every level", {
@@ -981,6 +1487,30 @@ test_that("confint() selects conditional rows by position and by name", {
   )
 })
 
+test_that("confint() empties a conditional selection the same way", {
+  # A subscript means the same thing in either reading. The two build their
+  # limits in different places in the method, so an empty selection that came
+  # back as a labelled matrix in one and as something else in the other would be
+  # a difference a caller who switched modes would meet with nothing to warn
+  # them.
+  res <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected_outcome_vcov(),
+    effects = "conditional"
+  )
+
+  none <- confint(res, parm = 0)
+
+  expect_true(is.matrix(none))
+  expect_identical(dim(none), c(0L, 2L))
+  expect_identical(colnames(none), c("2.5 %", "97.5 %"))
+  # The surface it emptied is the coefficient one: two rows rather than the
+  # three effects the other reading reports, so the assertions above are about
+  # this reading rather than about a result that answered in the other.
+  expect_identical(dim(confint(res)), c(2L, 2L))
+})
+
 test_that("confint() refuses a conditional parm the outcome model lacks", {
   # `rd` is an effect the result reports in its other reading, which is exactly
   # the mistake worth catching: the labels a caller has in hand belong to the
@@ -1010,6 +1540,14 @@ test_that("confint() refuses a conditional parm the outcome model lacks", {
     confint(res, parm = 3),
     class = "causalgenerics_invalid_argument_parm"
   )
+  # A position is matched against the surface the call names, so the reading
+  # asked for at the call site is refused the same way as the one the result
+  # records. Two coefficients are all this model has, and `99` indexes none of
+  # them either way.
+  expect_error(
+    confint(res, parm = 99, effects = "conditional"),
+    class = "causalgenerics_invalid_argument_parm"
+  )
 
   expect_snapshot(error = TRUE, confint(res, parm = "rd"))
 })
@@ -1034,6 +1572,35 @@ test_that("confint() refuses the conditional mode without a corrected block", {
   expect_no_error(stats::vcov(res$outcome_mod))
 
   expect_snapshot(error = TRUE, confint(res))
+})
+
+test_that("confint() refuses a conditional block the outcome model lost", {
+  # The limits are built from the covariance, so this reading needs the block
+  # `vcov()` needs, whatever the reason it is missing. A wrapper carrying
+  # nothing is where an interval goes wrong most quietly: the widths taken from
+  # it are an empty vector, and the limits come back as `NA` at every level with
+  # nothing said.
+  res <- stripped_wrapper_result()
+
+  expect_error(confint(res), class = "causalgenerics_no_vcov_ipw_model")
+  expect_error(confint(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res, parm = 1, level = 0.9),
+    class = "causalgenerics_no_vcov_ipw_model"
+  )
+
+  # The covariance is asked for before `parm` is matched, the way the reading's
+  # own refusal documents. A label the surface does not have is beside the point
+  # when no interval can be built for any of them.
+  expect_error(
+    confint(res, parm = "nope", effects = "conditional"),
+    class = "causalgenerics_no_vcov_ipw_model"
+  )
+
+  # Not the conditional error, for the reason `vcov()` does not raise it here:
+  # the model was wrapped, and wrapping it again is no answer.
+  cnd <- tryCatch(confint(res), error = identity)
+  expect_false(inherits(cnd, "causalgenerics_no_conditional_vcov"))
 })
 
 # ---- naming a reading for one call -------------------------------------------
@@ -1265,6 +1832,33 @@ test_that("a result with no mode reads as marginal", {
   )
 })
 
+test_that("model.frame() does not read the mode", {
+  # The frame is the outcome model's, and which surface a result presents says
+  # nothing about the data that model was fitted on. A result stored before the
+  # field existed answers the same way, so an older one needs no migration to be
+  # asked for its frame.
+  res <- ipw_result(binary_estimates())
+  legacy <- legacy_result()
+
+  expect_length(legacy, 6L)
+  expect_identical(model.frame(as_conditional(res)), model.frame(res))
+  expect_identical(model.frame(legacy), model.frame(res))
+  expect_identical(model.frame(res), outcome_frame_columns())
+})
+
+test_that("estimand() does not read the mode", {
+  # The estimand is what the weights targeted, and both readings of a result are
+  # readings of estimates computed under those weights. A flip cannot move it,
+  # and a result recording no mode reports it unchanged.
+  res <- ipw_result(binary_estimates())
+  legacy <- legacy_result()
+
+  expect_length(legacy, 6L)
+  expect_identical(estimand(as_conditional(res)), estimand(res))
+  expect_identical(estimand(legacy), estimand(res))
+  expect_identical(estimand(res), "ate")
+})
+
 # ---- registration ------------------------------------------------------------
 
 test_that("the accessors are registered against ipw", {
@@ -1290,4 +1884,26 @@ test_that("the accessors are registered against ipw", {
   )
 
   expect_identical(generics[!registered], character())
+})
+
+test_that("model.frame() is registered against ipw", {
+  # `model.frame()` lives in stats as the six accessors above do, so its entry
+  # belongs to stats' table rather than to this package's. The claim is the one
+  # the test above makes: every assertion written for this method reaches it
+  # from the test frame, and a downstream package calling `model.frame()` on a
+  # result from its own namespace has only the table.
+  table <- s3_methods_table("model.frame")
+
+  expect_false(is.null(table))
+  expect_true(exists("model.frame.ipw", envir = table, inherits = FALSE))
+})
+
+test_that("estimand() is registered against ipw", {
+  # `estimand()` is this package's own generic, so its entry belongs to this
+  # package's table rather than to stats'. `s3_methods_table()` reads the
+  # generic's own environment and finds either one.
+  table <- s3_methods_table("estimand")
+
+  expect_false(is.null(table))
+  expect_true(exists("estimand.ipw", envir = table, inherits = FALSE))
 })

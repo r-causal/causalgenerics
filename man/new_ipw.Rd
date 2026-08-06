@@ -86,9 +86,14 @@ weights.}
 following columns: \code{effect} (the measure name), \code{estimate} (point
 estimate), \code{std.err} (standard error), \code{z} (z-statistic), \code{ci.lower} and
 \code{ci.upper} (confidence interval bounds), \code{conf.level}, and \code{p.value}. For
-a categorical exposure the data frame also has a \code{comparison} column,
+a categorical exposure the data frame also has a \code{contrast} column,
 placed after \code{effect}, naming the non-reference level and reference level
-of each contrast.}
+of each contrast. A frame stored against an earlier version of this
+contract names that column \code{comparison}. The older name is read as an
+alias for the canonical one wherever the column is read, so a result
+holding such a frame labels its rows and reports its table exactly as one
+holding a \code{contrast} column does. A method written now writes
+\code{contrast}.}
 \item{\code{se_method}}{The standard error method used, such as \code{"mestimation"}
 or \code{"linearization"}.}
 \item{\code{fit}}{The fitted object the variance estimator produced, or \code{NULL}.
@@ -130,7 +135,7 @@ describes the two modes and what each one tabulates.
 
 \code{as.data.frame()} reports the effect estimates as a tidier-shaped table
 rather than as a copy of the \code{estimates} component. Its columns are \code{term},
-then \code{comparison} when the result names contrasts, then \code{estimate},
+then \code{contrast} when the result names contrasts, then \code{estimate},
 \code{std.error}, \code{statistic}, and \code{p.value}. Those are the names the tidier
 convention uses, so a fitting package's \code{tidy()} method is this table read as
 a tibble and nothing more. The \code{estimates} component itself is unchanged by
@@ -164,8 +169,8 @@ Every row of \code{estimates} has a label, and it is the label rather than the
 position that \code{print()} writes down the side of its table and that
 \code{\link[=ipw-accessors]{coef()}}, \code{\link[=ipw-accessors]{vcov()}}, and
 \code{\link[=ipw-accessors]{confint()}} name their results with. The label is the
-\code{effect} column on its own when there is no \code{comparison} column, and \code{effect}
-and \code{comparison} pasted together, such as \code{"rd b vs a"}, when there is. A
+\code{effect} column on its own when there is no \code{contrast} column, and \code{effect}
+and \code{contrast} pasted together, such as \code{"rd b vs a"}, when there is. A
 categorical exposure repeats each effect measure across its contrasts, so
 \code{effect} alone would name several rows the same thing.
 }

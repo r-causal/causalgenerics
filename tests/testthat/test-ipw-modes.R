@@ -26,7 +26,7 @@
 
 # ---- fixtures ----------------------------------------------------------------
 
-# A binary-exposure estimates frame: one row per effect measure, no `comparison`
+# A binary-exposure estimates frame: one row per effect measure, no `contrast`
 # column. It holds the same numbers as its counterpart in `test-ipw-result.R`.
 binary_estimates <- function() {
   data.frame(

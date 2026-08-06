@@ -25,7 +25,7 @@
 #'
 #' `as.data.frame()` reports the effect estimates as a tidier-shaped table
 #' rather than as a copy of the `estimates` component. Its columns are `term`,
-#' then `comparison` when the result names contrasts, then `estimate`,
+#' then `contrast` when the result names contrasts, then `estimate`,
 #' `std.error`, `statistic`, and `p.value`. Those are the names the tidier
 #' convention uses, so a fitting package's `tidy()` method is this table read as
 #' a tibble and nothing more. The `estimates` component itself is unchanged by
@@ -60,8 +60,8 @@
 #' position that `print()` writes down the side of its table and that
 #' [`coef()`][ipw-accessors], [`vcov()`][ipw-accessors], and
 #' [`confint()`][ipw-accessors] name their results with. The label is the
-#' `effect` column on its own when there is no `comparison` column, and `effect`
-#' and `comparison` pasted together, such as `"rd b vs a"`, when there is. A
+#' `effect` column on its own when there is no `contrast` column, and `effect`
+#' and `contrast` pasted together, such as `"rd b vs a"`, when there is. A
 #' categorical exposure repeats each effect measure across its contrasts, so
 #' `effect` alone would name several rows the same thing.
 #'
@@ -138,9 +138,14 @@
 #'     following columns: `effect` (the measure name), `estimate` (point
 #'     estimate), `std.err` (standard error), `z` (z-statistic), `ci.lower` and
 #'     `ci.upper` (confidence interval bounds), `conf.level`, and `p.value`. For
-#'     a categorical exposure the data frame also has a `comparison` column,
+#'     a categorical exposure the data frame also has a `contrast` column,
 #'     placed after `effect`, naming the non-reference level and reference level
-#'     of each contrast.}
+#'     of each contrast. A frame stored against an earlier version of this
+#'     contract names that column `comparison`. The older name is read as an
+#'     alias for the canonical one wherever the column is read, so a result
+#'     holding such a frame labels its rows and reports its table exactly as one
+#'     holding a `contrast` column does. A method written now writes
+#'     `contrast`.}
 #'   \item{`se_method`}{The standard error method used, such as `"mestimation"`
 #'     or `"linearization"`.}
 #'   \item{`fit`}{The fitted object the variance estimator produced, or `NULL`.
@@ -296,8 +301,18 @@ print_marginal_estimates <- function(estimates) {
   cat("Marginal estimates:\n")
 
   # The rows are keyed by effect label, and the character columns the labels are
-  # built from are dropped from the numeric matrix printCoefmat() formats.
-  numbers <- estimates[setdiff(names(estimates), c("effect", "comparison"))]
+  # built from are dropped from the numeric matrix printCoefmat() formats. Both
+  # spellings of the contrast column go, rather than whichever one
+  # `ipw_contrast_column()` reads: the question here is which columns must not
+  # reach `printCoefmat()`, which is every character column the frame might
+  # carry, and not which one the labels are built from. A frame carrying both
+  # would otherwise keep the unread one, and that does not error. It is
+  # factor-coded by `data.matrix()` into the first numeric position, which shifts
+  # every column along one and leaves `cs.ind` and `tst.ind` naming the wrong
+  # ones, so the standard errors are formatted as a test statistic.
+  numbers <- estimates[
+    setdiff(names(estimates), c("effect", "contrast", "comparison"))
+  ]
   rownames(numbers) <- ipw_effect_labels(estimates)
   stats::printCoefmat(numbers, has.Pvalue = TRUE, cs.ind = 1:2, tst.ind = 3)
 
@@ -423,8 +438,13 @@ print_conditional_estimates <- function(model) {
 #' `coef()` gave has to get the entry `print()` showed.
 #'
 #' A categorical exposure repeats each effect measure across its contrasts, so a
-#' frame with a `comparison` column needs both columns to name a row uniquely.
-#' The labels stay unique because the comparison labels are distinct.
+#' frame that names contrasts needs both columns to name a row uniquely. The
+#' labels stay unique because the contrast labels are distinct.
+#'
+#' The label is the same string whichever column name a stored frame keeps its
+#' contrasts under, since the column supplies the second half of the label and
+#' not its own name. A result built against the earlier contract therefore
+#' reports the labels it always reported.
 #'
 #' @param estimates The `estimates` component of an `ipw` object.
 #'
@@ -432,11 +452,44 @@ print_conditional_estimates <- function(model) {
 #'
 #' @noRd
 ipw_effect_labels <- function(estimates) {
-  if ("comparison" %in% names(estimates)) {
-    paste(estimates$effect, estimates$comparison)
-  } else {
-    as.character(estimates$effect)
+  contrast <- ipw_contrast_column(estimates)
+  if (is.null(contrast)) {
+    return(as.character(estimates$effect))
   }
+  paste(estimates$effect, estimates[[contrast]])
+}
+
+#' The column of an estimates frame that names its contrasts
+#'
+#' A categorical exposure names each row's contrast in a column of the
+#' `estimates` frame, and the [new_ipw()] contract calls that column `contrast`.
+#' A frame stored against an earlier version of the contract calls it
+#' `comparison`, and a result holding one is still a result a caller has in hand,
+#' so the older name is read as an alias for the canonical one rather than as a
+#' shape this layer has no reading for. A frame carrying both is read under the
+#' canonical name.
+#'
+#' The alias is resolved here and nowhere else, so that the three surfaces which
+#' read the column cannot come to disagree about which frames name contrasts.
+#' What it buys is on the way in only. `print()` labels its rows, the accessors
+#' name their results, and `as.data.frame()` heads its column the canonical way
+#' for a frame of either vintage, so nothing a caller reads says which one the
+#' result was built from.
+#'
+#' @param estimates The `estimates` component of an `ipw` object.
+#'
+#' @return A single string naming the column, or `NULL` when the frame names no
+#'   contrasts.
+#'
+#' @noRd
+ipw_contrast_column <- function(estimates) {
+  # `intersect()` keeps the order of its first argument, which is what puts the
+  # canonical name ahead of the alias.
+  columns <- intersect(c("contrast", "comparison"), names(estimates))
+  if (length(columns) == 0L) {
+    return(NULL)
+  }
+  columns[[1L]]
 }
 
 #' Format a model's originating call for the `ipw()` summary
@@ -502,11 +555,14 @@ as.data.frame.ipw <- function(
 
   # `term` first, then the column naming the contrast it qualifies when the
   # result reports one. A binary or continuous exposure has a single contrast,
-  # so a `comparison` column there would repeat one value down the table and
-  # read as a contrast that was named.
+  # so a `contrast` column there would repeat one value down the table and read
+  # as a contrast that was named. The heading is the canonical one whichever
+  # name the stored frame used, since the heading is what a caller reads the
+  # table by.
+  contrast <- ipw_contrast_column(estimates)
   columns <- list(term = as.character(estimates$effect))
-  if ("comparison" %in% names(estimates)) {
-    columns$comparison <- estimates$comparison
+  if (!is.null(contrast)) {
+    columns$contrast <- estimates[[contrast]]
   }
   columns$estimate <- estimates$estimate
   columns$std.error <- estimates$std.err

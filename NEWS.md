@@ -1,8 +1,20 @@
 # causalgenerics (development version)
 
+* Breaking change: the column a categorical `ipw` result names its contrasts
+  with is `contrast`, in the `estimates` frame `new_ipw()` takes and in the
+  table `as.data.frame()` reports. It was `comparison`. Both things that read
+  the table by column name spell it the new way: `mice::pool()` groups the rows
+  it pools by a closed whitelist of names that holds `contrast` and not
+  `comparison`, and marginaleffects heads the same column `contrast`, so a
+  table under the old name lost the contrast it was keyed by and did not stack
+  with one of theirs. A stored result whose frame carries the old name is still
+  read: the older spelling is an alias wherever the column is read, so such a
+  result labels its rows and reports its table exactly as one built now does. A
+  package supplying an `ipw()` method writes `contrast`.
+
 * Breaking change: `as.data.frame()` on an `ipw` result returns the
   tidier-shaped table of its effect estimates rather than a copy of the
-  `estimates` component. The columns are `term`, `comparison` when the result
+  `estimates` component. The columns are `term`, `contrast` when the result
   names contrasts, `estimate`, `std.error`, `statistic`, and `p.value`, so the
   storage names `effect`, `std.err`, and `z` no longer appear and code reading
   the table by those names has to be updated. The interval is opt-in through the

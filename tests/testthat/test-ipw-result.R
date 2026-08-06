@@ -1024,45 +1024,286 @@ test_that("print() shows the class label for a model with no accessible call", {
 
 # ---- as.data.frame.ipw() -----------------------------------------------------
 
-test_that("as.data.frame() returns the estimates unchanged by default", {
+# `as.data.frame()` is the result's tidier-shaped table rather than a copy of the
+# `estimates` frame. The storage names of that frame are the constructor's
+# contract with the packages that build a result; the names below are the
+# contract with the packages that report one, and they are the column names a
+# tidier uses. A fitting package's `tidy()` method is `as_tibble()` over this
+# table and nothing else, so what that method returns is settled here rather than
+# restated in every package that has one.
+#
+# The interval is the one part of the table this method computes rather than
+# reads. At the level the frame stores, the stored bounds come back as they
+# stand: they need not be the normal pair at all, a bootstrap or profile interval
+# being asymmetric about the estimate, and even a normal one rounded on its way
+# into the frame is not the number recomputing gives. At any other level the
+# normal approximation is built from the estimate and its standard error.
+
+# The bounds the method builds at a level the frame does not store: one half
+# width from the normal approximation, added and subtracted. `qnorm()` is not
+# exactly antisymmetric, so taking the lower bound from the lower tail instead
+# would put the two a little apart from each other.
+normal_bounds <- function(estimates, level) {
+  half_width <- stats::qnorm(1 - (1 - level) / 2) * estimates$std.err
+  list(
+    lower = estimates$estimate - half_width,
+    upper = estimates$estimate + half_width
+  )
+}
+
+# A binary-exposure frame whose rows do not share one confidence level. A frame
+# like this is what tells a rule reading the stored level row by row from one
+# reading it as a property of the frame, and the two disagree about the rows
+# whose stored level is the one asked for.
+mixed_level_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$conf.level <- c(0.95, 0.90, 0.95)
+  estimates
+}
+
+# A binary-exposure frame whose ratios are already on the natural scale, which is
+# what separates matching the `log(rr)` and `log(or)` labels exactly from
+# matching every label holding `rr` or `or` somewhere. Only the labels are
+# changed: what the numbers under them mean is beside the point for a test about
+# which rows are picked out.
+exponentiated_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$effect <- c("rd", "rr", "or")
+  estimates
+}
+
+# The covariance of the binary fixture's three effects, in the shape a method
+# attaches it: a square matrix labelled on both margins by effect label, with
+# off-diagonal entries, since effects computed from the same weighted means are
+# correlated.
+binary_vcov <- function() {
+  labels <- binary_estimates()$effect
+  matrix(
+    c(
+      0.008542,
+      0.022753,
+      0.034812,
+      0.022753,
+      0.074813,
+      0.113106,
+      0.034812,
+      0.113106,
+      0.175277
+    ),
+    nrow = 3,
+    dimnames = list(labels, labels)
+  )
+}
+
+# An estimates frame carrying the covariance a method attaches to it.
+with_vcov <- function(estimates, covariance = binary_vcov()) {
+  attr(estimates, "ipw_vcov") <- covariance
+  estimates
+}
+
+test_that("as.data.frame() renames the estimates into the tidier columns", {
   estimates <- binary_estimates()
   res <- ipw_result(estimates)
 
-  expect_identical(as.data.frame(res), estimates)
-})
+  df <- as.data.frame(res)
 
-test_that("as.data.frame() returns a categorical estimates frame unchanged", {
-  estimates <- categorical_estimates()
-  res <- ipw_result(estimates)
-
-  expect_identical(as.data.frame(res), estimates)
-})
-
-test_that("as.data.frame() returns the same frame in either mode", {
-  # The mode says which surface `print()` and the accessors report. The frame
-  # is the estimates the result stores, which both readings hold, so flipping a
-  # result to read its coefficients does not change what `as.data.frame()`
-  # means. A caller who does not want the effects frame asks the outcome model
-  # for its own.
-  estimates <- binary_estimates()
-  marginal <- ipw_result(estimates)
-  conditional <- as_conditional(marginal)
-
-  expect_identical(conditional$effects, "conditional")
-  expect_identical(as.data.frame(conditional), estimates)
-  expect_identical(as.data.frame(conditional), as.data.frame(marginal))
+  expect_s3_class(df, "data.frame", exact = TRUE)
   expect_identical(
-    as.data.frame(conditional, exponentiate = TRUE),
-    as.data.frame(marginal, exponentiate = TRUE)
+    names(df),
+    c("term", "estimate", "std.error", "statistic", "p.value")
+  )
+
+  # The label of a row is its term, and the label is what the frame's `effect`
+  # column holds. The comparison a categorical result reports is a column of its
+  # own rather than part of this one.
+  expect_type(df$term, "character")
+  expect_identical(df$term, c("rd", "log(rr)", "log(or)"))
+
+  # Renamed and selected, not recomputed. The statistic is the frame's `z` and
+  # the p-value is the frame's own, so a result reporting a statistic that is
+  # not the estimate over its standard error still reports that statistic here.
+  expect_identical(df$estimate, estimates$estimate)
+  expect_identical(df$std.error, estimates$std.err)
+  expect_identical(df$statistic, estimates$z)
+  expect_identical(df$p.value, estimates$p.value)
+
+  # The storage names are gone rather than kept alongside. A table carrying both
+  # spellings of one quantity would let a caller read the same column twice
+  # under two names and would not stack with a tidier's output.
+  expect_false(
+    any(
+      c("effect", "std.err", "z", "ci.lower", "ci.upper", "conf.level") %in%
+        names(df)
+    )
   )
 })
 
-test_that("as.data.frame() passes row.names through", {
-  res <- ipw_result(binary_estimates())
+test_that("as.data.frame() puts comparison after term for a categorical result", {
+  # A categorical exposure reports each effect measure once per contrast, so the
+  # term alone names several rows the same thing. The column naming the contrast
+  # follows the term it qualifies rather than sitting among the numbers.
+  estimates <- categorical_estimates()
+  res <- ipw_result(estimates)
 
-  df <- as.data.frame(res, row.names = c("first", "second", "third"))
+  df <- as.data.frame(res)
 
-  expect_identical(rownames(df), c("first", "second", "third"))
+  expect_identical(
+    names(df),
+    c("term", "comparison", "estimate", "std.error", "statistic", "p.value")
+  )
+  expect_identical(df$term, rep(c("rd", "log(rr)", "log(or)"), times = 2))
+  expect_identical(df$comparison, estimates$comparison)
+  expect_identical(df$estimate, estimates$estimate)
+  expect_identical(df$std.error, estimates$std.err)
+})
+
+test_that("as.data.frame() omits comparison when the result reports none", {
+  # A binary or continuous exposure has one contrast, so there is nothing for a
+  # comparison column to say. It is absent rather than present and constant: a
+  # column of one repeated value would stack with a categorical result's table
+  # and read as a contrast that was named.
+  df <- as.data.frame(ipw_result(continuous_estimates()))
+
+  expect_identical(
+    names(df),
+    c("term", "estimate", "std.error", "statistic", "p.value")
+  )
+  expect_identical(nrow(df), 1L)
+  expect_identical(df$term, "diff")
+  expect_identical(df$estimate, continuous_estimates()$estimate)
+})
+
+test_that("as.data.frame() reports no interval and no level by default", {
+  # The bounds are opt-in, and the level is an argument rather than a column.
+  # A `conf.level` column would repeat one number down every row and would be
+  # read as a column of the table rather than as the level the two bounds beside
+  # it were built at.
+  df <- as.data.frame(ipw_result(binary_estimates()))
+
+  expect_false(any(c("conf.low", "conf.high", "conf.level") %in% names(df)))
+})
+
+test_that("as.data.frame(conf.int = TRUE) appends the bounds last", {
+  estimates <- binary_estimates()
+  res <- ipw_result(estimates)
+
+  df <- as.data.frame(res, conf.int = TRUE)
+
+  expect_identical(
+    names(df),
+    c(
+      "term",
+      "estimate",
+      "std.error",
+      "statistic",
+      "p.value",
+      "conf.low",
+      "conf.high"
+    )
+  )
+
+  # The level the bounds were built at is not a column of the table.
+  expect_false("conf.level" %in% names(df))
+})
+
+test_that("as.data.frame(conf.int = TRUE) keeps comparison after term", {
+  # The bounds go on the end, so the categorical table adds them after the same
+  # five columns the binary one has and leaves the contrast where it was.
+  df <- as.data.frame(ipw_result(categorical_estimates()), conf.int = TRUE)
+
+  expect_identical(
+    names(df),
+    c(
+      "term",
+      "comparison",
+      "estimate",
+      "std.error",
+      "statistic",
+      "p.value",
+      "conf.low",
+      "conf.high"
+    )
+  )
+  expect_identical(df$comparison, categorical_estimates()$comparison)
+})
+
+test_that("as.data.frame(conf.int = TRUE) returns the stored bounds", {
+  # At the level the frame stores, the frame's own bounds come back. They need
+  # not be the normal pair, and the fixture is discriminating on that point: its
+  # bounds are rounded to six places, so recomputing them from the estimate and
+  # the standard error gives numbers that agree to the eye and differ in the
+  # digits an assertion reads.
+  estimates <- binary_estimates()
+  res <- ipw_result(estimates)
+
+  df <- as.data.frame(res, conf.int = TRUE, conf.level = 0.95)
+
+  expect_identical(df$conf.low, estimates$ci.lower)
+  expect_identical(df$conf.high, estimates$ci.upper)
+
+  recomputed <- normal_bounds(estimates, 0.95)
+  expect_false(any(df$conf.low == recomputed$lower))
+  expect_false(any(df$conf.high == recomputed$upper))
+})
+
+test_that("as.data.frame(conf.int = TRUE) recomputes at another level", {
+  # A level the frame does not store has no bounds to return, so the normal
+  # approximation is built from the estimate and its standard error.
+  estimates <- binary_estimates()
+  res <- ipw_result(estimates)
+
+  df <- as.data.frame(res, conf.int = TRUE, conf.level = 0.9)
+
+  expected <- normal_bounds(estimates, 0.9)
+  expect_identical(df$conf.low, expected$lower)
+  expect_identical(df$conf.high, expected$upper)
+
+  # The stored bounds describe the level the frame stores, and reporting them
+  # under another one would label a 95% interval as a 90% one.
+  expect_false(any(df$conf.low == estimates$ci.lower))
+  expect_false(any(df$conf.high == estimates$ci.upper))
+
+  # The rest of the table is what it is without an interval, so asking for one
+  # changes nothing but the two columns it adds.
+  expect_identical(
+    df[names(as.data.frame(res))],
+    as.data.frame(res)
+  )
+})
+
+test_that("as.data.frame(conf.int = TRUE) recomputes every row when the stored levels differ", {
+  # The stored level is a property of the frame rather than of a row: the bounds
+  # come back as they stand only when every row was reported at the level asked
+  # for. A frame whose rows disagree has no one level to return bounds for, and
+  # a table mixing stored bounds with recomputed ones would report two intervals
+  # under one column heading.
+  estimates <- mixed_level_estimates()
+  res <- ipw_result(estimates)
+
+  df <- as.data.frame(res, conf.int = TRUE, conf.level = 0.95)
+
+  expected <- normal_bounds(estimates, 0.95)
+  expect_identical(df$conf.low, expected$lower)
+  expect_identical(df$conf.high, expected$upper)
+
+  # The two rows whose stored level is the one asked for are recomputed with the
+  # rest, which is what makes this a claim about the frame and not about a row.
+  expect_false(any(df$conf.low[c(1, 3)] == estimates$ci.lower[c(1, 3)]))
+})
+
+test_that("as.data.frame(conf.int = TRUE) recomputes when the frame stores no level", {
+  # A frame with no `conf.level` column says nothing about what its bounds
+  # describe, so there is no level for the stored pair to be returned at and the
+  # normal approximation is built for whatever was asked for.
+  estimates <- binary_estimates()
+  estimates$conf.level <- NULL
+  res <- ipw_result(estimates)
+
+  df <- as.data.frame(res, conf.int = TRUE, conf.level = 0.95)
+
+  expected <- normal_bounds(estimates, 0.95)
+  expect_identical(df$conf.low, expected$lower)
+  expect_identical(df$conf.high, expected$upper)
 })
 
 test_that("as.data.frame(exponentiate = TRUE) moves only the ratio rows", {
@@ -1071,72 +1312,407 @@ test_that("as.data.frame(exponentiate = TRUE) moves only the ratio rows", {
 
   df <- as.data.frame(res, exponentiate = TRUE)
 
-  # The two log rows are relabelled and their point estimate and interval move
-  # to the natural scale. The risk difference was never on the log scale, so it
-  # is untouched.
-  expect_identical(df$effect, c("rd", "rr", "or"))
+  # The two log rows move to the natural scale and their terms move with them,
+  # since the label names the scale. The risk difference was never on the log
+  # scale, so it is untouched.
+  expect_identical(df$term, c("rd", "rr", "or"))
   expect_identical(
     df$estimate,
     c(estimates$estimate[1], exp(estimates$estimate[2:3]))
   )
+
+  # Inference stays on the log scale, where it is done. Exponentiating a
+  # standard error would state a quantity nobody asked for, and the statistic
+  # and the p-value describe the log scale estimate.
+  expect_identical(df$std.error, estimates$std.err)
+  expect_identical(df$statistic, estimates$z)
+  expect_identical(df$p.value, estimates$p.value)
+
+  # The columns are the ones the table always has: exponentiating changes what
+  # the numbers mean and not which columns report them.
+  expect_identical(names(df), names(as.data.frame(res)))
+})
+
+test_that("as.data.frame(exponentiate = TRUE) moves the bounds it reports", {
+  estimates <- binary_estimates()
+  res <- ipw_result(estimates)
+
+  stored <- as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
+
   expect_identical(
-    df$ci.lower,
+    stored$conf.low,
     c(estimates$ci.lower[1], exp(estimates$ci.lower[2:3]))
   )
   expect_identical(
-    df$ci.upper,
+    stored$conf.high,
     c(estimates$ci.upper[1], exp(estimates$ci.upper[2:3]))
   )
 
-  # Inference stays on the log scale, where it is done. Exponentiating a
-  # standard error would state a quantity nobody asked for.
-  expect_identical(df$std.err, estimates$std.err)
-  expect_identical(df$z, estimates$z)
-  expect_identical(df$p.value, estimates$p.value)
-  expect_identical(df$conf.level, estimates$conf.level)
+  # The interval is settled before the scale is: the bounds a level the frame
+  # does not store gets are built on the log scale, where the standard error
+  # lives, and exponentiated afterwards. Building them from the exponentiated
+  # estimate instead would add a half width on the log scale to a number on the
+  # natural one.
+  recomputed <- as.data.frame(
+    res,
+    conf.int = TRUE,
+    conf.level = 0.9,
+    exponentiate = TRUE
+  )
+  expected <- normal_bounds(estimates, 0.9)
 
-  expect_identical(names(df), names(estimates))
+  expect_identical(
+    recomputed$conf.low,
+    c(expected$lower[1], exp(expected$lower[2:3]))
+  )
+  expect_identical(
+    recomputed$conf.high,
+    c(expected$upper[1], exp(expected$upper[2:3]))
+  )
 })
 
 test_that("as.data.frame(exponentiate = TRUE) relabels every comparison", {
   estimates <- categorical_estimates()
   res <- ipw_result(estimates)
 
-  df <- as.data.frame(res, exponentiate = TRUE)
+  df <- as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
 
-  expect_identical(df$effect, rep(c("rd", "rr", "or"), times = 2))
+  expect_identical(df$term, rep(c("rd", "rr", "or"), times = 2))
+
   # The comparison labels identify the contrast, not the scale, so they survive
-  # untouched and stay in place after `effect`.
+  # untouched and stay in place after the term.
   expect_identical(df$comparison, estimates$comparison)
-  expect_identical(names(df), names(estimates))
+  expect_identical(names(df)[1:2], c("term", "comparison"))
 
-  ratios <- df$effect %in% c("rr", "or")
+  ratios <- df$term %in% c("rr", "or")
   expect_identical(df$estimate[ratios], exp(estimates$estimate[ratios]))
-  expect_identical(df$ci.lower[ratios], exp(estimates$ci.lower[ratios]))
-  expect_identical(df$ci.upper[ratios], exp(estimates$ci.upper[ratios]))
-  expect_identical(df$std.err, estimates$std.err)
+  expect_identical(df$conf.low[ratios], exp(estimates$ci.lower[ratios]))
+  expect_identical(df$conf.high[ratios], exp(estimates$ci.upper[ratios]))
+  expect_identical(df$std.error, estimates$std.err)
 })
 
 test_that("as.data.frame(exponentiate = TRUE) matches the log labels exactly", {
   # The rows to move are the ones labelled `log(rr)` and `log(or)`, not every
-  # row whose label happens to contain `rr` or `or`. An already exponentiated
-  # frame is the fixture that separates the two: its labels are `rr` and `or`,
-  # so a substring match would exponentiate it a second time while an equality
-  # match leaves it alone.
-  once <- as.data.frame(ipw_result(binary_estimates()), exponentiate = TRUE)
-  twice <- as.data.frame(ipw_result(once), exponentiate = TRUE)
+  # row whose label happens to contain `rr` or `or`. A frame whose ratios are
+  # already on the natural scale is the fixture that separates the two: its
+  # labels are `rr` and `or`, so a substring match would exponentiate it a
+  # second time while an equality match leaves it alone.
+  res <- ipw_result(exponentiated_estimates())
 
-  expect_identical(twice, once)
+  df <- as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
+
+  expect_identical(df$term, c("rd", "rr", "or"))
+  expect_identical(df, as.data.frame(res, conf.int = TRUE))
 })
 
 test_that("as.data.frame(exponentiate = TRUE) is a no-op with no ratio rows", {
   # A continuous outcome reports a difference in means and nothing else, so
-  # asking for the natural scale has to leave the frame alone rather than error
+  # asking for the natural scale has to leave the table alone rather than error
   # on the absent rows.
-  estimates <- continuous_estimates()
+  res <- ipw_result(continuous_estimates())
+
+  df <- as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
+
+  expect_identical(df$term, "diff")
+  expect_identical(df, as.data.frame(res, conf.int = TRUE))
+})
+
+test_that("as.data.frame() carries the covariance the result stores", {
+  # The covariance belongs to the estimates rather than to a column of them, so
+  # it travels on the table as the attribute the `new_ipw()` contract names it
+  # under. A caller who reads the table and then asks it for the covariance of
+  # the rows it holds gets the matrix the fitting package attached.
+  covariance <- binary_vcov()
+  estimates <- with_vcov(binary_estimates(), covariance)
   res <- ipw_result(estimates)
 
-  expect_identical(as.data.frame(res, exponentiate = TRUE), estimates)
+  df <- as.data.frame(res)
+
+  expect_identical(
+    names(df),
+    c("term", "estimate", "std.error", "statistic", "p.value")
+  )
+  expect_identical(attr(df, "ipw_vcov", exact = TRUE), covariance)
+
+  # Asking for the interval adds two columns and says nothing about the
+  # covariance of the rows.
+  expect_identical(
+    attr(as.data.frame(res, conf.int = TRUE), "ipw_vcov", exact = TRUE),
+    covariance
+  )
+
+  # A result whose method attached none reports none rather than a matrix built
+  # from the standard errors, which would report the effects as uncorrelated.
+  expect_null(attr(as.data.frame(ipw_result(binary_estimates())), "ipw_vcov"))
+})
+
+test_that("as.data.frame(exponentiate = TRUE) drops the covariance", {
+  # The covariance describes the estimates on the scale they were estimated on.
+  # Exponentiating two of the rows leaves it describing neither the table it is
+  # attached to nor anything else, and a caller has no way to tell such a matrix
+  # from one that still matches. There is no correct matrix to put in its place
+  # either, since the delta method answer is not what the fitting package
+  # computed, so it is dropped.
+  covariance <- binary_vcov()
+  res <- ipw_result(with_vcov(binary_estimates(), covariance))
+
+  expect_null(attr(as.data.frame(res, exponentiate = TRUE), "ipw_vcov"))
+  expect_null(
+    attr(
+      as.data.frame(res, conf.int = TRUE, exponentiate = TRUE),
+      "ipw_vcov"
+    )
+  )
+
+  # The result is the caller's own and reading a table off it does not change
+  # it, whichever scale the table was asked for.
+  expect_identical(attr(res$estimates, "ipw_vcov", exact = TRUE), covariance)
+})
+
+test_that("as.data.frame() returns the same table in either mode", {
+  # The mode says which surface `print()` and the accessors report. The table is
+  # built from the estimates the result stores, which both readings hold, so
+  # flipping a result to read its coefficients does not change what
+  # `as.data.frame()` means. A caller who does not want the effects table asks
+  # the outcome model for its own.
+  marginal <- ipw_result(binary_estimates())
+  conditional <- as_conditional(marginal)
+
+  expect_identical(conditional$effects, "conditional")
+  expect_identical(as.data.frame(conditional), as.data.frame(marginal))
+  expect_identical(
+    as.data.frame(conditional, conf.int = TRUE, conf.level = 0.9),
+    as.data.frame(marginal, conf.int = TRUE, conf.level = 0.9)
+  )
+  expect_identical(
+    as.data.frame(conditional, exponentiate = TRUE),
+    as.data.frame(marginal, exponentiate = TRUE)
+  )
+})
+
+test_that("as.data.frame() returns the same table for a result with no mode", {
+  # A result stored before the field existed carries six fields. The table is
+  # the estimates it holds either way, so it is the seven-field result's table
+  # exactly rather than a third thing.
+  legacy <- legacy_result()
+
+  expect_length(legacy, 6L)
+  expect_null(legacy$effects)
+
+  marginal <- ipw_result(binary_estimates())
+
+  expect_identical(as.data.frame(legacy), as.data.frame(marginal))
+  expect_identical(
+    as.data.frame(legacy, conf.int = TRUE, conf.level = 0.9),
+    as.data.frame(marginal, conf.int = TRUE, conf.level = 0.9)
+  )
+  expect_identical(
+    as.data.frame(legacy, conf.int = TRUE, exponentiate = TRUE),
+    as.data.frame(marginal, conf.int = TRUE, exponentiate = TRUE)
+  )
+})
+
+test_that("as.data.frame() sets the row names from row.names", {
+  res <- ipw_result(binary_estimates())
+
+  df <- as.data.frame(res, row.names = c("first", "second", "third"))
+
+  expect_identical(rownames(df), c("first", "second", "third"))
+  expect_identical(
+    df[names(as.data.frame(res))],
+    `rownames<-`(as.data.frame(res), c("first", "second", "third"))
+  )
+})
+
+test_that("as.data.frame() takes row.names and optional positionally", {
+  # The generic in \pkg{base} takes `row.names` and `optional` in that order
+  # before its dots, and this method matches it, so a positional call written
+  # against the generic means here what it means there. The three arguments this
+  # method adds sit after the dots and are named at every call site, which is
+  # what keeps a second positional argument from being read as one of them.
+  res <- ipw_result(binary_estimates())
+
+  expect_identical(
+    as.data.frame(res, c("first", "second", "third")),
+    as.data.frame(res, row.names = c("first", "second", "third"))
+  )
+
+  # Every column this method builds is named, so there is nothing for `optional`
+  # to make optional. It is accepted for the generic's sake and changes nothing.
+  expect_identical(as.data.frame(res, NULL, TRUE), as.data.frame(res))
+  expect_identical(
+    as.data.frame(res, optional = TRUE, conf.int = TRUE),
+    as.data.frame(res, conf.int = TRUE)
+  )
+})
+
+test_that("as.data.frame() ignores further arguments", {
+  # The dots are the generic's, and this method reads nothing out of them. An
+  # argument it does not know is neither an error nor a column of the table.
+  res <- ipw_result(binary_estimates())
+
+  expect_identical(
+    as.data.frame(res, cg_unused = "ignored"),
+    as.data.frame(res)
+  )
+})
+
+test_that("as.data.frame() refuses a conf.level that is not a probability", {
+  res <- ipw_result(binary_estimates())
+
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = 1),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = 1),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  # The bounds of the open interval are refused along with everything outside
+  # it: an interval at level 0 or 1 is not one the normal approximation gives a
+  # finite pair of numbers for.
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = 0),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = -0.1),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = 95),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+
+  # A missing level names no interval, and a vector of levels names several
+  # where the table reports one.
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = NA_real_),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = c(0.9, 0.95)),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = numeric()),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = NULL),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+
+  # A level is a number. A string that reads as one is not, and neither is the
+  # logical a comparison would produce.
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = "0.95"),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = TRUE, conf.level = TRUE),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+})
+
+test_that("as.data.frame() checks conf.level with no interval asked for", {
+  # The argument means the same thing whether or not the bounds are reported,
+  # and a call that names a level the method cannot build an interval at has
+  # said something wrong. Checking only on the branch that reads it would accept
+  # the call now and refuse the same value the moment `conf.int` was turned on.
+  res <- ipw_result(binary_estimates())
+
+  expect_error(
+    as.data.frame(res, conf.level = 95),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = FALSE, conf.level = NA_real_),
+    class = "causalgenerics_invalid_argument_conf.level"
+  )
+})
+
+test_that("as.data.frame() refuses a conf.int that is not a flag", {
+  res <- ipw_result(binary_estimates())
+
+  expect_error(
+    as.data.frame(res, conf.int = NA),
+    class = "causalgenerics_invalid_argument_conf.int"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = NA),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = c(TRUE, FALSE)),
+    class = "causalgenerics_invalid_argument_conf.int"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = logical()),
+    class = "causalgenerics_invalid_argument_conf.int"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = NULL),
+    class = "causalgenerics_invalid_argument_conf.int"
+  )
+
+  # A number and a string are not flags. Both would take the true branch of a
+  # bare `if`, so a method that did not check them would report an interval for
+  # `conf.int = "no"`.
+  expect_error(
+    as.data.frame(res, conf.int = 1),
+    class = "causalgenerics_invalid_argument_conf.int"
+  )
+  expect_error(
+    as.data.frame(res, conf.int = "TRUE"),
+    class = "causalgenerics_invalid_argument_conf.int"
+  )
+})
+
+test_that("as.data.frame() refuses an exponentiate that is not a flag", {
+  res <- ipw_result(binary_estimates())
+
+  expect_error(
+    as.data.frame(res, exponentiate = NA),
+    class = "causalgenerics_invalid_argument_exponentiate"
+  )
+  expect_error(
+    as.data.frame(res, exponentiate = NA),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    as.data.frame(res, exponentiate = c(TRUE, TRUE)),
+    class = "causalgenerics_invalid_argument_exponentiate"
+  )
+  expect_error(
+    as.data.frame(res, exponentiate = NULL),
+    class = "causalgenerics_invalid_argument_exponentiate"
+  )
+  expect_error(
+    as.data.frame(res, exponentiate = 1),
+    class = "causalgenerics_invalid_argument_exponentiate"
+  )
+  expect_error(
+    as.data.frame(res, exponentiate = "yes"),
+    class = "causalgenerics_invalid_argument_exponentiate"
+  )
+})
+
+test_that("the as.data.frame() argument errors state the contract", {
+  # One value per argument. The message names the argument and the contract it
+  # broke rather than the value that broke it, so a second value of the same
+  # argument would record the same sentence again.
+  #
+  # Each value below is one the method reports on rather than one base R trips
+  # over on its way past. A logical argument that reaches an `if` unchecked
+  # errors from the `if` itself, and a snapshot of that message would record the
+  # absence of the check as though it were the check.
+  res <- ipw_result(binary_estimates())
+
+  expect_snapshot(error = TRUE, as.data.frame(res, conf.level = 95))
+  expect_snapshot(error = TRUE, as.data.frame(res, conf.int = NA))
+  expect_snapshot(error = TRUE, as.data.frame(res, exponentiate = 1))
 })
 
 # ---- registration and export -------------------------------------------------

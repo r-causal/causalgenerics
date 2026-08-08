@@ -24,5 +24,7 @@ reference:
   - new_ipw
   - new_ipw_model
   - ipw-accessors
+  - pool_ipw
+  - ipw-pooled-methods
   - new_causal_wts
   - causal_wts_ptype2

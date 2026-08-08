@@ -8,6 +8,8 @@
 [![R-CMD-check](https://github.com/r-causal/causalgenerics/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/r-causal/causalgenerics/actions/workflows/R-CMD-check.yaml)
 [![R-universe
 version](https://r-causal.r-universe.dev/causalgenerics/badges/version)](https://r-causal.r-universe.dev/causalgenerics)
+[![CRAN
+status](https://www.r-pkg.org/badges/version/causalgenerics)](https://CRAN.R-project.org/package=causalgenerics)
 <!-- badges: end -->
 
 causalgenerics is the shared generics package for the r-causal

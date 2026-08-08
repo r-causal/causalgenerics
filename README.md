@@ -6,6 +6,8 @@
 <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/r-causal/causalgenerics/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/r-causal/causalgenerics/actions/workflows/R-CMD-check.yaml)
+[![R-universe
+version](https://r-causal.r-universe.dev/causalgenerics/badges/version)](https://r-causal.r-universe.dev/causalgenerics)
 <!-- badges: end -->
 
 causalgenerics is the shared generics package for the r-causal
@@ -30,8 +32,18 @@ You can install the released version of causalgenerics from
 install.packages("causalgenerics")
 ```
 
-You can install the development version from
-[GitHub](https://github.com/r-causal/causalgenerics) with:
+You can install the development version of causalgenerics from
+[r-causal.r-universe.dev](https://r-causal.r-universe.dev/) with:
+
+``` r
+install.packages(
+  "causalgenerics",
+  repos = c("https://r-causal.r-universe.dev", getOption("repos"))
+)
+```
+
+You can also install the development version of causalgenerics from
+source from [GitHub](https://github.com/r-causal/causalgenerics) with:
 
 ``` r
 # install.packages("pak")

@@ -17,6 +17,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/r-causal/causalgenerics/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/r-causal/causalgenerics/actions/workflows/R-CMD-check.yaml)
+[![R-universe version](https://r-causal.r-universe.dev/causalgenerics/badges/version)](https://r-causal.r-universe.dev/causalgenerics)
 <!-- badges: end -->
 
 causalgenerics is the shared generics package for the r-causal ecosystem. It provides a near-zero-dependency home for the S3 generics that packages such as propensity, halfmoon, positively, and balancing register methods on. Owning the generic definitions in one place means that attaching several r-causal packages at once produces no masking: each package contributes methods to a common generic instead of redefining the function.
@@ -31,7 +32,16 @@ You can install the released version of causalgenerics from [CRAN](https://cran.
 install.packages("causalgenerics")
 ```
 
-You can install the development version from [GitHub](https://github.com/r-causal/causalgenerics) with:
+You can install the development version of causalgenerics from [r-causal.r-universe.dev](https://r-causal.r-universe.dev/) with:
+
+``` r
+install.packages(
+  "causalgenerics",
+  repos = c("https://r-causal.r-universe.dev", getOption("repos"))
+)
+```
+
+You can also install the development version of causalgenerics from source from [GitHub](https://github.com/r-causal/causalgenerics) with:
 
 ``` r
 # install.packages("pak")

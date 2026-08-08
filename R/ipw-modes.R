@@ -94,6 +94,11 @@ as_marginal.ipw <- function(x, ...) {
 }
 
 #' @export
+as_marginal.ipw_pooled <- function(x, ...) {
+  flip_ipw_pooled(x, "marginal")
+}
+
+#' @export
 as_marginal.default <- function(x, ...) {
   stop_no_method("as_marginal", x)
 }
@@ -111,8 +116,72 @@ as_conditional.ipw <- function(x, ...) {
 }
 
 #' @export
+as_conditional.ipw_pooled <- function(x, ...) {
+  flip_ipw_pooled(x, "conditional")
+}
+
+#' @export
 as_conditional.default <- function(x, ...) {
   stop_no_method("as_conditional", x)
+}
+
+#' Move a pooled result between the two readings it carries
+#'
+#' [pool_ipw()] pools both readings of one set of results and stores the one the
+#' call did not name under `alternate`, so a pooled result is moved between them
+#' by swapping the three fields that differ rather than by setting one. The
+#' shared fields are properties of the analyses rather than of a reading of
+#' them, and they stay where they are.
+#'
+#' The swap is by assignment to fields the result already has, which is what
+#' makes the round trip the object that went in: the field order is the
+#' contract, and the reading that was active goes back under `alternate` in the
+#' shape it was recorded in. Asking for the reading the result already presents
+#' is answered with the result itself, so the generics are idempotent on a
+#' pooled result and on one stored before both readings were kept alike.
+#'
+#' Unlike the methods on `ipw`, these cannot be total. A reading that could not
+#' be pooled is recorded as unavailable, and a result stored before both
+#' readings were kept records nothing at all; both are refused here rather than
+#' answered with a surface the result does not hold. The recorded reason is the
+#' refusal the same request raised at pooling time, so it is passed on as it
+#' stands.
+#'
+#' @param x An `ipw_pooled` object.
+#' @param effects The reading to present.
+#' @param call The call to report a missing reading against, which is the
+#'   generic's or the accessor's rather than this helper's.
+#'
+#' @return `x` presenting the reading asked for.
+#'
+#' @noRd
+flip_ipw_pooled <- function(x, effects, call = sys.call(-1)) {
+  current <- ipw_effects(x, call = call)
+  if (current == effects) {
+    return(x)
+  }
+
+  alternate <- x$alternate
+  if (is.null(alternate)) {
+    stop_pool_missing_surface(effects, reason = NULL, call = call)
+  }
+  if (is.null(alternate$estimates)) {
+    stop_pool_missing_surface(effects, alternate$reason, call = call)
+  }
+
+  # Read out before either side is written, since the two halves of a swap
+  # cannot both be assigned first.
+  stashed <- list(
+    effects = current,
+    estimates = x$estimates,
+    pooling = x$pooling
+  )
+
+  x$effects <- alternate$effects
+  x$estimates <- alternate$estimates
+  x$pooling <- alternate$pooling
+  x$alternate <- stashed
+  x
 }
 
 #' The presentation mode a result records

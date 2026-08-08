@@ -10,6 +10,7 @@
 #' * `nobs()` returns the smallest number of observations any pooled analysis
 #'   was estimated from.
 #' * `as.data.frame()` reports the pooled effects as a tidier-shaped table.
+#' * `estimand()` returns the estimand the pooled analyses targeted.
 #'
 #' @details
 #' These live here for the reason the `ipw` methods do. Two packages each
@@ -102,6 +103,12 @@
 #'   default, uses the level the result records.
 #' @param exponentiate If `TRUE`, move the estimates that are on a log scale to
 #'   their natural scale, as the section above describes. Default is `FALSE`.
+#' @param effects The reading to report, either `"marginal"` or
+#'   `"conditional"`. `NULL`, the default, reports the reading the result
+#'   records; any other value overrides it for the one call and leaves the
+#'   result as it is. A reading the pooling could not compute is refused with an
+#'   error of class `causalgenerics_pool_missing_surface`, which is where
+#'   [as_marginal()] and [as_conditional()] refuse it.
 #' @param ... Further arguments. These methods ignore them.
 #'
 #' @return
@@ -130,6 +137,9 @@
 #' `statistic`, `df`, and `p.value`, with `conf.low` and `conf.high` appended
 #' when they are asked for. The pooled covariance travels on it under the
 #' `ipw_vcov` attribute unless the table was exponentiated.
+#'
+#' `estimand()` returns the estimand the pooled results agreed on, which is the
+#' one the weights their estimates were computed under targeted.
 #'
 #' @seealso [pool_ipw()], which produces these results, and [new_ipw()] for the
 #'   unpooled result they are pooled from.
@@ -241,7 +251,9 @@ print.ipw_pooled <- function(x, ...) {
 #' @rdname ipw-pooled-methods
 #' @export
 #' @importFrom stats coef setNames
-coef.ipw_pooled <- function(object, ...) {
+coef.ipw_pooled <- function(object, ..., effects = NULL) {
+  object <- pooled_surface(object, effects)
+
   # The same labels the unpooled result names its estimates with, read through
   # the same helper, so a caller who pools a set of results gets the names they
   # were reading before they pooled them. In the conditional reading the frame's
@@ -256,7 +268,9 @@ coef.ipw_pooled <- function(object, ...) {
 #' @rdname ipw-pooled-methods
 #' @export
 #' @importFrom stats vcov
-vcov.ipw_pooled <- function(object, ...) {
+vcov.ipw_pooled <- function(object, ..., effects = NULL) {
+  object <- pooled_surface(object, effects)
+
   # `pool_ipw()` attaches no covariance when any of the results it pooled
   # carried none, since the average of the within-imputation covariances needs
   # one from every imputation. There is nothing to fall back on: the standard
@@ -273,7 +287,17 @@ vcov.ipw_pooled <- function(object, ...) {
 #' @rdname ipw-pooled-methods
 #' @export
 #' @importFrom stats confint qt
-confint.ipw_pooled <- function(object, parm, level = 0.95, ...) {
+confint.ipw_pooled <- function(
+  object,
+  parm,
+  level = 0.95,
+  ...,
+  effects = NULL
+) {
+  # Before `parm` is matched against anything, so the rows are selected from the
+  # reading that was asked for rather than from the one the result records.
+  object <- pooled_surface(object, effects)
+
   estimates <- object$estimates
   labels <- ipw_effect_labels(estimates)
   rows <- if (missing(parm)) {
@@ -327,7 +351,8 @@ as.data.frame.ipw_pooled <- function(
   ...,
   conf.int = FALSE,
   conf.level = NULL,
-  exponentiate = FALSE
+  exponentiate = FALSE,
+  effects = NULL
 ) {
   # Checked on every call rather than on the branch that reads them, for the
   # reason `as.data.frame()` on an unpooled result checks them all: a level no
@@ -337,6 +362,11 @@ as.data.frame.ipw_pooled <- function(
     check_conf_level(conf.level)
   }
   check_flag(exponentiate, "exponentiate")
+
+  # The reading is settled before anything is read off the result, so the gate
+  # below and every column built after it belong to the reading that was asked
+  # for. Once the result presents that reading, the reading is what it records.
+  x <- pooled_surface(x, effects)
 
   estimates <- x$estimates
   effects <- ipw_effects(x)
@@ -428,6 +458,53 @@ as.data.frame.ipw_pooled <- function(
   }
 
   df
+}
+
+#' @rdname ipw-pooled-methods
+#' @export
+estimand.ipw_pooled <- function(x, ...) {
+  # The field rather than a computation, the way `estimand.ipw()` reads the
+  # unpooled one. The estimand is one of the things the results had to agree on
+  # before they could be pooled, so a pooled result records exactly one; it
+  # describes the analyses rather than a reading of them, which is why this
+  # method takes no `effects` argument and answers the same way either way.
+  #
+  # A method of its own rather than the unpooled one registered a second time,
+  # since `ipw_pooled` does not inherit from `ipw` and a shared method would
+  # carry a later change to the unpooled reading into the pooled result with
+  # nothing to say so.
+  x$estimand
+}
+
+#' The reading a pooled accessor reports
+#'
+#' An accessor that takes an `effects` argument reports the reading the caller
+#' names, and the reading the result records when the caller names none. A
+#' pooled result holds both readings, so the accessor reads the reading it was
+#' asked for off the result the flip gives rather than reaching into the
+#' `alternate` field itself.
+#'
+#' Routing it through the flip is what keeps one answer to the question of what
+#' a reading a pooling could not compute does: the flip raises the recorded
+#' reason, and every accessor raises it in the same words without repeating the
+#' branch that decides it. The flip answers a request for the reading the result
+#' already presents with the result itself, so declining to name one costs
+#' nothing and reports what it reported before the argument existed.
+#'
+#' @param object An `ipw_pooled` object.
+#' @param effects The `effects` argument as the caller supplied it, or `NULL`.
+#' @param call The call to report the error against, which is the accessor's
+#'   rather than this helper's.
+#'
+#' @return An `ipw_pooled` object presenting the reading asked for.
+#'
+#' @noRd
+pooled_surface <- function(object, effects, call = sys.call(-1)) {
+  flip_ipw_pooled(
+    object,
+    resolve_ipw_effects(object, effects, call = call),
+    call = call
+  )
 }
 
 #' The confidence bounds `as.data.frame()` reports for a pooled result

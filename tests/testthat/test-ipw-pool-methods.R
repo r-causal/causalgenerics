@@ -1609,21 +1609,26 @@ test_that("the pooled result does not inherit the unpooled methods", {
   expect_null(res$wt_mod)
   expect_null(res$fit)
 
-  # Each generic resolves to a method of its own for the pooled class rather
-  # than to the unpooled one. The non-inheritance above is what makes that
-  # necessary, and this is what says it was done: a pooled frame carries every
-  # column `confint.ipw()` reads, so that method would answer for one without
-  # erroring, with normal bounds where the pooled inference calls for t. The
-  # mode generics are the same case from the other side: `as_conditional.ipw()`
-  # sets a field, and a pooled result whose reading was changed that way would
-  # report the frames of the reading it no longer names.
+  # Each generic below resolves to a method of its own for the pooled class
+  # rather than to the unpooled one. The non-inheritance above is what makes
+  # that necessary, and this is what says it was done: a pooled frame carries
+  # every column `confint.ipw()` reads, so that method would answer for one
+  # without erroring, with normal bounds where the pooled inference calls for t.
+  # The mode generics are the same case from the other side:
+  # `as_conditional.ipw()` sets a field, and a pooled result whose reading was
+  # changed that way would report the frames of the reading it no longer names.
+  #
+  # `estimand()` is deliberately absent here. Both methods read one field and do
+  # nothing else, so written idiomatically they are the same closure and
+  # `identical()` reports them equal however the registration is arranged. The
+  # assertion would pin that coincidence rather than any property of the pooled
+  # class, and the pooled method's registration is asserted above.
   for (generic in c(
     "print",
     "coef",
     "vcov",
     "confint",
     "nobs",
-    "estimand",
     "as_marginal",
     "as_conditional"
   )) {

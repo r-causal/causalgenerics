@@ -8,15 +8,16 @@
 \alias{confint.ipw_pooled}
 \alias{nobs.ipw_pooled}
 \alias{as.data.frame.ipw_pooled}
+\alias{estimand.ipw_pooled}
 \title{Methods for a pooled inverse probability weighted result}
 \usage{
 \method{print}{ipw_pooled}(x, ...)
 
-\method{coef}{ipw_pooled}(object, ...)
+\method{coef}{ipw_pooled}(object, ..., effects = NULL)
 
-\method{vcov}{ipw_pooled}(object, ...)
+\method{vcov}{ipw_pooled}(object, ..., effects = NULL)
 
-\method{confint}{ipw_pooled}(object, parm, level = 0.95, ...)
+\method{confint}{ipw_pooled}(object, parm, level = 0.95, ..., effects = NULL)
 
 \method{nobs}{ipw_pooled}(object, ...)
 
@@ -27,8 +28,11 @@
   ...,
   conf.int = FALSE,
   conf.level = NULL,
-  exponentiate = FALSE
+  exponentiate = FALSE,
+  effects = NULL
 )
+
+\method{estimand}{ipw_pooled}(x, ...)
 }
 \arguments{
 \item{x}{An \code{ipw_pooled} object.}
@@ -36,6 +40,13 @@
 \item{...}{Further arguments. These methods ignore them.}
 
 \item{object}{An \code{ipw_pooled} object.}
+
+\item{effects}{The reading to report, either \code{"marginal"} or
+\code{"conditional"}. \code{NULL}, the default, reports the reading the result
+records; any other value overrides it for the one call and leaves the
+result as it is. A reading the pooling could not compute is refused with an
+error of class \code{causalgenerics_pool_missing_surface}, which is where
+\code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} refuse it.}
 
 \item{parm}{The rows to report an interval for, given either as the effect
 labels or as their positions. Missing means all of them.}
@@ -85,6 +96,9 @@ of class \code{causalgenerics_invalid_argument}.
 \code{statistic}, \code{df}, and \code{p.value}, with \code{conf.low} and \code{conf.high} appended
 when they are asked for. The pooled covariance travels on it under the
 \code{ipw_vcov} attribute unless the table was exponentiated.
+
+\code{estimand()} returns the estimand the pooled results agreed on, which is the
+one the weights their estimates were computed under targeted.
 }
 \description{
 The methods the class \code{\link[=pool_ipw]{pool_ipw()}} returns carries.
@@ -96,6 +110,7 @@ The methods the class \code{\link[=pool_ipw]{pool_ipw()}} returns carries.
 \item \code{nobs()} returns the smallest number of observations any pooled analysis
 was estimated from.
 \item \code{as.data.frame()} reports the pooled effects as a tidier-shaped table.
+\item \code{estimand()} returns the estimand the pooled analyses targeted.
 }
 }
 \details{

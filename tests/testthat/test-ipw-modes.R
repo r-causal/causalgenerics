@@ -560,6 +560,7 @@ test_that("a pooled result refuses the reading it could not pool", {
     as_conditional(res),
     class = "causalgenerics_pool_missing_surface"
   )
+  expect_snapshot(error = TRUE, as_conditional(res))
 
   # The reading asked for and what stopped it travel on the condition, so a
   # handler reports them without parsing the sentence for them. The reason is
@@ -626,6 +627,7 @@ test_that("a pooled result with no other reading stored refuses its own way", {
     as_conditional(legacy),
     class = "causalgenerics_pool_missing_surface"
   )
+  expect_snapshot(error = TRUE, as_conditional(legacy))
 
   cnd <- tryCatch(as_conditional(legacy), error = identity)
   expect_identical(cnd$effects, "conditional")

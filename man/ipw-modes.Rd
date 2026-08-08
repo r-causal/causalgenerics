@@ -11,17 +11,24 @@ as_marginal(x, ...)
 as_conditional(x, ...)
 }
 \arguments{
-\item{x}{An \code{ipw} object. These generics dispatch on this argument.}
+\item{x}{An \code{ipw} or \code{ipw_pooled} object. These generics dispatch on this
+argument.}
 
 \item{...}{Arguments passed to methods.}
 }
 \value{
-\code{x} with its presentation mode set to the one asked for. The methods
-on \code{ipw} change the \code{effects} field and nothing else, so every other field
-comes back as it went in, the covariance attached to \code{estimates} included.
+\code{x} presenting the reading asked for. The methods on \code{ipw} change the
+\code{effects} field and nothing else, so every other field comes back as it
+went in, the covariance attached to \code{estimates} included. The methods on
+\code{ipw_pooled} exchange \code{estimates}, \code{pooling}, and the recorded mode with the
+reading stored under \code{alternate}, so the reading that was presented is what
+the returned result stores there, and the components shared by both readings
+come back as they went in. A pooled result that does not carry the reading
+asked for raises an error rather than returning one.
 }
 \description{
-The two readings of a result, defined for the class \code{\link[=new_ipw]{new_ipw()}} constructs.
+The two readings of a result, defined for the class \code{\link[=new_ipw]{new_ipw()}} constructs
+and for the pooled results \code{\link[=pool_ipw]{pool_ipw()}} returns.
 \itemize{
 \item \code{as_marginal()} returns the result reporting the causal contrast estimates.
 \item \code{as_conditional()} returns the result presenting the outcome model's
@@ -29,16 +36,16 @@ coefficient surface.
 }
 }
 \details{
-Both surfaces exist on every result, so these generics record which one the
-result presents rather than computing anything. They set the \code{effects} field
-of the \code{\link[=new_ipw]{new_ipw()}} contract and read nothing else, which makes them the
-supported way to move a result between the two readings: a caller writes
-\code{as_conditional(res)} rather than assigning to the field.
+Both surfaces exist on every \code{ipw} result, so on one of those these generics
+record which one the result presents rather than computing anything. They set
+the \code{effects} field of the \code{\link[=new_ipw]{new_ipw()}} contract and read nothing else, which
+makes them the supported way to move a result between the two readings: a
+caller writes \code{as_conditional(res)} rather than assigning to the field.
 
-The methods on \code{ipw} are total. Every result has one of the two modes, so
-asking for either is always answerable: they never error, asking twice says
-what asking once said, and a result that goes out to the other reading and
-back is the result that went in. A result built before the field existed
+The methods on \code{ipw} are total. Every such result has one of the two modes,
+so asking for either is always answerable: they never error, asking twice
+says what asking once said, and a result that goes out to the other reading
+and back is the result that went in. A result built before the field existed
 carries six fields rather than seven and reads as marginal, which is the mode
 every method produced then.
 
@@ -49,6 +56,33 @@ was installed last rather than the contract. There is no marginal or
 conditional reading of an object that is not an IPW result, so the default
 method signals an error rather than inventing one.
 }
+\section{The readings a pooled result carries}{
+\code{\link[=pool_ipw]{pool_ipw()}} pools both readings of one set of results whenever it can
+compute both, and stores the one the call did not name whole, under the
+\code{alternate} component. The methods on \code{ipw_pooled} therefore swap which
+reading the result presents rather than setting a field: the pooled
+estimates, the pooling diagnostics, and the recorded mode move together, and
+the components that describe the pooled analyses rather than a reading of
+them stay where they are.
+
+Where both readings were pooled, the properties above hold. Asking a pooled
+result for the reading it already presents gives that result back, and a
+result taken out to the other reading and back is the result that went in.
+Totality is what these methods cannot keep. A reading the pooling could not
+compute is recorded as unavailable rather than computed, and asking for it
+raises an error of class \code{causalgenerics_pool_missing_surface_marginal} or
+\code{causalgenerics_pool_missing_surface_conditional}, and of the general class
+\code{causalgenerics_pool_missing_surface}. That condition carries the reading
+under \code{effects} and, under \code{reason}, the refusal that reading raised when it
+was pooled, which is the same wording the caller would have seen from
+\code{\link[=pool_ipw]{pool_ipw()}} had they asked for it there.
+
+A result pooled before both readings were kept records no alternate at all.
+Asking such a result for the other reading is refused with the same two
+classes and a \code{reason} of \code{NULL}, and the message says that pooling the
+results again gives a result carrying both.
+}
+
 \examples{
 dat <- data.frame(
   x = rep(c(-1.5, -0.5, 0.5, 1.5), each = 5),
@@ -92,5 +126,7 @@ try(as_marginal(1:3))
 
 }
 \seealso{
-\code{\link[=new_ipw]{new_ipw()}} for the result class and the field these generics set.
+\code{\link[=new_ipw]{new_ipw()}} for the result class and the field these generics set,
+and \code{\link[=pool_ipw]{pool_ipw()}} for the pooled result and the reading it stores beside the
+one it presents.
 }

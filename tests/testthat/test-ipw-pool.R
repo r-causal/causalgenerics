@@ -286,6 +286,132 @@ pool_conditional_fits <- function(effects = "conditional") {
   )
 }
 
+# Three results whose two surfaces are both poolable: the outcome models carry
+# the corrected block the conditional reading is pooled from, and the estimates
+# frames carry the covariance of the effects the marginal reading pools. A
+# fixture holding only one of the two would leave the other surface's
+# covariance out of whatever a two-sided test asserted.
+#
+# The stored level is named one per imputation. The marginal surface is the
+# only one that records a level, so it is the surface whose level the two
+# readings resolve differently, and a set that disagrees about it is one of the
+# ways the reading that was not asked for cannot be pooled.
+pool_both_surface_fits <- function(
+  effects = "marginal",
+  conf.level = c(0.95, 0.95, 0.95)
+) {
+  estimate <- pool_binary_estimate()
+  std_err <- pool_binary_std_err()
+  Map(
+    function(i, mod) {
+      pool_fit(
+        pool_binary_estimates(estimate[i, ], std_err[i, ], conf.level[[i]]),
+        vcov = pool_effects_vcov(std_err[i, ], pool_binary_labels()),
+        outcome_mod = mod,
+        effects = effects
+      )
+    },
+    1:3,
+    pool_conditional_models()
+  )
+}
+
+# The outcome models of three imputations of a three-level exposure, wrapped
+# the way the binary ones above are. Their coefficients are named for the
+# levels rather than for the contrasts the marginal surface reports, and there
+# are three of them against six reported effects, so the two surfaces of a
+# categorical result are separable by their rows alone.
+pool_categorical_models <- function() {
+  lapply(1:3, function(i) {
+    dat <- pool_imputed_data(i)
+    dat$g <- factor(rep(c("a", "b", "c", "a"), each = 5))
+    mod <- glm(y ~ g, family = quasibinomial(), data = dat)
+    new_ipw_model(mod, stats::vcov(mod) * (1 + i / 10))
+  })
+}
+
+pool_categorical_both_surface_fits <- function(effects = "marginal") {
+  estimate <- pool_categorical_estimate()
+  std_err <- pool_categorical_std_err()
+  Map(
+    function(i, mod) {
+      pool_fit(
+        pool_categorical_estimates(estimate[i, ], std_err[i, ]),
+        outcome_mod = mod,
+        effects = effects
+      )
+    },
+    1:3,
+    pool_categorical_models()
+  )
+}
+
+# A carrier for an outcome model that reports no residual degrees of freedom: a
+# bare list whose class has no `df.residual()` method, so the default one looks
+# for an element that is not there and finds nothing. What it does answer for is
+# registered by the tests that use it, since a registration has to be undone
+# when the test that made it exits.
+#
+# The coefficients sit in the list rather than in the method, so three carriers
+# built here report three different coefficient surfaces through one
+# registration.
+pool_bare_model <- function(coefficients = NULL) {
+  structure(list(coefficients = coefficients), class = "cg_pool_bare")
+}
+
+# Three outcome models whose conditional surface is poolable and which report no
+# residual degrees of freedom. `new_ipw_model()` registers nothing but `vcov()`,
+# so wrapping the carrier above hands the conditional reading the corrected
+# block it pools while `df.residual()` still finds nothing on the model. A
+# fitted model holds those two properties apart, since one that reports
+# coefficients reports a residual count as well, which is why the carrier is
+# built rather than fitted.
+#
+# The coefficients and the block move by imputation, for the reason the fitted
+# models above do: the between-imputation variance of the surface is then not
+# zero.
+pool_dfless_models <- function() {
+  lapply(1:3, function(i) {
+    coefficients <- c("(Intercept)" = -0.4 + i / 10, z = 0.5 + i / 20)
+    new_ipw_model(
+      pool_bare_model(coefficients),
+      pool_effects_vcov(c(0.2, 0.3) * (1 + i / 10), names(coefficients))
+    )
+  })
+}
+
+# Three results built around those models, recording the marginal reading, so
+# the conditional one is the alternate. Both readings of the set can be pooled
+# and nothing in it reports a complete-data count, which is the set the
+# large-sample fallback has to be exercised against: where the other reading
+# cannot be pooled, the count is never wanted on that side, whether or not it is
+# resolved once for the call.
+pool_dfless_fits <- function() {
+  estimate <- pool_binary_estimate()
+  std_err <- pool_binary_std_err()
+  Map(
+    function(i, mod) {
+      pool_fit(
+        pool_binary_estimates(estimate[i, ], std_err[i, ]),
+        outcome_mod = mod
+      )
+    },
+    1:3,
+    pool_dfless_models()
+  )
+}
+
+# The three binary results as a fitting package stored them before the mode
+# existed: six fields and no `effects`. The absent field reads as marginal,
+# which is the reading every method produced then, and the outcome models carry
+# no corrected block either, which is the pair of properties such a set has.
+pool_legacy_fits <- function() {
+  lapply(pool_binary_fits(), function(fit) {
+    fields <- unclass(fit)
+    structure(fields[names(fields) != "effects"], class = "ipw")
+  })
+}
+
 # Rubin's rules and the Barnard-Rubin small-sample adjustment for one effect,
 # transcribed from the formulas `mice::pool()` implements. The tests recompute
 # with this from the fixture inputs rather than reading the pooled frame back
@@ -335,6 +461,22 @@ rubin_rules_by_column <- function(estimate, std_err, dfcom) {
 # One field of those, gathered into the vector the pooled frame holds.
 rubin_column <- function(pooled, field) {
   vapply(pooled, function(x) x[[field]], numeric(1))
+}
+
+# Every warning one call raises, with the call's value beside them. Counting
+# them takes a calling handler rather than `expect_warning()`, which muffles the
+# first warning it matches and leaves a test unable to say whether a second one
+# followed.
+pool_warnings <- function(expr) {
+  raised <- character()
+  value <- withCallingHandlers(
+    expr,
+    warning = function(w) {
+      raised <<- c(raised, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  list(value = value, warnings = raised)
 }
 
 # ---- what `fits` may be ------------------------------------------------------
@@ -1258,7 +1400,7 @@ test_that("pool_ipw() assumes a large sample when nothing reports a df", {
   withr::local_options(warn = 0)
 
   local_s3_method("nobs", "cg_pool_bare", function(object, ...) 20L)
-  bare <- structure(list(), class = "cg_pool_bare")
+  bare <- pool_bare_model()
   fits <- pool_fits_varying("outcome_mod", list(bare, bare, bare))
 
   expect_null(stats::df.residual(bare))
@@ -1322,7 +1464,8 @@ test_that("pool_ipw() records the documented fields in order", {
       "m",
       "dfcom",
       "nobs",
-      "outcome_link"
+      "outcome_link",
+      "alternate"
     )
   )
   expect_identical(res$estimand, "ate")
@@ -1498,4 +1641,353 @@ test_that("pool_ipw() refuses the conditional mode without corrected blocks", {
   expect_no_error(pool_ipw(fits))
 
   expect_snapshot(error = TRUE, pool_ipw(fits, effects = "conditional"))
+})
+
+# ---- the alternate surface ---------------------------------------------------
+
+test_that("pool_ipw() pools the reading it was not asked for as well", {
+  # Both readings are pooled from one set of results, so which one the call
+  # named decides which pair of frames is the active one rather than what gets
+  # computed at all. The other pair is recorded under `alternate`, in the shape
+  # the active fields have for that reading, which is what lets a caller move a
+  # pooled result between the two readings afterwards.
+  fits <- pool_both_surface_fits()
+  labels <- names(coef(pool_conditional_models()[[1]]))
+
+  res <- pool_ipw(fits, dfcom = 18)
+
+  expect_identical(res$effects, "marginal")
+  expect_identical(names(res$alternate), c("effects", "estimates", "pooling"))
+  expect_identical(res$alternate$effects, "conditional")
+
+  # The same two frames the active reading holds, keyed by coefficient rather
+  # than by effect label.
+  expect_s3_class(res$alternate$estimates, "data.frame")
+  expect_s3_class(res$alternate$pooling, "data.frame")
+  expect_identical(names(res$alternate$estimates), names(res$estimates))
+  expect_identical(names(res$alternate$pooling), names(res$pooling))
+  expect_identical(res$alternate$estimates$effect, labels)
+  expect_identical(res$alternate$pooling$effect, labels)
+  expect_identical(nrow(res$alternate$estimates), 2L)
+
+  # The pooled block travels with the frame it describes and is named the way
+  # that frame is named. A block carrying the active reading's labels would
+  # report one surface's covariance under the other surface's names.
+  covariance <- attr(res$alternate$estimates, "ipw_vcov", exact = TRUE)
+  expect_identical(dimnames(covariance), list(labels, labels))
+  expect_equal(
+    diag(covariance),
+    res$alternate$estimates$std.err^2,
+    ignore_attr = TRUE
+  )
+  # The two surfaces are separable by their labels alone, so nothing asserted
+  # above could be met by the active frames.
+  expect_false(any(labels %in% pool_binary_labels()))
+})
+
+test_that("pool_ipw() gives the same four frames whichever reading it pools", {
+  # The property the two-surface pooling is for: pooling the conditional
+  # reading and pooling the marginal one over the same results compute the same
+  # four frames, and differ in which pair of them is the active one and in
+  # nothing else. Every shared field is settled by the results rather than by
+  # the reading, so those come back the same as well.
+  fits <- pool_both_surface_fits()
+  shared <- c("estimand", "se_method", "m", "dfcom", "nobs", "outcome_link")
+
+  marginal <- pool_ipw(fits, effects = "marginal", dfcom = 18)
+  conditional <- pool_ipw(fits, effects = "conditional", dfcom = 18)
+
+  expect_identical(conditional$alternate$estimates, marginal$estimates)
+  expect_identical(conditional$alternate$pooling, marginal$pooling)
+  expect_identical(marginal$alternate$estimates, conditional$estimates)
+  expect_identical(marginal$alternate$pooling, conditional$pooling)
+  expect_identical(conditional$alternate$effects, marginal$effects)
+  expect_identical(marginal$alternate$effects, conditional$effects)
+  expect_identical(marginal[shared], conditional[shared])
+
+  # The two active frames report different rows, so the identities above are
+  # about a swap rather than about a fixture whose surfaces agree.
+  expect_false(identical(marginal$estimates, conditional$estimates))
+})
+
+test_that("pool_ipw() swaps the same frames at a level named for both", {
+  # A level named at the call site settles the bounds of both readings, so the
+  # swap is between frames built at that level on either side.
+  fits <- pool_both_surface_fits()
+
+  marginal <- pool_ipw(
+    fits,
+    effects = "marginal",
+    dfcom = 18,
+    conf_level = 0.8
+  )
+  conditional <- pool_ipw(
+    fits,
+    effects = "conditional",
+    dfcom = 18,
+    conf_level = 0.8
+  )
+
+  expect_identical(conditional$alternate$estimates, marginal$estimates)
+  expect_identical(conditional$alternate$pooling, marginal$pooling)
+  expect_identical(marginal$alternate$estimates, conditional$estimates)
+  expect_identical(marginal$alternate$pooling, conditional$pooling)
+  expect_identical(marginal$estimates$conf.level, rep(0.8, 3))
+  expect_identical(marginal$alternate$estimates$conf.level, rep(0.8, 2))
+})
+
+test_that("pool_ipw() resolves the level of each surface on its own", {
+  # The level is stored on the marginal surface alone: an estimates frame
+  # records the level its bounds were reported at, and a coefficient surface
+  # records none. With no level named the two readings therefore resolve
+  # different ones, each from what its own surface says, and which reading is
+  # the active one does not decide the other's bounds.
+  fits <- pool_both_surface_fits(conf.level = rep(0.9, 3))
+
+  res <- pool_ipw(fits, effects = "conditional", dfcom = 18)
+  alternate <- res$alternate$estimates
+  # The same two levels the other way round when the marginal reading is the
+  # active one.
+  flipped <- pool_ipw(fits, effects = "marginal", dfcom = 18)
+
+  expect_identical(res$estimates$conf.level, rep(0.95, 2))
+  expect_identical(alternate$conf.level, rep(0.9, 3))
+  expect_identical(flipped$estimates$conf.level, rep(0.9, 3))
+  expect_identical(flipped$alternate$estimates$conf.level, rep(0.95, 2))
+
+  # The bounds are built at the level the frame records rather than merely
+  # labelled with it.
+  half_width <- stats::qt(0.95, alternate$df) * alternate$std.err
+
+  expect_equal(alternate$ci.lower, alternate$estimate - half_width)
+  expect_equal(alternate$ci.upper, alternate$estimate + half_width)
+})
+
+test_that("pool_ipw() records why the other reading could not be pooled", {
+  # The conditional reading is pooled from the corrected block a fitting
+  # package attaches with `new_ipw_model()`, and results from the linearization
+  # path carry none. The pooling the caller asked for is done regardless, and
+  # what stopped the other reading is recorded rather than raised, since
+  # nothing about the result that was asked for is wrong.
+  fits <- pool_binary_fits()
+  cnd <- tryCatch(
+    pool_ipw(fits, effects = "conditional", dfcom = 17),
+    error = identity
+  )
+
+  res <- pool_ipw(fits, dfcom = 17)
+
+  expect_s3_class(cnd, "causalgenerics_no_conditional_vcov")
+  expect_identical(names(res$alternate), c("effects", "reason"))
+  expect_identical(res$alternate$effects, "conditional")
+  expect_type(res$alternate$reason, "character")
+  expect_length(res$alternate$reason, 1L)
+  # The reason is what the same refusal said when the caller asked for that
+  # reading, rather than a second wording of it.
+  expect_identical(res$alternate$reason, conditionMessage(cnd))
+  # The reading that was asked for is pooled exactly as it is when the other
+  # one is available: the `rd` row is the 0.30 the literal test works out.
+  expect_identical(res$estimates$effect, pool_binary_labels())
+  expect_identical(res$estimates$estimate[[1]], 0.30)
+})
+
+test_that("pool_ipw() records a reason when only some results carry a block", {
+  # An average of the per-imputation coefficients needs a corrected block from
+  # every imputation, so a set where one outcome model was never wrapped cannot
+  # be pooled on that reading at all. What is recorded is the refusal that one
+  # result raises, since it is the whole of why the reading is unavailable.
+  fits <- pool_both_surface_fits()
+  fits[[2]]$outcome_mod <- pool_outcome_model()
+  cnd <- tryCatch(
+    pool_ipw(fits, effects = "conditional", dfcom = 18),
+    error = identity
+  )
+
+  res <- pool_ipw(fits, dfcom = 18)
+
+  expect_s3_class(cnd, "causalgenerics_no_conditional_vcov")
+  expect_identical(names(res$alternate), c("effects", "reason"))
+  expect_identical(res$alternate$effects, "conditional")
+  expect_identical(res$alternate$reason, conditionMessage(cnd))
+  # The results that do carry a block are not enough on their own, and the
+  # reading the caller asked for is unaffected either way.
+  expect_no_error(conditional_vcov(fits[[1]]$outcome_mod))
+  expect_identical(res$estimates$effect, pool_binary_labels())
+})
+
+test_that("pool_ipw() pools results stored before the mode existed", {
+  # A result from an earlier version of a fitting package carries six fields
+  # and no `effects`, which reads as marginal, and its outcome model carries no
+  # corrected block either. Both halves of that are answered here: the marginal
+  # reading is pooled and the conditional one is recorded as unavailable.
+  fits <- pool_legacy_fits()
+
+  expect_length(fits[[1]], 6L)
+  expect_null(fits[[1]]$effects)
+
+  res <- pool_ipw(fits, dfcom = 17)
+
+  expect_identical(res$effects, "marginal")
+  expect_identical(names(res$alternate), c("effects", "reason"))
+  expect_identical(res$alternate$effects, "conditional")
+  # The absent field is the only difference from the same results carrying it,
+  # so the pooled result has to be the one those give, alternate included.
+  expect_identical(res, pool_ipw(pool_binary_fits(), dfcom = 17))
+})
+
+test_that("pool_ipw() records a level disagreement on the other reading", {
+  # The levels the results stored have to agree for the marginal reading to
+  # report bounds at one of them, and that disagreement is a refusal when the
+  # marginal reading is the one asked for. On the other side it is one more
+  # reason the reading could not be pooled, since what the estimates frames
+  # stored says nothing about the conditional pooling that was asked for.
+  fits <- pool_both_surface_fits(conf.level = c(0.95, 0.9, 0.95))
+  cnd <- tryCatch(
+    pool_ipw(fits, effects = "marginal", dfcom = 18),
+    error = identity
+  )
+
+  res <- pool_ipw(fits, effects = "conditional", dfcom = 18)
+
+  expect_s3_class(cnd, "causalgenerics_pool_mismatch_conf_level")
+  expect_identical(names(res$alternate), c("effects", "reason"))
+  expect_identical(res$alternate$effects, "marginal")
+  expect_identical(res$alternate$reason, conditionMessage(cnd))
+
+  # A level named at the call site settles the question for both readings, so
+  # the same set has both surfaces again.
+  named <- pool_ipw(
+    fits,
+    effects = "conditional",
+    dfcom = 18,
+    conf_level = 0.9
+  )
+
+  expect_identical(names(named$alternate), c("effects", "estimates", "pooling"))
+  expect_identical(named$alternate$estimates$conf.level, rep(0.9, 3))
+})
+
+test_that("pool_ipw() appends the alternate after the documented nine", {
+  # The nine components the return contract documents keep their names and
+  # their order, since callers read fields by name and a printed form writes
+  # them positionally. The alternate is a tenth after them rather than a field
+  # among them.
+  fits <- pool_binary_fits()
+  res <- pool_ipw(fits, dfcom = 17)
+
+  expect_length(res, 10L)
+  expect_identical(
+    names(res)[seq_len(9)],
+    c(
+      "estimand",
+      "estimates",
+      "pooling",
+      "se_method",
+      "effects",
+      "m",
+      "dfcom",
+      "nobs",
+      "outcome_link"
+    )
+  )
+  # Everything after those nine, so the assertion is that the alternate is the
+  # last field as well as the tenth.
+  expect_identical(names(res)[-seq_len(9)], "alternate")
+})
+
+test_that("pool_ipw() keys the two surfaces of a categorical result apart", {
+  # A categorical exposure reports one row per measure per contrast on the
+  # marginal reading and one row per coefficient on the conditional one, so the
+  # two surfaces of the same result differ in their rows as well as in their
+  # numbers. Each frame is keyed the way its own surface is: the active one
+  # carries the contrast column the `ipw()` contract puts after `effect`, and
+  # the alternate names coefficients and has no contrast to report.
+  fits <- pool_categorical_both_surface_fits()
+  labels <- names(coef(pool_categorical_models()[[1]]))
+
+  res <- pool_ipw(fits, dfcom = 17)
+
+  expect_identical(names(res$alternate), c("effects", "estimates", "pooling"))
+  expect_identical(nrow(res$estimates), 6L)
+  expect_identical(res$estimates$contrast, rep(c("b vs a", "c vs a"), each = 3))
+
+  expect_identical(nrow(res$alternate$estimates), 3L)
+  expect_identical(res$alternate$estimates$effect, labels)
+  expect_identical(res$alternate$pooling$effect, labels)
+  expect_false("contrast" %in% names(res$alternate$estimates))
+  expect_false("contrast" %in% names(res$alternate$pooling))
+  expect_identical(
+    dimnames(attr(res$alternate$estimates, "ipw_vcov", exact = TRUE)),
+    list(labels, labels)
+  )
+})
+
+test_that("pool_ipw() pools the other reading without saying anything", {
+  # A caller who asked for one reading is told nothing about the other: a set
+  # whose conditional surface cannot be pooled records why rather than warning
+  # about it, and the case where both readings are poolable says nothing
+  # either.
+  available <- pool_both_surface_fits()
+
+  expect_silent(pool_ipw(pool_binary_fits(), dfcom = 17))
+  expect_silent(pool_ipw(pool_legacy_fits(), dfcom = 17))
+  expect_silent(pool_ipw(available, dfcom = 18))
+  expect_silent(pool_ipw(available, effects = "conditional", dfcom = 18))
+})
+
+test_that("pool_ipw() warns once when nothing reports a complete-data df", {
+  # The fallback that assumes a large sample belongs to the pooling rather than
+  # to a reading of it, since the complete-data count is one of the fields both
+  # readings share. It is settled once, before either surface is pooled, so
+  # pooling the other reading beside the one that was asked for does not raise
+  # that warning a second time, which a caller reading two of them would take as
+  # two separate assumptions.
+  #
+  # The option is restored to its default for this block for the reason the
+  # fallback's own test above restores it: the suite treats a stray warning as
+  # a failure, and the subject here is the warning itself.
+  withr::local_options(warn = 0)
+
+  local_s3_method("nobs", "cg_pool_bare", function(object, ...) 20L)
+  local_s3_method("coef", "cg_pool_bare", function(object, ...) {
+    object$coefficients
+  })
+  fits <- pool_dfless_fits()
+
+  # What makes the set discriminating: both readings can be pooled, and neither
+  # the results nor their outcome models report a count. A count resolved once
+  # per surface would warn twice for this set, and a set whose other reading is
+  # refused before the count is wanted cannot tell the two apart.
+  expect_no_error(conditional_vcov(fits[[1]]$outcome_mod))
+  expect_identical(df.residual(fits[[1]]), NA_integer_)
+  expect_null(stats::df.residual(fits[[1]]$outcome_mod))
+
+  pooled <- pool_warnings(pool_ipw(fits))
+
+  expect_length(pooled$warnings, 1L)
+  expect_match(pooled$warnings, "a large sample is assumed")
+  expect_identical(pooled$value$dfcom, Inf)
+  # The other reading was pooled rather than passed over, which is what the
+  # single warning is asserted against.
+  expect_identical(
+    names(pooled$value$alternate),
+    c("effects", "estimates", "pooling")
+  )
+  expect_identical(pooled$value$alternate$effects, "conditional")
+  expect_identical(
+    pooled$value$alternate$estimates$effect,
+    c("(Intercept)", "z")
+  )
+
+  # A set whose other reading cannot be pooled at all is answered the same way.
+  # The count was settled before either surface was read, so a reading that is
+  # never pooled neither adds a warning nor takes one away.
+  unavailable <- pool_fits_varying(
+    "outcome_mod",
+    rep(list(pool_bare_model()), 3)
+  )
+  refused <- pool_warnings(pool_ipw(unavailable))
+
+  expect_length(refused$warnings, 1L)
+  expect_identical(names(refused$value$alternate), c("effects", "reason"))
 })

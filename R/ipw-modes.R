@@ -1,23 +1,24 @@
 #' The presentation mode of an inverse probability weighted result
 #'
 #' @description
-#' The two readings of a result, defined for the class [new_ipw()] constructs.
+#' The two readings of a result, defined for the class [new_ipw()] constructs
+#' and for the pooled results [pool_ipw()] returns.
 #'
 #' * `as_marginal()` returns the result reporting the causal contrast estimates.
 #' * `as_conditional()` returns the result presenting the outcome model's
 #'   coefficient surface.
 #'
 #' @details
-#' Both surfaces exist on every result, so these generics record which one the
-#' result presents rather than computing anything. They set the `effects` field
-#' of the [new_ipw()] contract and read nothing else, which makes them the
-#' supported way to move a result between the two readings: a caller writes
-#' `as_conditional(res)` rather than assigning to the field.
+#' Both surfaces exist on every `ipw` result, so on one of those these generics
+#' record which one the result presents rather than computing anything. They set
+#' the `effects` field of the [new_ipw()] contract and read nothing else, which
+#' makes them the supported way to move a result between the two readings: a
+#' caller writes `as_conditional(res)` rather than assigning to the field.
 #'
-#' The methods on `ipw` are total. Every result has one of the two modes, so
-#' asking for either is always answerable: they never error, asking twice says
-#' what asking once said, and a result that goes out to the other reading and
-#' back is the result that went in. A result built before the field existed
+#' The methods on `ipw` are total. Every such result has one of the two modes,
+#' so asking for either is always answerable: they never error, asking twice
+#' says what asking once said, and a result that goes out to the other reading
+#' and back is the result that went in. A result built before the field existed
 #' carries six fields rather than seven and reads as marginal, which is the mode
 #' every method produced then.
 #'
@@ -28,14 +29,49 @@
 #' conditional reading of an object that is not an IPW result, so the default
 #' method signals an error rather than inventing one.
 #'
-#' @param x An `ipw` object. These generics dispatch on this argument.
+#' # The readings a pooled result carries
+#'
+#' [pool_ipw()] pools both readings of one set of results whenever it can
+#' compute both, and stores the one the call did not name whole, under the
+#' `alternate` component. The methods on `ipw_pooled` therefore swap which
+#' reading the result presents rather than setting a field: the pooled
+#' estimates, the pooling diagnostics, and the recorded mode move together, and
+#' the components that describe the pooled analyses rather than a reading of
+#' them stay where they are.
+#'
+#' Where both readings were pooled, the properties above hold. Asking a pooled
+#' result for the reading it already presents gives that result back, and a
+#' result taken out to the other reading and back is the result that went in.
+#' Totality is what these methods cannot keep. A reading the pooling could not
+#' compute is recorded as unavailable rather than computed, and asking for it
+#' raises an error of class `causalgenerics_pool_missing_surface_marginal` or
+#' `causalgenerics_pool_missing_surface_conditional`, and of the general class
+#' `causalgenerics_pool_missing_surface`. That condition carries the reading
+#' under `effects` and, under `reason`, the refusal that reading raised when it
+#' was pooled, which is the same wording the caller would have seen from
+#' [pool_ipw()] had they asked for it there.
+#'
+#' A result pooled before both readings were kept records no alternate at all.
+#' Asking such a result for the other reading is refused with the same two
+#' classes and a `reason` of `NULL`, and the message says that pooling the
+#' results again gives a result carrying both.
+#'
+#' @param x An `ipw` or `ipw_pooled` object. These generics dispatch on this
+#'   argument.
 #' @param ... Arguments passed to methods.
 #'
-#' @return `x` with its presentation mode set to the one asked for. The methods
-#'   on `ipw` change the `effects` field and nothing else, so every other field
-#'   comes back as it went in, the covariance attached to `estimates` included.
+#' @return `x` presenting the reading asked for. The methods on `ipw` change the
+#'   `effects` field and nothing else, so every other field comes back as it
+#'   went in, the covariance attached to `estimates` included. The methods on
+#'   `ipw_pooled` exchange `estimates`, `pooling`, and the recorded mode with the
+#'   reading stored under `alternate`, so the reading that was presented is what
+#'   the returned result stores there, and the components shared by both readings
+#'   come back as they went in. A pooled result that does not carry the reading
+#'   asked for raises an error rather than returning one.
 #'
-#' @seealso [new_ipw()] for the result class and the field these generics set.
+#' @seealso [new_ipw()] for the result class and the field these generics set,
+#'   and [pool_ipw()] for the pooled result and the reading it stores beside the
+#'   one it presents.
 #'
 #' @examples
 #' dat <- data.frame(
@@ -94,6 +130,11 @@ as_marginal.ipw <- function(x, ...) {
 }
 
 #' @export
+as_marginal.ipw_pooled <- function(x, ...) {
+  flip_ipw_pooled(x, "marginal")
+}
+
+#' @export
 as_marginal.default <- function(x, ...) {
   stop_no_method("as_marginal", x)
 }
@@ -111,8 +152,72 @@ as_conditional.ipw <- function(x, ...) {
 }
 
 #' @export
+as_conditional.ipw_pooled <- function(x, ...) {
+  flip_ipw_pooled(x, "conditional")
+}
+
+#' @export
 as_conditional.default <- function(x, ...) {
   stop_no_method("as_conditional", x)
+}
+
+#' Move a pooled result between the two readings it carries
+#'
+#' [pool_ipw()] pools both readings of one set of results and stores the one the
+#' call did not name under `alternate`, so a pooled result is moved between them
+#' by swapping the three fields that differ rather than by setting one. The
+#' shared fields are properties of the analyses rather than of a reading of
+#' them, and they stay where they are.
+#'
+#' The swap is by assignment to fields the result already has, which is what
+#' makes the round trip the object that went in: the field order is the
+#' contract, and the reading that was active goes back under `alternate` in the
+#' shape it was recorded in. Asking for the reading the result already presents
+#' is answered with the result itself, so the generics are idempotent on a
+#' pooled result and on one stored before both readings were kept alike.
+#'
+#' Unlike the methods on `ipw`, these cannot be total. A reading that could not
+#' be pooled is recorded as unavailable, and a result stored before both
+#' readings were kept records nothing at all; both are refused here rather than
+#' answered with a surface the result does not hold. The recorded reason is the
+#' refusal the same request raised at pooling time, so it is passed on as it
+#' stands.
+#'
+#' @param x An `ipw_pooled` object.
+#' @param effects The reading to present.
+#' @param call The call to report a missing reading against, which is the
+#'   generic's or the accessor's rather than this helper's.
+#'
+#' @return `x` presenting the reading asked for.
+#'
+#' @noRd
+flip_ipw_pooled <- function(x, effects, call = sys.call(-1)) {
+  current <- ipw_effects(x, call = call)
+  if (current == effects) {
+    return(x)
+  }
+
+  alternate <- x$alternate
+  if (is.null(alternate)) {
+    stop_pool_missing_surface(effects, reason = NULL, call = call)
+  }
+  if (is.null(alternate$estimates)) {
+    stop_pool_missing_surface(effects, alternate$reason, call = call)
+  }
+
+  # Read out before either side is written, since the two halves of a swap
+  # cannot both be assigned first.
+  stashed <- list(
+    effects = current,
+    estimates = x$estimates,
+    pooling = x$pooling
+  )
+
+  x$effects <- alternate$effects
+  x$estimates <- alternate$estimates
+  x$pooling <- alternate$pooling
+  x$alternate <- stashed
+  x
 }
 
 #' The presentation mode a result records
@@ -157,6 +262,13 @@ ipw_effects <- function(object, call = sys.call(-1)) {
 #' all in that case. A result whose field was assigned to directly is therefore
 #' still readable by naming a mode, and reading it without naming one is refused
 #' where the field is read.
+#'
+#' That last part is about resolving the mode, which is all this helper does. It
+#' holds for a caller that goes on to report the resolved mode directly, as the
+#' accessors on `ipw` do. A pooled result is reported by moving it to the reading
+#' asked for, and the move has to read the stored mode to know whether that
+#' reading is the one the result already presents, so naming a mode there does
+#' not keep the stored field from being read.
 #'
 #' @param object An `ipw` object.
 #' @param effects The `effects` argument as the caller supplied it, or `NULL`.

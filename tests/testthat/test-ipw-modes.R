@@ -19,10 +19,22 @@
 # seven. `ipw_effects()` reads that shape as marginal, so an older result and a
 # result built today behave the same way.
 #
+# A pooled result carries both readings too, in the active fields and in the
+# `alternate` component beside them, so the generics are a swap there rather
+# than an assignment. The swap keeps the properties above where both readings
+# were pooled: the same-reading request is the result itself and the round trip
+# is what went in. It cannot keep totality. A reading that could not be pooled
+# is recorded as unavailable rather than computed, and a result pooled before
+# both readings were kept has no `alternate` at all, so the methods on
+# `ipw_pooled` refuse those requests instead of answering them with a surface
+# they do not hold.
+#
 # The estimates frames are written out literally, in the shape the `ipw()`
 # return contract documents, rather than produced by fitting a model. Nothing
 # here needs a real estimator, and this package holds no model-fitting
-# dependency to build one with.
+# dependency to build one with. The pooled fixtures below are the exception:
+# they pool several such frames through `pool_ipw()`, since a pooled result is
+# what the methods under test dispatch on.
 
 # ---- fixtures ----------------------------------------------------------------
 
@@ -137,6 +149,154 @@ null_effects_result <- function() {
   fields <- unclass(legacy)
   fields["effects"] <- list(NULL)
   structure(fields, class = "ipw")
+}
+
+# One imputation of the fixture data: a single cell filled in differently, which
+# is what separates two imputations of the same incomplete data. The
+# coefficients move with it, so the conditional reading of the pooled result has
+# a between-imputation variance to report rather than none.
+imputed_data <- function(i) {
+  dat <- ipw_data()
+  dat$y[i] <- 1 - dat$y[i]
+  dat
+}
+
+# The three imputations' estimates and standard errors, one row per imputation
+# and one column per effect. They are the numbers `test-ipw-pool.R` pools by
+# hand; testthat sources each file in an environment of its own, so the fixtures
+# are rebuilt here rather than shared.
+pooled_estimate <- function() {
+  rbind(
+    c(0.20, 0.55, 0.85),
+    c(0.30, 0.60, 0.95),
+    c(0.40, 0.65, 1.05)
+  )
+}
+
+pooled_std_err <- function() {
+  rbind(
+    c(0.10, 0.25, 0.40),
+    c(0.20, 0.30, 0.45),
+    c(0.30, 0.35, 0.50)
+  )
+}
+
+pooled_labels <- function() {
+  c("rd", "log(rr)", "log(or)")
+}
+
+# One imputation's estimates frame. The level is an argument because the level
+# the results stored is one of the things the marginal reading needs the set to
+# agree on, and a set that disagrees is one of the ways that reading cannot be
+# pooled.
+pooled_estimates <- function(estimate, std.err, conf.level = 0.95) {
+  half_width <- stats::qnorm(1 - (1 - conf.level) / 2) * std.err
+  data.frame(
+    effect = pooled_labels(),
+    estimate = estimate,
+    std.err = std.err,
+    z = estimate / std.err,
+    ci.lower = estimate - half_width,
+    ci.upper = estimate + half_width,
+    conf.level = conf.level,
+    p.value = 2 * stats::pnorm(-abs(estimate / std.err))
+  )
+}
+
+# The covariance of one imputation's effects, in the shape a fitting package
+# attaches it. It rides on the estimates frame, so the pooled block rides on the
+# pooled frame, which is the part of a swapped reading most likely to be lost.
+pooled_effects_vcov <- function(std_err, labels) {
+  index <- seq_along(std_err)
+  covariance <- 0.9^abs(outer(index, index, "-")) * outer(std_err, std_err)
+  dimnames(covariance) <- list(labels, labels)
+  covariance
+}
+
+# The outcome models of three imputations, each wrapped with the corrected
+# covariance the joint estimation of the weights and the outcome implies. The
+# conditional reading is pooled from that block, so a set built on these models
+# is one whose two readings can both be pooled. The scaling differs by
+# imputation so that the within-imputation variance is not constant either.
+wrapped_models <- function() {
+  lapply(1:3, function(i) {
+    mod <- glm(y ~ z, family = quasibinomial(), data = imputed_data(i))
+    new_ipw_model(mod, stats::vcov(mod) * (1 + i / 10))
+  })
+}
+
+# The same models with no corrected block attached, which is what the
+# linearization path produces. The conditional reading of a set built on these
+# cannot be pooled at all, so a pooling of them records why rather than holding
+# a second reading.
+unwrapped_models <- function() {
+  lapply(1:3, function(i) {
+    glm(y ~ z, family = quasibinomial(), data = imputed_data(i))
+  })
+}
+
+# The three results a pooling reads, recording the reading named here. The
+# estimates frames carry the covariance of the effects the marginal reading
+# pools and the outcome models carry the block the conditional one pools, so
+# both readings of the default set are available.
+pooled_fits <- function(
+  effects = "marginal",
+  conf.level = c(0.95, 0.95, 0.95),
+  models = wrapped_models()
+) {
+  estimate <- pooled_estimate()
+  std_err <- pooled_std_err()
+  Map(
+    function(i, mod) {
+      estimates <- pooled_estimates(
+        estimate[i, ],
+        std_err[i, ],
+        conf.level[[i]]
+      )
+      attr(estimates, "ipw_vcov") <- pooled_effects_vcov(
+        std_err[i, ],
+        pooled_labels()
+      )
+      new_ipw(
+        estimand = "ate",
+        wt_mod = glm(z ~ x, family = binomial(), data = imputed_data(i)),
+        outcome_mod = mod,
+        estimates = estimates,
+        se_method = "mestimation",
+        fit = NULL,
+        effects = effects
+      )
+    },
+    1:3,
+    models
+  )
+}
+
+# A pooled result of the shape the constructor built before the other reading
+# was kept: the nine documented components in their documented order and no
+# `alternate` after them. A result stored from an earlier version of this
+# package has this shape, and there is nothing on it to flip to.
+#
+# The two frames are ones a pooling produced rather than numbers written for the
+# fixture. What makes the object legacy is the field it does not carry, and
+# inventing values for the fields it does carry would say that the flip reads
+# them.
+legacy_pooled_result <- function() {
+  pooled <- pool_ipw(pooled_fits(models = unwrapped_models()), dfcom = 18)
+  structure(
+    list(
+      estimand = pooled$estimand,
+      estimates = pooled$estimates,
+      pooling = pooled$pooling,
+      se_method = pooled$se_method,
+      effects = "marginal",
+      m = pooled$m,
+      dfcom = pooled$dfcom,
+      nobs = pooled$nobs,
+      outcome_link = pooled$outcome_link
+    ),
+    class = "ipw_pooled"
+  )
 }
 
 # ---- as_conditional() --------------------------------------------------------
@@ -312,6 +472,190 @@ test_that("as_marginal() leaves a result with no mode reading as marginal", {
   expect_identical(unclass(marginal)[names(legacy)], unclass(legacy))
 })
 
+# ---- pooled results ----------------------------------------------------------
+
+test_that("the mode generics leave a pooled result in the reading it records", {
+  # Asking a pooled result for the reading it already presents is a legitimate
+  # call, not a mistake, so it answers with the result rather than refusing,
+  # exactly as it does for an unpooled one. The whole object comes back, which
+  # is what says the answer is the result itself rather than a rebuilt copy of
+  # it, and applying the generic twice says what applying it once said.
+  marginal <- pool_ipw(pooled_fits(), dfcom = 18)
+  conditional <- pool_ipw(pooled_fits(effects = "conditional"), dfcom = 18)
+
+  expect_no_error(as_marginal(marginal))
+  expect_identical(as_marginal(marginal), marginal)
+  expect_identical(as_marginal(as_marginal(marginal)), marginal)
+
+  expect_no_error(as_conditional(conditional))
+  expect_identical(as_conditional(conditional), conditional)
+  expect_identical(as_conditional(as_conditional(conditional)), conditional)
+})
+
+test_that("the two readings of a pooled result round-trip", {
+  # A pooled result holds both readings, the active one in `estimates` and
+  # `pooling` and the other under `alternate`, so the flip is a swap between
+  # them. A caller who looks at the other reading and then goes back is holding
+  # what they started with, down to the covariance attached to the estimates.
+  marginal <- pool_ipw(pooled_fits(), dfcom = 18)
+  conditional <- pool_ipw(pooled_fits(effects = "conditional"), dfcom = 18)
+
+  expect_identical(as_marginal(as_conditional(marginal)), marginal)
+  expect_identical(as_conditional(as_marginal(conditional)), conditional)
+
+  # The flip moved something, so the round trips above are not the identity
+  # applied twice: the two readings report different rows under different
+  # labels.
+  expect_identical(as_conditional(marginal)$effects, "conditional")
+  expect_identical(
+    as_conditional(marginal)$estimates$effect,
+    c("(Intercept)", "z")
+  )
+  expect_false(identical(
+    as_conditional(marginal)$estimates,
+    marginal$estimates
+  ))
+})
+
+test_that("flipping a pooled result gives the pooling of the other reading", {
+  # The property the two-reading pooling is for. One set of results gives the
+  # same four frames whichever reading is asked for, and the flip decides which
+  # pair is the active one, so a caller who pooled the reading they did not want
+  # reads the other one without pooling again. The complete-data count is named
+  # rather than read off the fits, so both callings work at the same one.
+  fits <- pooled_fits()
+
+  marginal <- pool_ipw(fits, effects = "marginal", dfcom = 18)
+  conditional <- pool_ipw(fits, effects = "conditional", dfcom = 18)
+
+  expect_identical(as_conditional(marginal), conditional)
+  expect_identical(as_marginal(conditional), marginal)
+
+  # The two pooled results differ to begin with, so the identities above are
+  # about the swap rather than about a fixture whose readings agree.
+  expect_false(identical(marginal, conditional))
+  expect_identical(marginal$estimates$effect, pooled_labels())
+  expect_identical(conditional$estimates$effect, c("(Intercept)", "z"))
+})
+
+test_that("a pooled result refuses the reading it could not pool", {
+  # The conditional reading is pooled from the corrected block a fitting package
+  # attaches with `new_ipw_model()`, and results from the linearization path
+  # carry none. `pool_ipw()` records why that reading is unavailable rather than
+  # raising it, since nothing about the reading the caller asked for is wrong;
+  # the flip is the request that reason answers, so it is raised here.
+  fits <- pooled_fits(models = unwrapped_models())
+  reason <- conditionMessage(tryCatch(
+    pool_ipw(fits, effects = "conditional", dfcom = 18),
+    error = identity
+  ))
+
+  res <- pool_ipw(fits, dfcom = 18)
+
+  expect_error(
+    as_conditional(res),
+    class = "causalgenerics_pool_missing_surface_conditional"
+  )
+  expect_error(
+    as_conditional(res),
+    class = "causalgenerics_pool_missing_surface"
+  )
+  expect_snapshot(error = TRUE, as_conditional(res))
+
+  # The reading asked for and what stopped it travel on the condition, so a
+  # handler reports them without parsing the sentence for them. The reason is
+  # what the same refusal said when the caller asked to pool that reading rather
+  # than a second wording of it, and the message embeds it.
+  cnd <- tryCatch(as_conditional(res), error = identity)
+  expect_identical(cnd$effects, "conditional")
+  expect_identical(cnd$reason, reason)
+  expect_match(conditionMessage(cnd), reason, fixed = TRUE)
+
+  # The reading it does carry is unaffected, so the refusal is about the one
+  # request rather than about the result.
+  expect_identical(as_marginal(res), res)
+})
+
+test_that("a pooled result refuses the marginal reading the same way", {
+  # The refusal the other way round, from a set whose stored levels disagree.
+  # That disagreement stops the marginal reading and says nothing about the
+  # conditional one, so a conditional pooling of the set is a result with no
+  # marginal reading to flip to. The specific class names the reading that was
+  # asked for, which is what makes it worth carrying beside the general one.
+  fits <- pooled_fits(
+    effects = "conditional",
+    conf.level = c(0.95, 0.9, 0.95)
+  )
+  reason <- conditionMessage(tryCatch(
+    pool_ipw(fits, effects = "marginal", dfcom = 18),
+    error = identity
+  ))
+
+  res <- pool_ipw(fits, dfcom = 18)
+
+  expect_error(
+    as_marginal(res),
+    class = "causalgenerics_pool_missing_surface_marginal"
+  )
+  expect_error(as_marginal(res), class = "causalgenerics_pool_missing_surface")
+
+  cnd <- tryCatch(as_marginal(res), error = identity)
+  expect_identical(cnd$effects, "marginal")
+  expect_identical(cnd$reason, reason)
+  expect_match(conditionMessage(cnd), reason, fixed = TRUE)
+
+  expect_identical(as_conditional(res), res)
+})
+
+test_that("a pooled result with no other reading stored refuses its own way", {
+  # A result pooled before both readings were kept carries the nine documented
+  # components and no `alternate` at all. That is a different fact from a
+  # reading that was tried and could not be pooled: there is no reason to
+  # report, and what the caller has to do is pool the results again rather than
+  # change how they were fitted. It is refused with the same two classes, since
+  # a handler cares that the reading is not there rather than why.
+  legacy <- legacy_pooled_result()
+
+  expect_length(legacy, 9L)
+  expect_false("alternate" %in% names(legacy))
+
+  expect_error(
+    as_conditional(legacy),
+    class = "causalgenerics_pool_missing_surface_conditional"
+  )
+  expect_error(
+    as_conditional(legacy),
+    class = "causalgenerics_pool_missing_surface"
+  )
+  expect_snapshot(error = TRUE, as_conditional(legacy))
+
+  cnd <- tryCatch(as_conditional(legacy), error = identity)
+  expect_identical(cnd$effects, "conditional")
+  expect_null(cnd$reason)
+
+  # Not the sentence a recorded reason gets, which tells a caller to wrap their
+  # outcome models when what this result needs is to be pooled again.
+  recorded <- tryCatch(
+    as_conditional(pool_ipw(
+      pooled_fits(models = unwrapped_models()),
+      dfcom = 18
+    )),
+    error = identity
+  )
+  expect_false(identical(conditionMessage(cnd), conditionMessage(recorded)))
+})
+
+test_that("a pooled result with no other reading keeps the one it has", {
+  # The absent field says nothing about the reading the result does present, so
+  # asking for that one is the no-op it is on a result carrying both. An older
+  # result and one pooled today therefore behave the same way wherever they can.
+  legacy <- legacy_pooled_result()
+
+  expect_no_error(as_marginal(legacy))
+  expect_identical(as_marginal(legacy), legacy)
+  expect_identical(as_marginal(as_marginal(legacy)), legacy)
+})
+
 # ---- the default methods -----------------------------------------------------
 
 test_that("the mode generics have no default", {
@@ -378,11 +722,31 @@ test_that("the mode generics dispatch through the method table", {
     dispatch_from_baseenv(as_marginal, conditional_result())$effects,
     "marginal"
   )
+
+  # The pooled methods take the same route. They are a second pair of methods on
+  # the same two generics, so a registration that reached only the `ipw` ones
+  # would leave a downstream caller with the default's refusal here.
+  pooled <- pool_ipw(pooled_fits(), dfcom = 18)
+
+  expect_identical(
+    dispatch_from_baseenv(as_conditional, pooled)$effects,
+    "conditional"
+  )
+  expect_identical(
+    dispatch_from_baseenv(
+      as_marginal,
+      dispatch_from_baseenv(as_conditional, pooled)
+    ),
+    pooled
+  )
 })
 
 test_that("the mode generics and their methods are registered", {
   # Both generics belong to this package, so their entries are in this package's
-  # own method table rather than base's or stats'.
+  # own method table rather than base's or stats'. Each carries three methods:
+  # one for each result class, and the default that refuses everything else.
+  # `ipw_pooled` does not inherit from `ipw`, so its method has to be in the
+  # table under its own name rather than reached through the unpooled one.
   generics <- c("as_marginal", "as_conditional")
 
   registered <- vapply(
@@ -391,6 +755,11 @@ test_that("the mode generics and their methods are registered", {
       table <- s3_methods_table(generic)
       !is.null(table) &&
         exists(paste0(generic, ".ipw"), envir = table, inherits = FALSE) &&
+        exists(
+          paste0(generic, ".ipw_pooled"),
+          envir = table,
+          inherits = FALSE
+        ) &&
         exists(paste0(generic, ".default"), envir = table, inherits = FALSE)
     },
     logical(1)

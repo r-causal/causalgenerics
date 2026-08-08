@@ -29,6 +29,32 @@
 #' the object is, so a package that produces one by another route is answered
 #' the same way.
 #'
+#' # The two readings
+#'
+#' Both readings of the results are pooled from one call whenever both can be
+#' pooled. `effects` says which of them the returned result presents, and the
+#' other is stored whole under `alternate`, so a caller moves a pooled result
+#' between the two afterwards with [as_marginal()] and [as_conditional()] rather
+#' than pooling again. Which reading was named therefore decides which pair of
+#' frames is the active one rather than what was computed at all: pooling one
+#' reading and moving to the other gives the frames pooling the other directly
+#' gives.
+#'
+#' The reading the call names is pooled first and is not guarded, so a set that
+#' cannot be pooled on it is refused as it always was. The other reading is
+#' pooled under a guard, since a set that cannot be pooled on it is a result with
+#' one reading rather than a failed pooling: nothing about the reading the caller
+#' asked for is wrong. `alternate` then records that reading and the refusal it
+#' raised, and asking the result for it later raises that refusal in the words it
+#' used. The commonest case is a set of results whose outcome models carry no
+#' corrected covariance, which is what the conditional reading is pooled from.
+#'
+#' The components describing the analyses rather than a reading of them are
+#' shared by both readings. The estimand, the standard error method, the number
+#' of results, the complete-data degrees of freedom, the observation count, and
+#' the outcome model link are settled once, from the results themselves, and are
+#' what either reading reports.
+#'
 #' # What the results have to agree on
 #'
 #' The pooled estimate of an effect is an average of the per-imputation ones, so
@@ -38,6 +64,16 @@
 #' its outcome model was fitted with is refused with an error of class
 #' `causalgenerics_pool_mismatch`, and of a second class naming which of those
 #' it was. The differing values travel on the condition under `values`.
+#'
+#' Those requirements are not all of one kind. The estimand, the standard error
+#' method, and the outcome model link describe the results rather than a reading
+#' of them, and so does the presentation mode when `effects` leaves it to be
+#' read; a disagreement about any of those refuses the call. Which effects a
+#' result reports and what level it reported them at are properties of one
+#' reading of it, and those requirements bind the reading being pooled: a
+#' disagreement confined to the reading the call did not name is recorded on
+#' `alternate` as the reason that reading could not be pooled rather than
+#' refused.
 #'
 #' The effects have to agree as an ordered vector rather than as a set. The
 #' labels are what say which row is which, so two results reporting the same
@@ -88,8 +124,10 @@
 #'   between-imputation variance is estimated from the spread across them.
 #' @param ... These dots exist so that every argument after `fits` is matched by
 #'   name. Passing anything through them is an error.
-#' @param effects The reading to pool, either `"marginal"` or `"conditional"`.
-#'   `NULL`, the default, pools the reading the results record. The marginal
+#' @param effects The reading the pooled result presents, either `"marginal"` or
+#'   `"conditional"`. `NULL`, the default, presents the reading the results
+#'   record. Both readings are pooled whenever both can be, so this says which
+#'   one the result reports and which one it stores beside it. The marginal
 #'   reading pools the causal contrast estimates; the conditional reading pools
 #'   the outcome models' coefficients, with the standard errors implied by the
 #'   corrected covariance each one carries.
@@ -98,7 +136,7 @@
 #' @param conf_level The level the pooled bounds report. `NULL`, the default,
 #'   uses the level the results stored, or `0.95` when they store none.
 #'
-#' @return An S3 object of class `ipw_pooled`: a list of the following nine
+#' @return An S3 object of class `ipw_pooled`: a list of the following ten
 #'   components, in this order.
 #' \describe{
 #'   \item{`estimand`}{The causal estimand every pooled result targeted.}
@@ -128,6 +166,15 @@
 #'     estimated from.}
 #'   \item{`outcome_link`}{The link every pooled result's outcome model was
 #'     fitted with, which is the scale the effects are reported on.}
+#'   \item{`alternate`}{The reading the result does not present, in one of two
+#'     shapes. When that reading was pooled it is a list of `effects`, naming
+#'     which reading it is, and `estimates` and `pooling`, the two frames
+#'     described above built for it and built the same way, the pooled covariance
+#'     on the estimates frame included. When it could not be pooled it is a list
+#'     of `effects` and `reason`, the message of the refusal that reading raised.
+#'     [as_marginal()] and [as_conditional()] read this component to move the
+#'     result between the two readings, and the accessors that take an `effects`
+#'     argument read it the same way.}
 #' }
 #'
 #' @references
@@ -137,7 +184,9 @@
 #' Rubin, D. B. (1987). *Multiple Imputation for Nonresponse in Surveys*. New
 #' York: John Wiley and Sons.
 #'
-#' @seealso [new_ipw()] for the results this pools and the fields it reads.
+#' @seealso [new_ipw()] for the results this pools and the fields it reads, and
+#'   [as_marginal()] and [as_conditional()] for moving the pooled result between
+#'   the two readings it carries.
 #'
 #' @export
 #'
@@ -204,6 +253,13 @@
 #'
 #' # The ratio effect stays on the log scale it was estimated on.
 #' pooled$estimates$effect
+#'
+#' # Both readings are pooled from one call. These outcome models carry no
+#' # corrected covariance, which is what the conditional reading is pooled from,
+#' # so that reading records why it has none rather than refusing the call.
+#' pooled$alternate$effects
+#'
+#' try(as_conditional(pooled))
 pool_ipw <- function(
   fits,
   ...,
@@ -249,21 +305,17 @@ pool_ipw <- function(
     effects
   }
 
-  surfaces <- lapply(fits, pool_surface, effects = mode, call = call)
-  labels <- pool_common(surfaces, function(x) x$labels, "labels", call)
+  # The reading the caller asked for is read first and is never guarded, so a
+  # set that cannot be pooled on it is refused rather than answered with an
+  # empty result. The order the refusals come in is part of the contract: what
+  # the results report has to agree before the level they report it at does.
+  read <- pool_mode_surfaces(fits, mode, call = call)
+  level <- pool_mode_level(read$surfaces, conf_level, call = call)
 
-  # The same reading of a `NULL` argument as the mode above. A set that records
-  # no level at all leaves nothing to disagree about, and the level every other
-  # surface in this package defaults to is what the bounds report.
-  level <- if (is.null(conf_level)) {
-    pool_common(surfaces, function(x) x$conf.level, "conf_level", call)
-  } else {
-    conf_level
-  }
-  if (is.null(level)) {
-    level <- 0.95
-  }
-
+  # Settled once, before either reading is pooled, since the complete-data count
+  # is a property of the analyses rather than of a reading of them. Resolving it
+  # per surface would raise the large-sample warning twice for one call, which a
+  # reader would take as two separate assumptions.
   if (is.null(dfcom)) {
     dfcom <- pool_dfcom(fits)
     if (is.na(dfcom)) {
@@ -273,31 +325,164 @@ pool_ipw <- function(
   }
   dfcom <- max(dfcom, 1)
 
-  estimate <- do.call(rbind, lapply(surfaces, function(x) x$estimate))
-  std_err <- do.call(rbind, lapply(surfaces, function(x) x$std.err))
-  pooled <- rubin_rules(estimate, std_err, dfcom)
-
-  # The columns that name a row, which both returned frames are keyed by. A
-  # binary or continuous exposure has one contrast, so a `contrast` column there
-  # would repeat one value down the table and read as a contrast that was named.
-  key <- list(effect = surfaces[[1L]]$effect)
-  if (!is.null(surfaces[[1L]]$contrast)) {
-    key$contrast <- surfaces[[1L]]$contrast
-  }
-
-  estimates <- pool_estimates_frame(key, pooled, level)
-  attr(estimates, "ipw_vcov") <- pool_vcov(surfaces, estimate, labels)
+  frames <- pool_mode_frames(read, level, dfcom)
 
   new_ipw_pooled(
     estimand = estimand,
-    estimates = estimates,
-    pooling = pool_diagnostics_frame(key, pooled),
+    estimates = frames$estimates,
+    pooling = frames$pooling,
     se_method = se_method,
     effects = mode,
     m = m,
     dfcom = dfcom,
     nobs = min(vapply(fits, stats::nobs, integer(1))),
-    outcome_link = link
+    outcome_link = link,
+    alternate = pool_alternate(fits, mode, conf_level, dfcom, call = call)
+  )
+}
+
+#' The surfaces of one reading, and what keys their rows
+#'
+#' The first half of pooling a reading: every result's surface is read, what
+#' they report has to agree, and the columns that name a row are taken from the
+#' first of them. It is a helper rather than part of [pool_ipw()] because both
+#' readings are pooled from one call, and two copies of it would be two places
+#' for the agreements to drift apart.
+#'
+#' The key is the columns that name a row, which both returned frames are keyed
+#' by. A binary or continuous exposure has one contrast, so a `contrast` column
+#' there would repeat one value down the table and read as a contrast that was
+#' named. The conditional reading names coefficients and has no contrast at all.
+#'
+#' @param fits The results being pooled.
+#' @param effects The reading to read off them.
+#' @param call The call to report the error against, which is [pool_ipw()]'s
+#'   rather than this helper's.
+#'
+#' @return A list of the surfaces, the effect labels they agree on, and the key.
+#'
+#' @noRd
+pool_mode_surfaces <- function(fits, effects, call = sys.call(-1)) {
+  surfaces <- lapply(fits, pool_surface, effects = effects, call = call)
+  labels <- pool_common(surfaces, function(x) x$labels, "labels", call)
+
+  key <- list(effect = surfaces[[1L]]$effect)
+  if (!is.null(surfaces[[1L]]$contrast)) {
+    key$contrast <- surfaces[[1L]]$contrast
+  }
+
+  list(surfaces = surfaces, labels = labels, key = key)
+}
+
+#' The level one reading's bounds are reported at
+#'
+#' The same reading of a `NULL` argument that the mode gets. A level named at
+#' the call site settles the bounds of every reading, and otherwise each reading
+#' resolves its own from what its own surfaces stored: an estimates frame
+#' records the level its bounds were reported at and a coefficient surface
+#' records none. A set that records no level at all leaves nothing to disagree
+#' about, and the level every other surface in this package defaults to is what
+#' the bounds report.
+#'
+#' @param surfaces The surfaces of one reading.
+#' @param conf_level The argument as the caller supplied it.
+#' @param call The call to report the error against, which is [pool_ipw()]'s
+#'   rather than this helper's.
+#'
+#' @return A single number.
+#'
+#' @noRd
+pool_mode_level <- function(surfaces, conf_level, call = sys.call(-1)) {
+  level <- if (is.null(conf_level)) {
+    pool_common(surfaces, function(x) x$conf.level, "conf_level", call)
+  } else {
+    conf_level
+  }
+
+  if (is.null(level)) 0.95 else level
+}
+
+#' The two frames one reading is pooled into
+#'
+#' The second half of pooling a reading: Rubin's rules over the surfaces, and
+#' the estimates and diagnostics frames those give, keyed the same way so that a
+#' row of one is found from a row of the other. The pooled covariance rides on
+#' the estimates frame it describes and is named the way that frame is named.
+#'
+#' @param read The output of `pool_mode_surfaces()`.
+#' @param level The level the bounds report.
+#' @param dfcom The complete-data degrees of freedom, which both readings share.
+#'
+#' @return A list of the estimates frame and the diagnostics frame.
+#'
+#' @noRd
+pool_mode_frames <- function(read, level, dfcom) {
+  surfaces <- read$surfaces
+  estimate <- do.call(rbind, lapply(surfaces, function(x) x$estimate))
+  std_err <- do.call(rbind, lapply(surfaces, function(x) x$std.err))
+  pooled <- rubin_rules(estimate, std_err, dfcom)
+
+  estimates <- pool_estimates_frame(read$key, pooled, level)
+  attr(estimates, "ipw_vcov") <- pool_vcov(surfaces, estimate, read$labels)
+
+  list(
+    estimates = estimates,
+    pooling = pool_diagnostics_frame(read$key, pooled)
+  )
+}
+
+#' The reading the caller did not ask for
+#'
+#' Both readings are pooled from one set of results, so which one the call named
+#' decides which pair of frames is the active one rather than what gets computed
+#' at all. The other pair is recorded here, which is what lets a caller move a
+#' pooled result between the two readings afterwards without pooling again.
+#'
+#' This pass is guarded and the active one is not. A set whose other reading
+#' cannot be pooled is a result with one reading rather than a failed pooling,
+#' since nothing about the reading the caller asked for is wrong; what stopped
+#' the other one is recorded so that the request it answers can raise it later,
+#' in the words the refusal itself used. The guard catches errors alone, and the
+#' pass raises nothing else: the complete-data count is resolved before it and
+#' passed in, so the only warning [pool_ipw()] has is already behind it.
+#'
+#' @param fits The results being pooled.
+#' @param effects The reading that was pooled actively.
+#' @param conf_level The `conf_level` argument as the caller supplied it.
+#' @param dfcom The complete-data degrees of freedom the active reading used.
+#' @param call The call to report the error against, which is [pool_ipw()]'s
+#'   rather than this helper's.
+#'
+#' @return A list naming the other reading, holding either its two frames or the
+#'   reason it has none.
+#'
+#' @noRd
+pool_alternate <- function(
+  fits,
+  effects,
+  conf_level,
+  dfcom,
+  call = sys.call(-1)
+) {
+  other <- setdiff(c("marginal", "conditional"), effects)
+
+  frames <- tryCatch(
+    {
+      read <- pool_mode_surfaces(fits, other, call = call)
+      level <- pool_mode_level(read$surfaces, conf_level, call = call)
+      pool_mode_frames(read, level, dfcom)
+    },
+    error = function(cnd) cnd
+  )
+
+  if (inherits(frames, "error")) {
+    return(list(effects = other, reason = conditionMessage(frames)))
+  }
+
+  list(
+    effects = other,
+    estimates = frames$estimates,
+    pooling = frames$pooling
   )
 }
 
@@ -313,8 +498,16 @@ pool_ipw <- function(
 #' inference to t rather than to z, so the methods registered against `ipw`
 #' would answer for fields it does not carry.
 #'
+#' `alternate` is last rather than beside the fields it mirrors. The nine
+#' components before it are what the return contract has always documented, and
+#' a caller reading a pooled result positionally, or comparing one against a
+#' result stored before the other reading was kept, finds them where they were.
+#'
 #' @param estimand,estimates,pooling,se_method,effects,m,dfcom,nobs,outcome_link
 #'   The components, as the [pool_ipw()] return contract describes them.
+#' @param alternate The reading that was not pooled actively, as
+#'   `pool_alternate()` records it: a list naming that reading and holding
+#'   either its two frames or the reason it has none.
 #'
 #' @return An S3 object of class `ipw_pooled`.
 #'
@@ -328,7 +521,8 @@ new_ipw_pooled <- function(
   m,
   dfcom,
   nobs,
-  outcome_link
+  outcome_link,
+  alternate
 ) {
   structure(
     list(
@@ -340,7 +534,8 @@ new_ipw_pooled <- function(
       m = m,
       dfcom = dfcom,
       nobs = nobs,
-      outcome_link = outcome_link
+      outcome_link = outcome_link,
+      alternate = alternate
     ),
     class = "ipw_pooled"
   )

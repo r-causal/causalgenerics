@@ -227,6 +227,49 @@ stop_no_conditional_vcov <- function(call = sys.call(-1)) {
   ))
 }
 
+# Signal that a pooled result was asked to present a reading it does not carry.
+# The classes follow `stop_no_method()`: one keyed to the reading that was asked
+# for, since a caller who wants only the conditional reading has nothing to match
+# on otherwise, and one general class for callers that care that the reading is
+# absent rather than which one it was.
+#
+# Two facts get the same pair of classes and different sentences. A reading that
+# was tried and could not be pooled has a reason recorded, and it is repeated
+# here verbatim rather than paraphrased: it is the refusal the same request would
+# have raised at pooling time, and a second wording of it would be a second thing
+# to keep true. A result stored before both readings were kept has no reason to
+# report, and what its caller has to do is pool the results again rather than
+# change how they were fitted.
+stop_pool_missing_surface <- function(effects, reason, call = sys.call(-1)) {
+  message <- if (is.null(reason)) {
+    paste0(
+      "This pooled result carries no ",
+      effects,
+      " reading: it was pooled before both readings were kept, so there is ",
+      "nothing recorded to present; pooling the results again gives a result ",
+      "that carries both."
+    )
+  } else {
+    paste0(
+      "This pooled result carries no ",
+      effects,
+      " reading, since pooling that reading over the same results was ",
+      "refused. ",
+      reason
+    )
+  }
+  stop(errorCondition(
+    message,
+    effects = effects,
+    reason = reason,
+    class = c(
+      paste0("causalgenerics_pool_missing_surface_", effects),
+      "causalgenerics_pool_missing_surface"
+    ),
+    call = call
+  ))
+}
+
 # Signal that the corrected covariance an outcome model carries cannot be paired
 # with the coefficients it is meant to report. The classes follow
 # `stop_no_conditional_vcov()`, whose general class this one also carries, and

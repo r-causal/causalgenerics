@@ -14,8 +14,10 @@ between-imputation variance is estimated from the spread across them.}
 \item{...}{These dots exist so that every argument after \code{fits} is matched by
 name. Passing anything through them is an error.}
 
-\item{effects}{The reading to pool, either \code{"marginal"} or \code{"conditional"}.
-\code{NULL}, the default, pools the reading the results record. The marginal
+\item{effects}{The reading the pooled result presents, either \code{"marginal"} or
+\code{"conditional"}. \code{NULL}, the default, presents the reading the results
+record. Both readings are pooled whenever both can be, so this says which
+one the result reports and which one it stores beside it. The marginal
 reading pools the causal contrast estimates; the conditional reading pools
 the outcome models' coefficients, with the standard errors implied by the
 corrected covariance each one carries.}
@@ -27,7 +29,7 @@ them off the results as the section above describes.}
 uses the level the results stored, or \code{0.95} when they store none.}
 }
 \value{
-An S3 object of class \code{ipw_pooled}: a list of the following nine
+An S3 object of class \code{ipw_pooled}: a list of the following ten
 components, in this order.
 \describe{
 \item{\code{estimand}}{The causal estimand every pooled result targeted.}
@@ -57,6 +59,15 @@ between-imputation variance), \code{riv} (the relative increase in variance),
 estimated from.}
 \item{\code{outcome_link}}{The link every pooled result's outcome model was
 fitted with, which is the scale the effects are reported on.}
+\item{\code{alternate}}{The reading the result does not present, in one of two
+shapes. When that reading was pooled it is a list of \code{effects}, naming
+which reading it is, and \code{estimates} and \code{pooling}, the two frames
+described above built for it and built the same way, the pooled covariance
+on the estimates frame included. When it could not be pooled it is a list
+of \code{effects} and \code{reason}, the message of the refusal that reading raised.
+\code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} read this component to move the
+result between the two readings, and the accessors that take an \code{effects}
+argument read it the same way.}
 }
 }
 \description{
@@ -88,6 +99,32 @@ recognized by its class and read through its \code{analyses} element, which is a
 the object is, so a package that produces one by another route is answered
 the same way.
 }
+\section{The two readings}{
+Both readings of the results are pooled from one call whenever both can be
+pooled. \code{effects} says which of them the returned result presents, and the
+other is stored whole under \code{alternate}, so a caller moves a pooled result
+between the two afterwards with \code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} rather
+than pooling again. Which reading was named therefore decides which pair of
+frames is the active one rather than what was computed at all: pooling one
+reading and moving to the other gives the frames pooling the other directly
+gives.
+
+The reading the call names is pooled first and is not guarded, so a set that
+cannot be pooled on it is refused as it always was. The other reading is
+pooled under a guard, since a set that cannot be pooled on it is a result with
+one reading rather than a failed pooling: nothing about the reading the caller
+asked for is wrong. \code{alternate} then records that reading and the refusal it
+raised, and asking the result for it later raises that refusal in the words it
+used. The commonest case is a set of results whose outcome models carry no
+corrected covariance, which is what the conditional reading is pooled from.
+
+The components describing the analyses rather than a reading of them are
+shared by both readings. The estimand, the standard error method, the number
+of results, the complete-data degrees of freedom, the observation count, and
+the outcome model link are settled once, from the results themselves, and are
+what either reading reports.
+}
+
 \section{What the results have to agree on}{
 The pooled estimate of an effect is an average of the per-imputation ones, so
 the results have to be estimating the same things the same way. A set that
@@ -96,6 +133,16 @@ records, the effects it reports, the confidence level it stores, or the link
 its outcome model was fitted with is refused with an error of class
 \code{causalgenerics_pool_mismatch}, and of a second class naming which of those
 it was. The differing values travel on the condition under \code{values}.
+
+Those requirements are not all of one kind. The estimand, the standard error
+method, and the outcome model link describe the results rather than a reading
+of them, and so does the presentation mode when \code{effects} leaves it to be
+read; a disagreement about any of those refuses the call. Which effects a
+result reports and what level it reported them at are properties of one
+reading of it, and those requirements bind the reading being pooled: a
+disagreement confined to the reading the call did not name is recorded on
+\code{alternate} as the reason that reading could not be pooled rather than
+refused.
 
 The effects have to agree as an ordered vector rather than as a set. The
 labels are what say which row is which, so two results reporting the same
@@ -206,6 +253,13 @@ pool_ipw(fits, dfcom = 500)$estimates$df
 
 # The ratio effect stays on the log scale it was estimated on.
 pooled$estimates$effect
+
+# Both readings are pooled from one call. These outcome models carry no
+# corrected covariance, which is what the conditional reading is pooled from,
+# so that reading records why it has none rather than refusing the call.
+pooled$alternate$effects
+
+try(as_conditional(pooled))
 }
 \references{
 Barnard, J. and Rubin, D. B. (1999). Small sample degrees of freedom with
@@ -215,5 +269,7 @@ Rubin, D. B. (1987). \emph{Multiple Imputation for Nonresponse in Surveys}. New
 York: John Wiley and Sons.
 }
 \seealso{
-\code{\link[=new_ipw]{new_ipw()}} for the results this pools and the fields it reads.
+\code{\link[=new_ipw]{new_ipw()}} for the results this pools and the fields it reads, and
+\code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} for moving the pooled result between
+the two readings it carries.
 }

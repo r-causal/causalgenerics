@@ -1,9 +1,9 @@
 # The methods an `ipw_pooled` result carries: `print()`, `coef()`, `vcov()`,
-# `confint()`, `nobs()`, and `as.data.frame()`. `pool_ipw()` itself, and the
-# construction of the class, are in `test-ipw-pool.R`, the way `new_ipw()` and
-# its methods are split across `test-ipw-result.R` and `test-ipw-accessors.R`.
-# The test files in this suite mirror the files under `R/` one for one, and
-# these methods are a surface of their own.
+# `confint()`, `nobs()`, `as.data.frame()`, and `estimand()`. `pool_ipw()`
+# itself, and the construction of the class, are in `test-ipw-pool.R`, the way
+# `new_ipw()` and its methods are split across `test-ipw-result.R` and
+# `test-ipw-accessors.R`. The test files in this suite mirror the files under
+# `R/` one for one, and these methods are a surface of their own.
 #
 # They live in this package for the reason the `ipw` methods do. Two packages
 # each registering `print.ipw_pooled()` would collide in the shared S3 method
@@ -20,6 +20,13 @@
 # degrees of freedom rather than to the normal. A method that reused the `ipw`
 # spelling would agree on the estimates and be wrong about every interval and
 # every p-value, by more the fewer imputations there are.
+#
+# `coef()`, `vcov()`, `confint()`, and `as.data.frame()` take an `effects`
+# argument, as their unpooled counterparts do. A pooled result holds both
+# readings, so naming one reports it for a single call: the argument is resolved
+# the way the unpooled accessors resolve theirs, and the reading is then read
+# off the result the flip would give, so a request for a reading the pooling
+# could not compute is refused where the flip refuses it.
 #
 # The fixtures are rebuilt here rather than shared with `test-ipw-pool.R`, since
 # testthat sources each file in an environment of its own. They hold the same
@@ -241,6 +248,44 @@ pooled_conditional <- function(models = pool_conditional_models()) {
   pool_ipw(pool_conditional_fits(models), dfcom = 18)
 }
 
+# The same three results recording the marginal reading, with the covariance of
+# the effects attached as well as the corrected block on the outcome models.
+# Both readings of this set can be pooled, which is what a result asked for the
+# reading it does not present needs: the outcome models carry what the
+# conditional reading is pooled from and the estimates frames carry what the
+# marginal one's covariance is pooled from.
+pool_both_surface_fits <- function(models = pool_conditional_models()) {
+  estimate <- pool_binary_estimate()
+  std_err <- pool_binary_std_err()
+  Map(
+    function(i, mod) {
+      pool_fit(
+        pool_binary_estimates(estimate[i, ], std_err[i, ]),
+        vcov = pool_effects_vcov(std_err[i, ], pool_binary_labels()),
+        outcome_mod = mod
+      )
+    },
+    1:3,
+    models
+  )
+}
+
+# A marginal pooled result whose conditional reading is there to be asked for.
+# `pooled_binary()` is deliberately not that result: its outcome models carry no
+# corrected block, so its conditional reading is recorded as unavailable, which
+# is the case the refusals below are written against.
+pooled_both <- function(models = pool_conditional_models()) {
+  pool_ipw(pool_both_surface_fits(models), dfcom = 18)
+}
+
+# The same set of results pooled the other way round: the conditional reading is
+# the one it records and the marginal one is there to be asked for. Pooling the
+# reading directly rather than flipping `pooled_both()` is what makes an
+# assertion about this result an assertion about the accessor.
+pooled_both_conditional <- function(models = pool_conditional_models()) {
+  pool_ipw(pool_both_surface_fits(models), effects = "conditional", dfcom = 18)
+}
+
 # A pooled result whose stored bounds are not the ones a recomputation gives:
 # asymmetric about the estimate, the way a bootstrap interval is, and recorded
 # at 0.9 rather than the 0.95 a caller who names no level asks for. Both facts
@@ -443,8 +488,9 @@ test_that("coef() keys a pooled categorical result by effect and contrast", {
 
 test_that("coef() reports the coefficient names in the conditional reading", {
   # The pooled conditional surface is the outcome models' coefficients, so the
-  # names are theirs. There is no `effects` argument here: a pooled result holds
-  # one surface, the one `pool_ipw()` pooled, rather than both.
+  # names are theirs. This is the reading the result records, which is what a
+  # caller who names none is asking for; naming one for a single call is the
+  # section further down.
   res <- pooled_conditional()
 
   expect_identical(names(coef(res)), c("(Intercept)", "z"))
@@ -1172,20 +1218,357 @@ test_that("as.data.frame() refuses to exponentiate an identity-link table", {
   expect_no_error(as.data.frame(pooled_binary(), exponentiate = TRUE))
 })
 
+# ---- estimand.ipw_pooled() ---------------------------------------------------
+
+test_that("estimand() reports the estimand a pooled result records", {
+  # The field rather than a computation, the way `estimand.ipw()` reads the
+  # unpooled one. The estimand is one of the things the pooled results had to
+  # agree on, so the pooled result records exactly one and reports it.
+  #
+  # `ipw_pooled` does not inherit from `ipw`, so without a method of its own the
+  # generic reaches the default and refuses a question the object can answer.
+  res <- pooled_binary()
+
+  expect_identical(estimand(res), "ate")
+  expect_identical(estimand(res), res$estimand)
+  expect_identical(estimand(pooled_conditional()), "ate")
+
+  # Carried across from the results rather than defaulted, so a pooling of
+  # results targeting something else reports that instead.
+  att <- res
+  att$estimand <- "att"
+  expect_identical(estimand(att), "att")
+
+  # Read through a call that cannot see this frame, so the answer is the
+  # registered method's rather than a local function's.
+  expect_identical(dispatch_from_baseenv(estimand, res), "ate")
+})
+
+# ---- naming a reading for one call -------------------------------------------
+
+test_that("coef() reports the reading its effects argument names", {
+  # The stored reading is the default and the argument is the override, in both
+  # directions. A caller holding a marginal pooled result and wanting the
+  # coefficient surface for one line does not have to flip the object to get it,
+  # and what they get is what the flipped object reports.
+  res <- pooled_both()
+  flipped <- as_conditional(res)
+
+  expect_identical(coef(res, effects = "conditional"), coef(flipped))
+  expect_identical(
+    names(coef(res, effects = "conditional")),
+    c("(Intercept)", "z")
+  )
+  expect_identical(
+    unname(coef(res, effects = "conditional")),
+    flipped$estimates$estimate
+  )
+
+  # Naming the reading the result records changes nothing, and `NULL` is how a
+  # caller declines to name one, which is what omitting it means.
+  expect_identical(coef(res, effects = "marginal"), coef(res))
+  expect_identical(coef(res, effects = NULL), coef(res))
+
+  # Without this the assertions above would hold of a method that ignored the
+  # argument, which is what it did before this contract existed.
+  expect_false(identical(coef(res, effects = "conditional"), coef(res)))
+})
+
+test_that("vcov() reports the block of the reading its argument names", {
+  # The covariance travels on the estimates frame of the reading it describes,
+  # so the block a named reading reports is that reading's, named the way that
+  # reading names its rows. A method that read the attribute before resolving
+  # the argument would report the stored reading's block under the other
+  # reading's question.
+  res <- pooled_both()
+  flipped <- as_conditional(res)
+
+  expect_identical(vcov(res, effects = "conditional"), vcov(flipped))
+  expect_identical(
+    vcov(res, effects = "conditional"),
+    attr(flipped$estimates, "ipw_vcov", exact = TRUE)
+  )
+  expect_identical(
+    dimnames(vcov(res, effects = "conditional")),
+    list(c("(Intercept)", "z"), c("(Intercept)", "z"))
+  )
+
+  expect_identical(vcov(res, effects = "marginal"), vcov(res))
+  expect_identical(vcov(res, effects = NULL), vcov(res))
+  expect_false(identical(vcov(res, effects = "conditional"), vcov(res)))
+})
+
+test_that("confint() bounds the reading its effects argument names", {
+  # The bounds, their labels, and the rows `parm` selects all come from the
+  # reading asked for. The two readings name their rows differently here, so a
+  # `parm` resolved against the stored reading would refuse a coefficient name
+  # the conditional surface does report.
+  res <- pooled_both()
+  flipped <- as_conditional(res)
+
+  expect_identical(confint(res, effects = "conditional"), confint(flipped))
+  expect_identical(
+    rownames(confint(res, effects = "conditional")),
+    c("(Intercept)", "z")
+  )
+  expect_identical(confint(res, effects = "marginal"), confint(res))
+  expect_identical(confint(res, effects = NULL), confint(res))
+
+  # The three arguments are independent, and a caller who names all of them
+  # names the reading, the rows of it, and the width at once.
+  ci <- confint(res, parm = "z", level = 0.9, effects = "conditional")
+
+  expect_identical(ci, confint(flipped, parm = "z", level = 0.9))
+  expect_identical(dimnames(ci), list("z", c("5 %", "95 %")))
+
+  # `z` names no row of the reading the result records, which is what says the
+  # selection above was made against the reading that was asked for.
+  expect_error(
+    confint(res, parm = "z"),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+})
+
+test_that("as.data.frame() tabulates the reading its argument names", {
+  # The whole table is the flipped result's, columns, terms, bounds, and the
+  # covariance that travels on it alike.
+  res <- pooled_both()
+  flipped <- as_conditional(res)
+
+  expect_identical(
+    as.data.frame(res, effects = "conditional"),
+    as.data.frame(flipped)
+  )
+  expect_identical(
+    as.data.frame(res, effects = "conditional", conf.int = TRUE),
+    as.data.frame(flipped, conf.int = TRUE)
+  )
+  expect_identical(
+    as.data.frame(res, effects = "conditional")$term,
+    c("(Intercept)", "z")
+  )
+
+  # Declining to name a reading, in either of the two ways, reports the stored
+  # one exactly as it did before the argument existed.
+  expect_identical(as.data.frame(res, effects = "marginal"), as.data.frame(res))
+  expect_identical(as.data.frame(res, effects = NULL), as.data.frame(res))
+  expect_identical(as.data.frame(res)$term, pool_binary_labels())
+})
+
+test_that("as.data.frame() exponentiates the reading it was asked for", {
+  # The reading is settled before the scale is, so `exponentiate = TRUE` beside
+  # a named reading means what it means on the object that reading belongs to. A
+  # conditional table has no rows labelled as ratios, so the link settles it for
+  # every row at once: a logit link moves every estimate and relabels no term.
+  res <- pooled_both()
+  flipped <- as_conditional(res)
+  plain <- as.data.frame(res, effects = "conditional")
+
+  expect_identical(res$outcome_link, "logit")
+
+  df <- as.data.frame(res, effects = "conditional", exponentiate = TRUE)
+
+  expect_identical(df, as.data.frame(flipped, exponentiate = TRUE))
+  expect_identical(df$term, c("(Intercept)", "z"))
+  expect_equal(df$estimate, exp(plain$estimate))
+  # The inference is done on the log scale and stays there.
+  expect_identical(df$std.error, plain$std.error)
+  expect_identical(df$statistic, plain$statistic)
+  expect_identical(df$p.value, plain$p.value)
+
+  # Not the marginal table's answer, which moves two rows of three and relabels
+  # both of them.
+  expect_false(identical(df$term, as.data.frame(res, exponentiate = TRUE)$term))
+})
+
+test_that("as.data.frame() refuses to exponentiate an identity-link reading", {
+  # The link gate reads the reading that was asked for, so a marginal result
+  # whose outcome models were fitted on the identity link refuses the
+  # conditional table it would otherwise build and leaves its own alone: the
+  # marginal reading picks its rows out by label and is unaffected by the link.
+  res <- pooled_both(pool_identity_models())
+
+  expect_identical(res$outcome_link, "identity")
+  expect_no_error(as.data.frame(res, exponentiate = TRUE))
+  expect_no_error(as.data.frame(res, effects = "conditional"))
+
+  expect_error(
+    as.data.frame(res, effects = "conditional", exponentiate = TRUE),
+    class = "causalgenerics_exponentiate_link"
+  )
+  expect_error(
+    as.data.frame(res, effects = "conditional", exponentiate = TRUE),
+    class = "causalgenerics_invalid_argument_exponentiate"
+  )
+  expect_error(
+    as.data.frame(res, effects = "conditional", exponentiate = TRUE),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  cnd <- tryCatch(
+    as.data.frame(res, effects = "conditional", exponentiate = TRUE),
+    error = identity
+  )
+  expect_identical(cnd$link, "identity")
+  expect_identical(cnd$exponentiable, c("logit", "log"))
+  expect_match(conditionMessage(cnd), "identity", fixed = TRUE)
+
+  # The same refusal the flipped object makes, since the gate is reached after
+  # the reading is settled and not before.
+  expect_error(
+    as.data.frame(as_conditional(res), exponentiate = TRUE),
+    class = "causalgenerics_exponentiate_link"
+  )
+})
+
+test_that("the pooled accessors read a conditional result's other reading", {
+  # The same contract from the other side. Every assertion above starts from a
+  # result recording the marginal reading, so a method that flipped whenever
+  # `"conditional"` was named and returned the object otherwise would satisfy
+  # all of them while answering this one with the surface the caller did not ask
+  # for. The argument names a reading, not a direction, and the reading a result
+  # records is the one it reports when no other is named, whichever that is.
+  #
+  # The two fixtures are the same three results pooled each way, which is the
+  # pair a flip moves between.
+  res <- pooled_both_conditional()
+  marginal <- pooled_both()
+
+  expect_identical(res$effects, "conditional")
+
+  accessors <- list(
+    coef = coef,
+    vcov = vcov,
+    confint = confint,
+    as.data.frame = as.data.frame
+  )
+
+  for (name in names(accessors)) {
+    accessor <- accessors[[name]]
+
+    expect_identical(
+      accessor(res, effects = "marginal"),
+      accessor(marginal),
+      info = name
+    )
+    # Naming the reading the result records changes nothing here either, and
+    # `NULL` is how a caller declines to name one.
+    expect_identical(
+      accessor(res, effects = "conditional"),
+      accessor(res),
+      info = name
+    )
+    expect_identical(accessor(res, effects = NULL), accessor(res), info = name)
+    # The two readings differ, so the two identities above are about the
+    # argument being resolved rather than about a fixture whose readings agree.
+    expect_false(
+      identical(accessor(res, effects = "marginal"), accessor(res)),
+      info = name
+    )
+  }
+
+  # The marginal reading labels its rows by effect where the conditional one
+  # labels them by coefficient, so the labels say which surface answered.
+  expect_identical(names(coef(res, effects = "marginal")), pool_binary_labels())
+  expect_identical(
+    rownames(confint(res, effects = "marginal")),
+    pool_binary_labels()
+  )
+  expect_identical(
+    as.data.frame(res, effects = "marginal")$term,
+    pool_binary_labels()
+  )
+  expect_identical(names(coef(res)), c("(Intercept)", "z"))
+
+  # The named reading is the one the flip gives from this side too, which is
+  # what says the fixture above is the flipped result rather than a result that
+  # merely agrees with it.
+  expect_identical(coef(res, effects = "marginal"), coef(as_marginal(res)))
+  expect_identical(as_marginal(res), marginal)
+})
+
+test_that("the pooled accessors refuse a reading the result does not hold", {
+  # A pooled result whose outcome models carry no corrected block records why
+  # its conditional reading is unavailable rather than holding one. Every
+  # accessor is refused the same way, since each reads the reading asked for
+  # through the flip and the flip is where the recorded reason is raised.
+  res <- pooled_binary()
+
+  accessors <- list(
+    coef = coef,
+    vcov = vcov,
+    confint = confint,
+    as.data.frame = as.data.frame
+  )
+
+  for (name in names(accessors)) {
+    accessor <- accessors[[name]]
+    expect_error(
+      accessor(res, effects = "conditional"),
+      class = "causalgenerics_pool_missing_surface_conditional",
+      info = name
+    )
+    expect_error(
+      accessor(res, effects = "conditional"),
+      class = "causalgenerics_pool_missing_surface",
+      info = name
+    )
+  }
+
+  # The reading it does hold is unaffected, whether it is named or not.
+  expect_identical(coef(res, effects = "marginal"), coef(res))
+  expect_identical(vcov(res, effects = "marginal"), vcov(res))
+  expect_identical(as.data.frame(res, effects = "marginal"), as.data.frame(res))
+})
+
+test_that("the pooled accessors refuse an effects value that names no reading", {
+  # There are two readings and no third, so anything else is a misspelling or a
+  # wrong argument, and answering it with either surface would give the caller
+  # one they did not ask for. The condition is the one every other `effects`
+  # argument in this package raises, so a caller handles a single class wherever
+  # it came from.
+  res <- pooled_both()
+
+  expect_error(
+    coef(res, effects = "banana"),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    coef(res, effects = "banana"),
+    class = "causalgenerics_invalid_argument"
+  )
+  # A character vector of length one that names nothing, which `==` alone would
+  # answer with `NA` rather than with a refusal.
+  expect_error(
+    vcov(res, effects = NA_character_),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    confint(res, effects = 1),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    as.data.frame(res, effects = c("marginal", "conditional")),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+})
+
 # ---- registration ------------------------------------------------------------
 
 test_that("the pooled result's methods are registered for dispatch", {
   # Downstream packages reach these through the S3 method table a NAMESPACE
   # `S3method()` directive fills in. Each method is asserted to be in the table
-  # belonging to its own generic, which for `coef()` and the rest is stats' and
-  # for `print()` and `as.data.frame()` is base's.
+  # belonging to its own generic, which for `coef()` and the rest is stats', for
+  # `print()` and `as.data.frame()` is base's, and for `estimand()` is this
+  # package's own.
   for (generic in c(
     "print",
     "coef",
     "vcov",
     "confint",
     "nobs",
-    "as.data.frame"
+    "as.data.frame",
+    "estimand"
   )) {
     expect_true(
       exists(
@@ -1226,12 +1609,29 @@ test_that("the pooled result does not inherit the unpooled methods", {
   expect_null(res$wt_mod)
   expect_null(res$fit)
 
-  # Each generic resolves to a method of its own for the pooled class rather
-  # than to the unpooled one. The non-inheritance above is what makes that
-  # necessary, and this is what says it was done: a pooled frame carries every
-  # column `confint.ipw()` reads, so that method would answer for one without
-  # erroring, with normal bounds where the pooled inference calls for t.
-  for (generic in c("print", "coef", "vcov", "confint", "nobs")) {
+  # Each generic below resolves to a method of its own for the pooled class
+  # rather than to the unpooled one. The non-inheritance above is what makes
+  # that necessary, and this is what says it was done: a pooled frame carries
+  # every column `confint.ipw()` reads, so that method would answer for one
+  # without erroring, with normal bounds where the pooled inference calls for t.
+  # The mode generics are the same case from the other side:
+  # `as_conditional.ipw()` sets a field, and a pooled result whose reading was
+  # changed that way would report the frames of the reading it no longer names.
+  #
+  # `estimand()` is deliberately absent here. Both methods read one field and do
+  # nothing else, so written idiomatically they are the same closure and
+  # `identical()` reports them equal however the registration is arranged. The
+  # assertion would pin that coincidence rather than any property of the pooled
+  # class, and the pooled method's registration is asserted above.
+  for (generic in c(
+    "print",
+    "coef",
+    "vcov",
+    "confint",
+    "nobs",
+    "as_marginal",
+    "as_conditional"
+  )) {
     expect_false(
       identical(
         utils::getS3method(generic, "ipw_pooled"),

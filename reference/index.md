@@ -48,6 +48,7 @@ their own.
   [`confint(`*`<ipw_pooled>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-pooled-methods.md)
   [`nobs(`*`<ipw_pooled>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-pooled-methods.md)
   [`as.data.frame(`*`<ipw_pooled>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-pooled-methods.md)
+  [`estimand(`*`<ipw_pooled>`*`)`](https://r-causal.github.io/causalgenerics/reference/ipw-pooled-methods.md)
   : Methods for a pooled inverse probability weighted result
 - [`new_causal_wts()`](https://r-causal.github.io/causalgenerics/reference/new_causal_wts.md)
   : Construct a causal weight vector

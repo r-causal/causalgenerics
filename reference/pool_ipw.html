@@ -73,8 +73,10 @@ name. Passing anything through them is an error.</p></dd>
 
 
 <dt id="arg-effects">effects<a class="anchor" aria-label="anchor" href="#arg-effects"></a></dt>
-<dd><p>The reading to pool, either <code>"marginal"</code> or <code>"conditional"</code>.
-<code>NULL</code>, the default, pools the reading the results record. The marginal
+<dd><p>The reading the pooled result presents, either <code>"marginal"</code> or
+<code>"conditional"</code>. <code>NULL</code>, the default, presents the reading the results
+record. Both readings are pooled whenever both can be, so this says which
+one the result reports and which one it stores beside it. The marginal
 reading pools the causal contrast estimates; the conditional reading pools
 the outcome models' coefficients, with the standard errors implied by the
 corrected covariance each one carries.</p></dd>
@@ -92,7 +94,7 @@ uses the level the results stored, or <code>0.95</code> when they store none.</p
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>An S3 object of class <code>ipw_pooled</code>: a list of the following nine
+    <p>An S3 object of class <code>ipw_pooled</code>: a list of the following ten
 components, in this order.</p><dl><dt><code>estimand</code></dt>
 <dd><p>The causal estimand every pooled result targeted.</p></dd>
 
@@ -138,6 +140,17 @@ estimated from.</p></dd>
 <dd><p>The link every pooled result's outcome model was
 fitted with, which is the scale the effects are reported on.</p></dd>
 
+<dt><code>alternate</code></dt>
+<dd><p>The reading the result does not present, in one of two
+shapes. When that reading was pooled it is a list of <code>effects</code>, naming
+which reading it is, and <code>estimates</code> and <code>pooling</code>, the two frames
+described above built for it and built the same way, the pooled covariance
+on the estimates frame included. When it could not be pooled it is a list
+of <code>effects</code> and <code>reason</code>, the message of the refusal that reading raised.
+<code><a href="ipw-modes.html">as_marginal()</a></code> and <code><a href="ipw-modes.html">as_conditional()</a></code> read this component to move the
+result between the two readings, and the accessors that take an <code>effects</code>
+argument read it the same way.</p></dd>
+
 
 </dl></div>
     <div class="section level2">
@@ -163,6 +176,30 @@ the object is, so a package that produces one by another route is answered
 the same way.</p>
     </div>
     <div class="section level2">
+    <h2 id="the-two-readings">The two readings<a class="anchor" aria-label="anchor" href="#the-two-readings"></a></h2>
+    <p>Both readings of the results are pooled from one call whenever both can be
+pooled. <code>effects</code> says which of them the returned result presents, and the
+other is stored whole under <code>alternate</code>, so a caller moves a pooled result
+between the two afterwards with <code><a href="ipw-modes.html">as_marginal()</a></code> and <code><a href="ipw-modes.html">as_conditional()</a></code> rather
+than pooling again. Which reading was named therefore decides which pair of
+frames is the active one rather than what was computed at all: pooling one
+reading and moving to the other gives the frames pooling the other directly
+gives.</p>
+<p>The reading the call names is pooled first and is not guarded, so a set that
+cannot be pooled on it is refused as it always was. The other reading is
+pooled under a guard, since a set that cannot be pooled on it is a result with
+one reading rather than a failed pooling: nothing about the reading the caller
+asked for is wrong. <code>alternate</code> then records that reading and the refusal it
+raised, and asking the result for it later raises that refusal in the words it
+used. The commonest case is a set of results whose outcome models carry no
+corrected covariance, which is what the conditional reading is pooled from.</p>
+<p>The components describing the analyses rather than a reading of them are
+shared by both readings. The estimand, the standard error method, the number
+of results, the complete-data degrees of freedom, the observation count, and
+the outcome model link are settled once, from the results themselves, and are
+what either reading reports.</p>
+    </div>
+    <div class="section level2">
     <h2 id="what-the-results-have-to-agree-on">What the results have to agree on<a class="anchor" aria-label="anchor" href="#what-the-results-have-to-agree-on"></a></h2>
     <p>The pooled estimate of an effect is an average of the per-imputation ones, so
 the results have to be estimating the same things the same way. A set that
@@ -171,6 +208,15 @@ records, the effects it reports, the confidence level it stores, or the link
 its outcome model was fitted with is refused with an error of class
 <code>causalgenerics_pool_mismatch</code>, and of a second class naming which of those
 it was. The differing values travel on the condition under <code>values</code>.</p>
+<p>Those requirements are not all of one kind. The estimand, the standard error
+method, and the outcome model link describe the results rather than a reading
+of them, and so does the presentation mode when <code>effects</code> leaves it to be
+read; a disagreement about any of those refuses the call. Which effects a
+result reports and what level it reported them at are properties of one
+reading of it, and those requirements bind the reading being pooled: a
+disagreement confined to the reading the call did not name is recorded on
+<code>alternate</code> as the reason that reading could not be pooled rather than
+refused.</p>
 <p>The effects have to agree as an ordered vector rather than as a set. The
 labels are what say which row is which, so two results reporting the same
 contrasts in different orders would otherwise have the <code>b vs a</code> rows of one
@@ -219,7 +265,9 @@ York: John Wiley and Sons.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="new_ipw.html">new_ipw()</a></code> for the results this pools and the fields it reads.</p></div>
+    <div class="dont-index"><p><code><a href="new_ipw.html">new_ipw()</a></code> for the results this pools and the fields it reads, and
+<code><a href="ipw-modes.html">as_marginal()</a></code> and <code><a href="ipw-modes.html">as_conditional()</a></code> for moving the pooled result between
+the two readings it carries.</p></div>
     </div>
 
     <div class="section level2">
@@ -298,6 +346,16 @@ York: John Wiley and Sons.</p>
 <span class="r-in"><span><span class="co"># The ratio effect stays on the log scale it was estimated on.</span></span></span>
 <span class="r-in"><span><span class="va">pooled</span><span class="op">$</span><span class="va">estimates</span><span class="op">$</span><span class="va">effect</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "rd"      "log(rr)"</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Both readings are pooled from one call. These outcome models carry no</span></span></span>
+<span class="r-in"><span><span class="co"># corrected covariance, which is what the conditional reading is pooled from,</span></span></span>
+<span class="r-in"><span><span class="co"># so that reading records why it has none rather than refusing the call.</span></span></span>
+<span class="r-in"><span><span class="va">pooled</span><span class="op">$</span><span class="va">alternate</span><span class="op">$</span><span class="va">effects</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "conditional"</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/try.html" class="external-link">try</a></span><span class="op">(</span><span class="fu"><a href="ipw-modes.html">as_conditional</a></span><span class="op">(</span><span class="va">pooled</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Error in as_conditional.ipw_pooled(pooled) : </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   This pooled result carries no conditional reading, since pooling that reading over the same results was refused. The conditional reading reports the covariance the joint estimation of the weights and the outcome implies, and this result's outcome model records none; the package that produced the result attaches one by wrapping the model with `new_ipw_model()`.</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

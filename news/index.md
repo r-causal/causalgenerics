@@ -2,6 +2,46 @@
 
 ## causalgenerics (development version)
 
+- [`pool_ipw()`](https://r-causal.github.io/causalgenerics/reference/pool_ipw.md)
+  pools both readings of the results it is given whenever both can be
+  pooled, and stores the one the call did not name whole, as a tenth
+  `alternate` component holding that reading’s pooled estimates and
+  pooling diagnostics. Which reading `effects` names therefore decides
+  which one the result presents rather than what was computed at all,
+  and pooling one reading and moving to the other gives the frames
+  pooling the other directly gives. The reading the call names is pooled
+  first and is not guarded, so `pool_ipw(fits, effects = "conditional")`
+  over results whose outcome models carry no corrected covariance is
+  refused exactly as it was before. The other reading is pooled under a
+  guard, since a set that cannot be pooled on it is a result with one
+  reading rather than a failed pooling: `alternate` then names that
+  reading and records the refusal it raised, in the words the refusal
+  used.
+
+- [`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  and
+  [`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  move a pooled result between the two readings it carries, exchanging
+  the pooled estimates, the pooling diagnostics, and the recorded mode
+  with the reading stored beside them and leaving the components that
+  describe the analyses where they are.
+  [`coef()`](https://rdrr.io/r/stats/coef.html),
+  [`vcov()`](https://rdrr.io/r/stats/vcov.html),
+  [`confint()`](https://rdrr.io/r/stats/confint.html), and
+  [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) on a
+  pooled result each gain an `effects` argument naming a reading for one
+  call without changing the result, and
+  [`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+  now answers on a pooled result with the estimand its analyses agreed
+  on. Asking a pooled result for a reading the pooling could not compute
+  raises an error of class
+  `causalgenerics_pool_missing_surface_marginal` or
+  `causalgenerics_pool_missing_surface_conditional`, and of the general
+  class `causalgenerics_pool_missing_surface`, carrying the recorded
+  refusal as its reason; a result pooled before both readings were kept
+  refuses the same way and says that pooling the results again gives one
+  that carries both.
+
 - A pooled result carries the methods a fitted model answers to:
   [`print()`](https://rdrr.io/r/base/print.html),
   [`coef()`](https://rdrr.io/r/stats/coef.html),

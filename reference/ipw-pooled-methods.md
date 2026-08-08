@@ -22,6 +22,9 @@ returns carries.
 - [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) reports
   the pooled effects as a tidier-shaped table.
 
+- [`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+  returns the estimand the pooled analyses targeted.
+
 ## Usage
 
 ``` r
@@ -29,13 +32,13 @@ returns carries.
 print(x, ...)
 
 # S3 method for class 'ipw_pooled'
-coef(object, ...)
+coef(object, ..., effects = NULL)
 
 # S3 method for class 'ipw_pooled'
-vcov(object, ...)
+vcov(object, ..., effects = NULL)
 
 # S3 method for class 'ipw_pooled'
-confint(object, parm, level = 0.95, ...)
+confint(object, parm, level = 0.95, ..., effects = NULL)
 
 # S3 method for class 'ipw_pooled'
 nobs(object, ...)
@@ -48,8 +51,12 @@ as.data.frame(
   ...,
   conf.int = FALSE,
   conf.level = NULL,
-  exponentiate = FALSE
+  exponentiate = FALSE,
+  effects = NULL
 )
+
+# S3 method for class 'ipw_pooled'
+estimand(x, ...)
 ```
 
 ## Arguments
@@ -65,6 +72,20 @@ as.data.frame(
 - object:
 
   An `ipw_pooled` object.
+
+- effects:
+
+  The reading to report, either `"marginal"` or `"conditional"`. `NULL`,
+  the default, reports the reading the result records; any other value
+  overrides it for the one call and leaves the result as it is. A
+  reading the pooling could not compute is refused with an error of
+  class `causalgenerics_pool_missing_surface`, which is where
+  [`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  and
+  [`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  refuse it, and a result pooled before both readings were kept refuses
+  a request for the other reading with the same classes, having nothing
+  recorded to report.
 
 - parm:
 
@@ -137,6 +158,10 @@ and `p.value`, with `conf.low` and `conf.high` appended when they are
 asked for. The pooled covariance travels on it under the `ipw_vcov`
 attribute unless the table was exponentiated.
 
+[`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+returns the estimand the pooled results agreed on, which is the one the
+weights their estimates were computed under targeted.
+
 ## Details
 
 These live here for the reason the `ipw` methods do. Two packages each
@@ -156,6 +181,44 @@ mean: a pooled result reports several analyses rather than one fit and
 refers its inference to t rather than to z, so a pooled result reaching
 [`confint.ipw()`](https://r-causal.github.io/causalgenerics/reference/ipw-accessors.md)
 would come back with normal limits and nothing would say so.
+
+## The reading these methods report
+
+A pooled result carries both readings whenever
+[`pool_ipw()`](https://r-causal.github.io/causalgenerics/reference/pool_ipw.md)
+could compute both: the one it presents and, under `alternate`, the one
+it does not. [`coef()`](https://rdrr.io/r/stats/coef.html),
+[`vcov()`](https://rdrr.io/r/stats/vcov.html),
+[`confint()`](https://rdrr.io/r/stats/confint.html), and
+[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) report
+the reading the result presents, and take an `effects` argument naming
+one for a single call. Naming a reading reports it and leaves the result
+as it was;
+[`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+and
+[`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+are what change which reading a result presents.
+
+The reading is settled before anything else the call asks for.
+[`confint()`](https://rdrr.io/r/stats/confint.html) selects the rows
+`parm` names from the reading it was asked for, and
+[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) decides
+what `exponentiate = TRUE` moves and what it relabels from that reading
+too, so a conditional table is gated on the outcome model link whichever
+reading the result itself records. A reading the pooling could not
+compute is refused rather than answered with the one the result holds,
+and a value naming neither reading raises an error of class
+`causalgenerics_invalid_argument_effects`, and of the general class
+`causalgenerics_invalid_argument`, as it does everywhere else in this
+package.
+
+[`print()`](https://rdrr.io/r/base/print.html) reports the reading the
+result presents and takes no such argument. It names that reading in its
+heading, and a caller who wants the other one moves the result to it
+first. [`nobs()`](https://rdrr.io/r/stats/nobs.html) and
+[`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+describe the pooled analyses rather than a reading of them, so they
+answer the same way in either reading and take no `effects` argument.
 
 ## The degrees of freedom
 
@@ -228,7 +291,11 @@ coefficients that describe nothing once exponentiated.
 ## See also
 
 [`pool_ipw()`](https://r-causal.github.io/causalgenerics/reference/pool_ipw.md),
-which produces these results, and
+which produces these results,
+[`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+and
+[`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md),
+which move one between the readings it carries, and
 [`new_ipw()`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
 for the unpooled result they are pooled from.
 

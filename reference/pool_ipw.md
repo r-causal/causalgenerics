@@ -28,11 +28,13 @@ pool_ipw(fits, ..., effects = NULL, dfcom = NULL, conf_level = NULL)
 
 - effects:
 
-  The reading to pool, either `"marginal"` or `"conditional"`. `NULL`,
-  the default, pools the reading the results record. The marginal
-  reading pools the causal contrast estimates; the conditional reading
-  pools the outcome models' coefficients, with the standard errors
-  implied by the corrected covariance each one carries.
+  The reading the pooled result presents, either `"marginal"` or
+  `"conditional"`. `NULL`, the default, presents the reading the results
+  record. Both readings are pooled whenever both can be, so this says
+  which one the result reports and which one it stores beside it. The
+  marginal reading pools the causal contrast estimates; the conditional
+  reading pools the outcome models' coefficients, with the standard
+  errors implied by the corrected covariance each one carries.
 
 - dfcom:
 
@@ -46,7 +48,7 @@ pool_ipw(fits, ..., effects = NULL, dfcom = NULL, conf_level = NULL)
 
 ## Value
 
-An S3 object of class `ipw_pooled`: a list of the following nine
+An S3 object of class `ipw_pooled`: a list of the following ten
 components, in this order.
 
 - `estimand`:
@@ -102,6 +104,21 @@ components, in this order.
   The link every pooled result's outcome model was fitted with, which is
   the scale the effects are reported on.
 
+- `alternate`:
+
+  The reading the result does not present, in one of two shapes. When
+  that reading was pooled it is a list of `effects`, naming which
+  reading it is, and `estimates` and `pooling`, the two frames described
+  above built for it and built the same way, the pooled covariance on
+  the estimates frame included. When it could not be pooled it is a list
+  of `effects` and `reason`, the message of the refusal that reading
+  raised.
+  [`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  and
+  [`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  read this component to move the result between the two readings, and
+  the accessors that take an `effects` argument read it the same way.
+
 ## Details
 
 Each result is estimated on one completed dataset and carries a standard
@@ -127,6 +144,36 @@ normal.
 element, which is all the object is, so a package that produces one by
 another route is answered the same way.
 
+## The two readings
+
+Both readings of the results are pooled from one call whenever both can
+be pooled. `effects` says which of them the returned result presents,
+and the other is stored whole under `alternate`, so a caller moves a
+pooled result between the two afterwards with
+[`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+and
+[`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+rather than pooling again. Which reading was named therefore decides
+which pair of frames is the active one rather than what was computed at
+all: pooling one reading and moving to the other gives the frames
+pooling the other directly gives.
+
+The reading the call names is pooled first and is not guarded, so a set
+that cannot be pooled on it is refused as it always was. The other
+reading is pooled under a guard, since a set that cannot be pooled on it
+is a result with one reading rather than a failed pooling: nothing about
+the reading the caller asked for is wrong. `alternate` then records that
+reading and the refusal it raised, and asking the result for it later
+raises that refusal in the words it used. The commonest case is a set of
+results whose outcome models carry no corrected covariance, which is
+what the conditional reading is pooled from.
+
+The components describing the analyses rather than a reading of them are
+shared by both readings. The estimand, the standard error method, the
+number of results, the complete-data degrees of freedom, the observation
+count, and the outcome model link are settled once, from the results
+themselves, and are what either reading reports.
+
 ## What the results have to agree on
 
 The pooled estimate of an effect is an average of the per-imputation
@@ -137,6 +184,16 @@ level it stores, or the link its outcome model was fitted with is
 refused with an error of class `causalgenerics_pool_mismatch`, and of a
 second class naming which of those it was. The differing values travel
 on the condition under `values`.
+
+Those requirements are not all of one kind. The estimand, the standard
+error method, and the outcome model link describe the results rather
+than a reading of them, and so does the presentation mode when `effects`
+leaves it to be read; a disagreement about any of those refuses the
+call. Which effects a result reports and what level it reported them at
+are properties of one reading of it, and those requirements bind the
+reading being pooled: a disagreement confined to the reading the call
+did not name is recorded on `alternate` as the reason that reading could
+not be pooled rather than refused.
 
 The effects have to agree as an ordered vector rather than as a set. The
 labels are what say which row is which, so two results reporting the
@@ -198,7 +255,11 @@ New York: John Wiley and Sons.
 ## See also
 
 [`new_ipw()`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
-for the results this pools and the fields it reads.
+for the results this pools and the fields it reads, and
+[`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+and
+[`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+for moving the pooled result between the two readings it carries.
 
 ## Examples
 
@@ -277,4 +338,14 @@ pool_ipw(fits, dfcom = 500)$estimates$df
 # The ratio effect stays on the log scale it was estimated on.
 pooled$estimates$effect
 #> [1] "rd"      "log(rr)"
+
+# Both readings are pooled from one call. These outcome models carry no
+# corrected covariance, which is what the conditional reading is pooled from,
+# so that reading records why it has none rather than refusing the call.
+pooled$alternate$effects
+#> [1] "conditional"
+
+try(as_conditional(pooled))
+#> Error in as_conditional.ipw_pooled(pooled) : 
+#>   This pooled result carries no conditional reading, since pooling that reading over the same results was refused. The conditional reading reports the covariance the joint estimation of the weights and the outcome implies, and this result's outcome model records none; the package that produced the result attaches one by wrapping the model with `new_ipw_model()`.
 ```

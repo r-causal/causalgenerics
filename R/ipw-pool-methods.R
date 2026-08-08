@@ -29,6 +29,31 @@
 #' to t rather than to z, so a pooled result reaching `confint.ipw()` would come
 #' back with normal limits and nothing would say so.
 #'
+#' # The reading these methods report
+#'
+#' A pooled result carries both readings whenever [pool_ipw()] could compute
+#' both: the one it presents and, under `alternate`, the one it does not.
+#' `coef()`, `vcov()`, `confint()`, and `as.data.frame()` report the reading the
+#' result presents, and take an `effects` argument naming one for a single call.
+#' Naming a reading reports it and leaves the result as it was; [as_marginal()]
+#' and [as_conditional()] are what change which reading a result presents.
+#'
+#' The reading is settled before anything else the call asks for. `confint()`
+#' selects the rows `parm` names from the reading it was asked for, and
+#' `as.data.frame()` decides what `exponentiate = TRUE` moves and what it
+#' relabels from that reading too, so a conditional table is gated on the outcome
+#' model link whichever reading the result itself records. A reading the pooling
+#' could not compute is refused rather than answered with the one the result
+#' holds, and a value naming neither reading raises an error of class
+#' `causalgenerics_invalid_argument_effects`, and of the general class
+#' `causalgenerics_invalid_argument`, as it does everywhere else in this package.
+#'
+#' `print()` reports the reading the result presents and takes no such argument.
+#' It names that reading in its heading, and a caller who wants the other one
+#' moves the result to it first. `nobs()` and `estimand()` describe the pooled
+#' analyses rather than a reading of them, so they answer the same way in either
+#' reading and take no `effects` argument.
+#'
 #' # The degrees of freedom
 #'
 #' Every pooled effect carries its own degrees of freedom, in the `df` column of
@@ -108,7 +133,9 @@
 #'   records; any other value overrides it for the one call and leaves the
 #'   result as it is. A reading the pooling could not compute is refused with an
 #'   error of class `causalgenerics_pool_missing_surface`, which is where
-#'   [as_marginal()] and [as_conditional()] refuse it.
+#'   [as_marginal()] and [as_conditional()] refuse it, and a result pooled
+#'   before both readings were kept refuses a request for the other reading with
+#'   the same classes, having nothing recorded to report.
 #' @param ... Further arguments. These methods ignore them.
 #'
 #' @return
@@ -141,8 +168,9 @@
 #' `estimand()` returns the estimand the pooled results agreed on, which is the
 #' one the weights their estimates were computed under targeted.
 #'
-#' @seealso [pool_ipw()], which produces these results, and [new_ipw()] for the
-#'   unpooled result they are pooled from.
+#' @seealso [pool_ipw()], which produces these results, [as_marginal()] and
+#'   [as_conditional()], which move one between the readings it carries, and
+#'   [new_ipw()] for the unpooled result they are pooled from.
 #'
 #' @examples
 #' dat <- data.frame(

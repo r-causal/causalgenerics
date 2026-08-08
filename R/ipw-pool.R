@@ -29,6 +29,32 @@
 #' the object is, so a package that produces one by another route is answered
 #' the same way.
 #'
+#' # The two readings
+#'
+#' Both readings of the results are pooled from one call whenever both can be
+#' pooled. `effects` says which of them the returned result presents, and the
+#' other is stored whole under `alternate`, so a caller moves a pooled result
+#' between the two afterwards with [as_marginal()] and [as_conditional()] rather
+#' than pooling again. Which reading was named therefore decides which pair of
+#' frames is the active one rather than what was computed at all: pooling one
+#' reading and moving to the other gives the frames pooling the other directly
+#' gives.
+#'
+#' The reading the call names is pooled first and is not guarded, so a set that
+#' cannot be pooled on it is refused as it always was. The other reading is
+#' pooled under a guard, since a set that cannot be pooled on it is a result with
+#' one reading rather than a failed pooling: nothing about the reading the caller
+#' asked for is wrong. `alternate` then records that reading and the refusal it
+#' raised, and asking the result for it later raises that refusal in the words it
+#' used. The commonest case is a set of results whose outcome models carry no
+#' corrected covariance, which is what the conditional reading is pooled from.
+#'
+#' The components describing the analyses rather than a reading of them are
+#' shared by both readings. The estimand, the standard error method, the number
+#' of results, the complete-data degrees of freedom, the observation count, and
+#' the outcome model link are settled once, from the results themselves, and are
+#' what either reading reports.
+#'
 #' # What the results have to agree on
 #'
 #' The pooled estimate of an effect is an average of the per-imputation ones, so
@@ -38,6 +64,16 @@
 #' its outcome model was fitted with is refused with an error of class
 #' `causalgenerics_pool_mismatch`, and of a second class naming which of those
 #' it was. The differing values travel on the condition under `values`.
+#'
+#' Those requirements are not all of one kind. The estimand, the standard error
+#' method, and the outcome model link describe the results rather than a reading
+#' of them, and so does the presentation mode when `effects` leaves it to be
+#' read; a disagreement about any of those refuses the call. Which effects a
+#' result reports and what level it reported them at are properties of one
+#' reading of it, and those requirements bind the reading being pooled: a
+#' disagreement confined to the reading the call did not name is recorded on
+#' `alternate` as the reason that reading could not be pooled rather than
+#' refused.
 #'
 #' The effects have to agree as an ordered vector rather than as a set. The
 #' labels are what say which row is which, so two results reporting the same
@@ -88,8 +124,10 @@
 #'   between-imputation variance is estimated from the spread across them.
 #' @param ... These dots exist so that every argument after `fits` is matched by
 #'   name. Passing anything through them is an error.
-#' @param effects The reading to pool, either `"marginal"` or `"conditional"`.
-#'   `NULL`, the default, pools the reading the results record. The marginal
+#' @param effects The reading the pooled result presents, either `"marginal"` or
+#'   `"conditional"`. `NULL`, the default, presents the reading the results
+#'   record. Both readings are pooled whenever both can be, so this says which
+#'   one the result reports and which one it stores beside it. The marginal
 #'   reading pools the causal contrast estimates; the conditional reading pools
 #'   the outcome models' coefficients, with the standard errors implied by the
 #'   corrected covariance each one carries.
@@ -98,7 +136,7 @@
 #' @param conf_level The level the pooled bounds report. `NULL`, the default,
 #'   uses the level the results stored, or `0.95` when they store none.
 #'
-#' @return An S3 object of class `ipw_pooled`: a list of the following nine
+#' @return An S3 object of class `ipw_pooled`: a list of the following ten
 #'   components, in this order.
 #' \describe{
 #'   \item{`estimand`}{The causal estimand every pooled result targeted.}
@@ -128,6 +166,15 @@
 #'     estimated from.}
 #'   \item{`outcome_link`}{The link every pooled result's outcome model was
 #'     fitted with, which is the scale the effects are reported on.}
+#'   \item{`alternate`}{The reading the result does not present, in one of two
+#'     shapes. When that reading was pooled it is a list of `effects`, naming
+#'     which reading it is, and `estimates` and `pooling`, the two frames
+#'     described above built for it and built the same way, the pooled covariance
+#'     on the estimates frame included. When it could not be pooled it is a list
+#'     of `effects` and `reason`, the message of the refusal that reading raised.
+#'     [as_marginal()] and [as_conditional()] read this component to move the
+#'     result between the two readings, and the accessors that take an `effects`
+#'     argument read it the same way.}
 #' }
 #'
 #' @references
@@ -137,7 +184,9 @@
 #' Rubin, D. B. (1987). *Multiple Imputation for Nonresponse in Surveys*. New
 #' York: John Wiley and Sons.
 #'
-#' @seealso [new_ipw()] for the results this pools and the fields it reads.
+#' @seealso [new_ipw()] for the results this pools and the fields it reads, and
+#'   [as_marginal()] and [as_conditional()] for moving the pooled result between
+#'   the two readings it carries.
 #'
 #' @export
 #'
@@ -204,6 +253,13 @@
 #'
 #' # The ratio effect stays on the log scale it was estimated on.
 #' pooled$estimates$effect
+#'
+#' # Both readings are pooled from one call. These outcome models carry no
+#' # corrected covariance, which is what the conditional reading is pooled from,
+#' # so that reading records why it has none rather than refusing the call.
+#' pooled$alternate$effects
+#'
+#' try(as_conditional(pooled))
 pool_ipw <- function(
   fits,
   ...,

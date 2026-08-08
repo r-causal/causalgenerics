@@ -46,7 +46,9 @@
 records; any other value overrides it for the one call and leaves the
 result as it is. A reading the pooling could not compute is refused with an
 error of class \code{causalgenerics_pool_missing_surface}, which is where
-\code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} refuse it.}
+\code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} refuse it, and a result pooled
+before both readings were kept refuses a request for the other reading with
+the same classes, having nothing recorded to report.}
 
 \item{parm}{The rows to report an interval for, given either as the effect
 labels or as their positions. Missing means all of them.}
@@ -130,6 +132,31 @@ result reports several analyses rather than one fit and refers its inference
 to t rather than to z, so a pooled result reaching \code{confint.ipw()} would come
 back with normal limits and nothing would say so.
 }
+\section{The reading these methods report}{
+A pooled result carries both readings whenever \code{\link[=pool_ipw]{pool_ipw()}} could compute
+both: the one it presents and, under \code{alternate}, the one it does not.
+\code{coef()}, \code{vcov()}, \code{confint()}, and \code{as.data.frame()} report the reading the
+result presents, and take an \code{effects} argument naming one for a single call.
+Naming a reading reports it and leaves the result as it was; \code{\link[=as_marginal]{as_marginal()}}
+and \code{\link[=as_conditional]{as_conditional()}} are what change which reading a result presents.
+
+The reading is settled before anything else the call asks for. \code{confint()}
+selects the rows \code{parm} names from the reading it was asked for, and
+\code{as.data.frame()} decides what \code{exponentiate = TRUE} moves and what it
+relabels from that reading too, so a conditional table is gated on the outcome
+model link whichever reading the result itself records. A reading the pooling
+could not compute is refused rather than answered with the one the result
+holds, and a value naming neither reading raises an error of class
+\code{causalgenerics_invalid_argument_effects}, and of the general class
+\code{causalgenerics_invalid_argument}, as it does everywhere else in this package.
+
+\code{print()} reports the reading the result presents and takes no such argument.
+It names that reading in its heading, and a caller who wants the other one
+moves the result to it first. \code{nobs()} and \code{estimand()} describe the pooled
+analyses rather than a reading of them, so they answer the same way in either
+reading and take no \code{effects} argument.
+}
+
 \section{The degrees of freedom}{
 Every pooled effect carries its own degrees of freedom, in the \code{df} column of
 the \code{estimates} frame. They are the Barnard-Rubin adjusted count, which
@@ -253,6 +280,7 @@ df.residual(pooled)
 
 }
 \seealso{
-\code{\link[=pool_ipw]{pool_ipw()}}, which produces these results, and \code{\link[=new_ipw]{new_ipw()}} for the
-unpooled result they are pooled from.
+\code{\link[=pool_ipw]{pool_ipw()}}, which produces these results, \code{\link[=as_marginal]{as_marginal()}} and
+\code{\link[=as_conditional]{as_conditional()}}, which move one between the readings it carries, and
+\code{\link[=new_ipw]{new_ipw()}} for the unpooled result they are pooled from.
 }

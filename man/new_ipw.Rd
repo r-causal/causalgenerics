@@ -94,7 +94,8 @@ alias for the canonical one wherever the column is read, so a result
 holding such a frame labels its rows and reports its table exactly as one
 holding a \code{contrast} column does. A method written now writes
 \code{contrast}. A result reported once per level of a grouping variable also
-has a \code{group} column, placed after the contrast column, naming the
+has a \code{group} column, placed after the contrast column when one is
+present and after \code{effect} when the result names no contrasts, naming the
 subgroup each row was estimated in as a \code{"var = value"} string such as
 \code{"sex = 0"}. That column has one spelling and no alias. Both optional
 columns are absent rather than constant when the result reports one

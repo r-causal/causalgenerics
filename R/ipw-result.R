@@ -150,7 +150,8 @@
 #'     holding such a frame labels its rows and reports its table exactly as one
 #'     holding a `contrast` column does. A method written now writes
 #'     `contrast`. A result reported once per level of a grouping variable also
-#'     has a `group` column, placed after the contrast column, naming the
+#'     has a `group` column, placed after the contrast column when one is
+#'     present and after `effect` when the result names no contrasts, naming the
 #'     subgroup each row was estimated in as a `"var = value"` string such as
 #'     `"sex = 0"`. That column has one spelling and no alias. Both optional
 #'     columns are absent rather than constant when the result reports one

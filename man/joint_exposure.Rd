@@ -27,6 +27,19 @@ effects all read that one declaration, so they agree on which cells exist
 without any of them owning it.
 }
 \details{
+Conditioning on a variable and jointly intervening on two treatments are
+different causal questions, and this class serves the second. Effect
+modification asks how the effect of one treatment differs across the levels
+of something else, which need not be a treatment and need not be anything an
+analysis could set; what comes back is one effect of that one treatment per
+subgroup, and a result reporting those carries the \code{group} column
+\code{\link[=new_ipw]{new_ipw()}} documents. Interaction asks what would happen under an
+intervention that sets both treatments at once; what comes back is one
+exposure with a cell per combination, reported against the reference cell.
+The packages that implement \code{\link[=ipw]{ipw()}} methods develop the distinction, in the
+weights they fit and in the effects they report. What is settled here is the
+declaration all of them read.
+
 The result is a factor. Its class vector is
 \code{c("joint_exposure", "factor", "vctrs_vctr", "integer")}, with \code{"factor"}
 ahead of \code{"vctrs_vctr"} so that the formula machinery treats a joint exposure

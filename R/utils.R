@@ -313,3 +313,201 @@ stop_conditional_vcov_mismatch <- function(
     call = call
   ))
 }
+
+# Signal that the components handed to `joint_exposure()` are not a crossing of
+# two treatments. The classes follow `stop_invalid_argument()`: one keyed to the
+# fault, and one general class shared by every refusal to declare a joint
+# exposure, so a caller who cares only that the declaration was rejected has one
+# class to catch. The count is written into the sentence rather than carried as a
+# field, since a caller who wants it has the call that supplied it.
+stop_joint_exposure_two_components <- function(n, call = sys.call(-1)) {
+  supplied <- if (n == 1L) "1 was supplied" else paste0(n, " were supplied")
+  message <- paste0(
+    "A joint exposure is the crossing of exactly two treatments, and ",
+    supplied,
+    "; pass one named vector per treatment."
+  )
+  stop(errorCondition(
+    message,
+    class = c(
+      "causalgenerics_joint_exposure_two_components",
+      "causalgenerics_invalid_joint_exposure"
+    ),
+    call = call
+  ))
+}
+
+# Signal that a component of a joint exposure arrived without a name. The names
+# are what the cell labels are written from, so an unnamed component leaves a
+# label that names no variable and a declaration nothing downstream can read.
+stop_joint_exposure_unnamed_component <- function(call = sys.call(-1)) {
+  message <- paste0(
+    "Every component of a joint exposure must be named, because the names are ",
+    "the treatment names its cell labels are written from; pass each treatment ",
+    "as `name = value`."
+  )
+  stop(errorCondition(
+    message,
+    class = c(
+      "causalgenerics_joint_exposure_unnamed_component",
+      "causalgenerics_invalid_joint_exposure"
+    ),
+    call = call
+  ))
+}
+
+# Signal that a component takes one value in the data it was given. The refusal
+# is keyed to the component rather than to the cells the crossing would leave
+# empty, so that the message points at the variable the caller can do something
+# about. The component is a field as well as part of the sentence, so a handler
+# reports it without parsing the message for it.
+stop_joint_exposure_constant_component <- function(
+  component,
+  call = sys.call(-1)
+) {
+  message <- paste0(
+    "`",
+    component,
+    "` takes one value in these data, so it is not a treatment the crossing ",
+    "can vary; a joint exposure needs both of its components observed at two ",
+    "or more levels."
+  )
+  stop(errorCondition(
+    message,
+    component = component,
+    class = c(
+      "causalgenerics_joint_exposure_constant_component",
+      "causalgenerics_invalid_joint_exposure"
+    ),
+    call = call
+  ))
+}
+
+# Signal that a component records a missing exposure. An observation with no
+# exposure falls in no cell, and the crossing has nowhere to record that, so the
+# decision stays with the caller, who is the only one who knows whether the row
+# should be dropped or the value recovered.
+stop_joint_exposure_missing_value <- function(component, call = sys.call(-1)) {
+  message <- paste0(
+    "`",
+    component,
+    "` has missing values, and an observation whose exposure is unknown falls ",
+    "in no cell of the crossing; drop or recover those observations before ",
+    "declaring the joint exposure."
+  )
+  stop(errorCondition(
+    message,
+    component = component,
+    class = c(
+      "causalgenerics_joint_exposure_missing_value",
+      "causalgenerics_invalid_joint_exposure"
+    ),
+    call = call
+  ))
+}
+
+# Signal that the crossing declares a cell nothing in the data falls in. Both
+# components may vary and the fault still be here: what is wrong is the joint
+# distribution, not either margin. That is a positivity violation, so the message
+# says so rather than reporting a count of levels. The cells are a field as well
+# as part of the sentence, so a handler reports them without parsing it.
+stop_joint_exposure_empty_cell <- function(cells, call = sys.call(-1)) {
+  message <- paste0(
+    "Nothing in these data falls in the ",
+    if (length(cells) == 1L) "cell " else "cells ",
+    format_series(encodeString(cells, quote = '"')),
+    ", so the crossing violates positivity and the joint effect of the two ",
+    "treatments is not identified here; coarsen a component or restrict the ",
+    "analysis to the cells that are populated."
+  )
+  stop(errorCondition(
+    message,
+    cells = cells,
+    class = c(
+      "causalgenerics_joint_exposure_empty_cell",
+      "causalgenerics_invalid_joint_exposure"
+    ),
+    call = call
+  ))
+}
+
+# Signal that two joint exposures declare different crossings, so the vector
+# they combine into carries no declaration. The classes follow the refusals
+# above: one keyed to the reason the declaration was given up, and one general
+# class shared by every operation that gives it up, so a caller who cares only
+# that a joint exposure degraded has one class to catch.
+warn_joint_exposure_incompatible_metadata <- function(call = sys.call(-1)) {
+  warning(warningCondition(
+    paste0(
+      "These joint exposures declare different crossings, so the result is a ",
+      "plain factor over the cells of both; a combined vector carries a ",
+      "crossing only when both sides declare the same one."
+    ),
+    class = c(
+      "causalgenerics_joint_exposure_incompatible_metadata",
+      "causalgenerics_joint_exposure_downgrade"
+    ),
+    call = call
+  ))
+}
+
+# Signal that a joint exposure was combined with a vector that declares no
+# crossing. The type is a field as well as part of the sentence, since a handler
+# that reports the combine reports what it was combined with.
+warn_joint_exposure_foreign_type <- function(type, call = sys.call(-1)) {
+  warning(warningCondition(
+    paste0(
+      "A joint exposure combines with a ",
+      type,
+      " vector only by giving up its crossing, because the other side declares ",
+      "none; the result carries the cell labels and nothing about the two ",
+      "treatments they cross."
+    ),
+    type = type,
+    class = c(
+      "causalgenerics_joint_exposure_foreign_type",
+      "causalgenerics_joint_exposure_downgrade"
+    ),
+    call = call
+  ))
+}
+
+# Signal that an operation asked for a level set narrower than the crossing. A
+# joint exposure is defined by the full crossing, so a vector with cells missing
+# from its levels is not one, and the caller gets what they asked for as a plain
+# factor. The warning fires whether or not a level would actually go, so that a
+# caller never has to know which case they are in to know what class comes back.
+warn_joint_exposure_dropped_levels <- function(call = sys.call(-1)) {
+  warning(warningCondition(
+    paste0(
+      "A joint exposure is defined by the full crossing of its two treatments, ",
+      "so dropping unused cells gives up the declaration; the result is a ",
+      "plain factor over the cells that remain."
+    ),
+    class = c(
+      "causalgenerics_joint_exposure_dropped_levels",
+      "causalgenerics_joint_exposure_downgrade"
+    ),
+    call = call
+  ))
+}
+
+# Signal that the cell labels were rewritten. Replacing the levels relabels the
+# cells without touching the crossing they were written from, which would leave a
+# vector claiming a declaration its labels no longer match, and nothing
+# downstream could detect that. The operation degrades rather than being refused
+# so that relabelling a factor stays available to the caller who wants it.
+warn_joint_exposure_replaced_levels <- function(call = sys.call(-1)) {
+  warning(warningCondition(
+    paste0(
+      "Replacing the levels of a joint exposure relabels its cells without ",
+      "changing the crossing they were written from, so the declaration is ",
+      "given up; the result is a plain factor with the new levels."
+    ),
+    class = c(
+      "causalgenerics_joint_exposure_replaced_levels",
+      "causalgenerics_joint_exposure_downgrade"
+    ),
+    call = call
+  ))
+}

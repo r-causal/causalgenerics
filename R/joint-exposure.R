@@ -42,6 +42,13 @@
 #' crossing. Casting the other way is refused outright, because a crossing
 #' cannot be recovered from labels that merely look like one.
 #'
+#' Two ways of combining escape all of that and give a bare factor without a
+#' word, because neither reaches a method this package can register.
+#' `unlist()` combines the underlying codes in base C code without dispatching
+#' at all, and `c()` dispatches on its first argument, so a combine that begins
+#' with a plain factor never reaches this class. Reach for `vctrs::vec_c()`
+#' where either could apply.
+#'
 #' @param ... Exactly two named vectors, one per treatment, recycled to a common
 #'   length. Each may be a factor, a character vector, or a numeric or logical
 #'   vector. The names are the treatment names the cell labels are written from.
@@ -96,7 +103,15 @@ joint_exposure <- function(...) {
   for (i in seq_along(components)) {
     component <- components[[i]]
     name <- component_names[[i]]
-    if (anyNA(component)) {
+    # The levels as well as the values. A factor built by `addNA()` or by
+    # `factor(exclude = NULL)` declares `NA` as a level, which gives its missing
+    # observations an ordinary code and hides them from `anyNA()`. Those rows
+    # still have no known exposure, and the cell the crossing would write for
+    # them names an absence rather than a treatment; when nobody falls in that
+    # cell, the check below would refuse the crossing for a positivity failure
+    # and send the caller to fix a component that is not the problem.
+    declares_na <- is.factor(component) && anyNA(levels(component))
+    if (anyNA(component) || declares_na) {
       stop_joint_exposure_missing_value(name)
     }
     # Observed values rather than declared levels. A factor that declares two
@@ -340,6 +355,16 @@ levels.joint_exposure <- function(x) {
 #' @export
 `[[.joint_exposure` <- function(x, i, ...) {
   new_joint_exposure(vctrs::vec_data(x)[[i]], levels(x), joint_components(x))
+}
+
+# `"factor"` precedes `"vctrs_vctr"`, so `c.factor()` would run first and combine
+# the codes into a bare factor without a word, which is the one degradation that
+# would happen silently. Routing through `vec_c()` puts `c()` on the same
+# coercion rules every other combine takes: two vectors declaring the same
+# crossing keep it, and anything else warns on its way down.
+#' @export
+c.joint_exposure <- function(...) {
+  vctrs::vec_c(...)
 }
 
 #' @export

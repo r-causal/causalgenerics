@@ -375,6 +375,75 @@ test_that("the missing-value refusal states the contract", {
   )
 })
 
+test_that("joint_exposure() refuses a factor that declares NA as a level", {
+  # `anyNA()` reads the values, and a factor that declares `NA` as one of its
+  # levels gives its missing observations an ordinary code, so they are not
+  # missing by that test. The exposure is still unknown for those rows, and the
+  # cell the crossing would write for them names an absence rather than a
+  # treatment, which is the same fault an `NA` value is and takes the same
+  # refusal.
+  declared_na <- addNA(factor(c("no", NA, "yes", "yes")))
+
+  expect_error(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = declared_na),
+    class = "causalgenerics_joint_exposure_missing_value"
+  )
+  expect_error(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = declared_na),
+    class = "causalgenerics_invalid_joint_exposure"
+  )
+
+  cnd <- tryCatch(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = declared_na),
+    error = identity
+  )
+  expect_identical(cnd$component, "exercise")
+
+  # `exclude = NULL` is the other spelling of the same declaration, and a caller
+  # should not have to know which one produced the level to know it is refused.
+  excluded_none <- factor(c("no", NA, "yes", "yes"), exclude = NULL)
+
+  expect_error(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = excluded_none),
+    class = "causalgenerics_joint_exposure_missing_value"
+  )
+  expect_error(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = excluded_none),
+    class = "causalgenerics_invalid_joint_exposure"
+  )
+})
+
+test_that("the declared-NA-level refusal states the contract", {
+  declared_na <- addNA(factor(c("no", NA, "yes", "yes")))
+
+  expect_snapshot(
+    error = TRUE,
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = declared_na)
+  )
+})
+
+test_that("an unpopulated NA level refuses as a missing value", {
+  # Here the `NA` level is declared and nothing falls in it, so the crossing does
+  # have empty cells and the positivity refusal would fire on its own terms. It
+  # would be the wrong answer twice over: the cells are empty because the level
+  # should not be there, and a caller told to coarsen a component or restrict the
+  # analysis has been sent to fix something that is not broken.
+  declared_only <- factor(
+    c("no", "no", "yes", "yes"),
+    levels = c("no", "yes", NA),
+    exclude = NULL
+  )
+
+  expect_error(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = declared_only),
+    class = "causalgenerics_joint_exposure_missing_value"
+  )
+  expect_error(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = declared_only),
+    class = "causalgenerics_invalid_joint_exposure"
+  )
+})
+
 test_that("joint_exposure() refuses a crossing with an empty cell", {
   # Both components vary, so nothing about either one on its own is wrong. What
   # is wrong is the crossing: nobody in these data both quit and exercises, so
@@ -596,6 +665,58 @@ test_that("casting out of the class gives the labels and the codes", {
   expect_identical(vctrs::vec_cast(x, character()), joint_smoking_cells())
   expect_identical(vctrs::vec_cast(x, integer()), joint_smoking_codes())
   expect_identical(as.integer(x), joint_smoking_codes())
+})
+
+test_that("base c() keeps the declaration where vec_c() does", {
+  # `"factor"` precedes `"vctrs_vctr"` in the class vector, so `c.factor()` runs
+  # before anything vctrs would reach and combines the codes into a bare factor
+  # without a word. That is the one degradation that would happen silently, and
+  # it happens on the spelling a caller is most likely to write. `c()` has to
+  # answer what `vec_c()` answers, declaration and warnings alike.
+  x <- joint_smoking()
+
+  doubled <- c(x, x)
+  expect_s3_class(doubled, joint_class(), exact = TRUE)
+  expect_length(doubled, 20L)
+  expect_joint_metadata_preserved(doubled, x)
+  expect_identical(as.character(doubled), rep(joint_smoking_cells(), 2L))
+
+  expect_identical(
+    c(x, joint_smoking_other()),
+    vctrs::vec_c(x, joint_smoking_other())
+  )
+})
+
+test_that("base c() warns and degrades where vec_c() does", {
+  x <- joint_smoking()
+
+  expect_warning(
+    c(x, joint_renamed()),
+    class = "causalgenerics_joint_exposure_incompatible_metadata"
+  )
+  expect_warning(
+    c(x, joint_renamed()),
+    class = "causalgenerics_joint_exposure_downgrade"
+  )
+  expect_s3_class(
+    suppressWarnings(c(x, joint_renamed())),
+    "factor",
+    exact = TRUE
+  )
+
+  expect_warning(
+    c(x, joint_smoking_baseline()),
+    class = "causalgenerics_joint_exposure_foreign_type"
+  )
+  expect_warning(
+    c(x, joint_smoking_baseline()),
+    class = "causalgenerics_joint_exposure_downgrade"
+  )
+
+  degraded <- suppressWarnings(c(x, joint_smoking_baseline()))
+  expect_s3_class(degraded, "factor", exact = TRUE)
+  expect_false(is_joint_exposure(degraded))
+  expect_identical(levels(degraded), joint_smoking_levels())
 })
 
 # ---- subsetting --------------------------------------------------------------
@@ -911,7 +1032,8 @@ test_that("the base methods the class overrides are registered", {
   # `[.factor` and `[[.factor` say nothing about the crossing metadata,
   # `format.factor` and `print.factor` report a plain factor, and
   # `droplevels.factor` and `levels<-.factor` change the level set while leaving
-  # the declaration in place.
+  # the declaration in place, and `c.factor` combines the codes into a bare
+  # factor without a word.
   generics <- c(
     "levels",
     "levels<-",
@@ -919,7 +1041,8 @@ test_that("the base methods the class overrides are registered", {
     "[[",
     "format",
     "print",
-    "droplevels"
+    "droplevels",
+    "c"
   )
 
   registered <- vapply(

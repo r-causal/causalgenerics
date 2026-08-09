@@ -28,7 +28,15 @@
       joint_exposure(qsmk = smoking_qsmk(), exercise = with_na)
     Condition
       Error in `joint_exposure()`:
-      ! `exercise` has missing values, and an observation whose exposure is unknown falls in no cell of the crossing; drop or recover those observations before declaring the joint exposure.
+      ! `exercise` admits a missing exposure, and an observation whose exposure is unknown falls in no cell of the crossing; drop or recover those observations, and any `NA` the component declares as a level, before declaring the joint exposure.
+
+# the declared-NA-level refusal states the contract
+
+    Code
+      joint_exposure(qsmk = c(0, 1, 0, 1), exercise = declared_na)
+    Condition
+      Error in `joint_exposure()`:
+      ! `exercise` admits a missing exposure, and an observation whose exposure is unknown falls in no cell of the crossing; drop or recover those observations, and any `NA` the component declares as a level, before declaring the joint exposure.
 
 # the empty-cell refusal names the cell and the positivity failure
 

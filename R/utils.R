@@ -383,17 +383,20 @@ stop_joint_exposure_constant_component <- function(
   ))
 }
 
-# Signal that a component records a missing exposure. An observation with no
+# Signal that a component admits a missing exposure. An observation with no
 # exposure falls in no cell, and the crossing has nowhere to record that, so the
 # decision stays with the caller, who is the only one who knows whether the row
-# should be dropped or the value recovered.
+# should be dropped or the value recovered. A factor that declares `NA` as one of
+# its levels is the same fault even when no observation currently takes it, so
+# the sentence names the level as well as the values.
 stop_joint_exposure_missing_value <- function(component, call = sys.call(-1)) {
   message <- paste0(
     "`",
     component,
-    "` has missing values, and an observation whose exposure is unknown falls ",
-    "in no cell of the crossing; drop or recover those observations before ",
-    "declaring the joint exposure."
+    "` admits a missing exposure, and an observation whose exposure is unknown ",
+    "falls in no cell of the crossing; drop or recover those observations, and ",
+    "any `NA` the component declares as a level, before declaring the joint ",
+    "exposure."
   )
   stop(errorCondition(
     message,

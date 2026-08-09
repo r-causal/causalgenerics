@@ -58,6 +58,13 @@ return a plain factor. So does combining a joint exposure with a factor, with
 a character vector, or with a joint exposure that declares a different
 crossing. Casting the other way is refused outright, because a crossing
 cannot be recovered from labels that merely look like one.
+
+Two ways of combining escape all of that and give a bare factor without a
+word, because neither reaches a method this package can register.
+\code{unlist()} combines the underlying codes in base C code without dispatching
+at all, and \code{c()} dispatches on its first argument, so a combine that begins
+with a plain factor never reaches this class. Reach for \code{vctrs::vec_c()}
+where either could apply.
 }
 \examples{
 x <- joint_exposure(

@@ -80,6 +80,14 @@
 #' contrasts in different orders would otherwise have the `b vs a` rows of one
 #' averaged with the `c vs a` rows of the other.
 #'
+#' A label carries the subgroup a row was estimated in along with the effect and
+#' the contrast, so a set whose results report different subgroups, or the same
+#' subgroups in different orders, disagrees about its labels and is refused
+#' through that requirement rather than through one of its own. A subgroup
+#' observed in one imputation and not in another is the case this answers: there
+#' is no row to average the missing one with, and pooling by position would
+#' combine two subgroups that answer different questions.
+#'
 #' Two of those agreements are only required when the argument that would settle
 #' the question is left at `NULL`. Naming `effects` says which surface to pool
 #' and the stored mode is not read at all; naming `conf_level` says what the
@@ -142,7 +150,8 @@
 #'   \item{`estimand`}{The causal estimand every pooled result targeted.}
 #'   \item{`estimates`}{A data frame with one row per effect and the following
 #'     columns: `effect` (the measure name), `contrast` after it when the
-#'     results name contrasts, `estimate` (the pooled point estimate),
+#'     results name contrasts, `group` after that when they name subgroups,
+#'     `estimate` (the pooled point estimate),
 #'     `std.err` (the pooled standard error), `t` (the test statistic),
 #'     `df` (the pooled degrees of freedom), `ci.lower` and `ci.upper`,
 #'     `conf.level`, and `p.value`. The statistic and the p-value are referred
@@ -152,8 +161,8 @@
 #'     both margins; when any of them carried none, no attribute is attached,
 #'     since a matrix built from a subset of the imputations would sit beside
 #'     estimates built from all of them.}
-#'   \item{`pooling`}{A data frame keyed by the same `effect` and `contrast`
-#'     columns, holding `ubar` (the within-imputation variance), `b` (the
+#'   \item{`pooling`}{A data frame keyed by the same columns that name a row of
+#'     the frame above, holding `ubar` (the within-imputation variance), `b` (the
 #'     between-imputation variance), `riv` (the relative increase in variance),
 #'     `lambda` (the proportion of the total variance due to missingness), and
 #'     `fmi` (the fraction of missing information).}
@@ -350,9 +359,13 @@ pool_ipw <- function(
 #' for the agreements to drift apart.
 #'
 #' The key is the columns that name a row, which both returned frames are keyed
-#' by. A binary or continuous exposure has one contrast, so a `contrast` column
-#' there would repeat one value down the table and read as a contrast that was
-#' named. The conditional reading names coefficients and has no contrast at all.
+#' by, and it is the key of the first surface rather than one rebuilt here. The
+#' surfaces have agreed on their labels by the time it is taken, and the labels
+#' are the key columns pasted together, so the first surface's key is every
+#' surface's. A binary or continuous exposure has one contrast and an ungrouped
+#' result has one group, so a column of either kind would repeat one value down
+#' the table and read as a contrast or a subgroup that was named. The
+#' conditional reading names coefficients and has neither.
 #'
 #' @param fits The results being pooled.
 #' @param effects The reading to read off them.
@@ -366,12 +379,7 @@ pool_mode_surfaces <- function(fits, effects, call = sys.call(-1)) {
   surfaces <- lapply(fits, pool_surface, effects = effects, call = call)
   labels <- pool_common(surfaces, function(x) x$labels, "labels", call)
 
-  key <- list(effect = surfaces[[1L]]$effect)
-  if (!is.null(surfaces[[1L]]$contrast)) {
-    key$contrast <- surfaces[[1L]]$contrast
-  }
-
-  list(surfaces = surfaces, labels = labels, key = key)
+  list(surfaces = surfaces, labels = labels, key = surfaces[[1L]]$key)
 }
 
 #' The level one reading's bounds are reported at
@@ -728,6 +736,12 @@ pool_common <- function(x, get, field, call = sys.call(-1)) {
 #' The covariance the model computed for itself is not a substitute, and its
 #' diagonal is what the standard errors would otherwise be taken from.
 #'
+#' The key is the columns that name a row, read through
+#' `ipw_identity_columns()` and named by the role each column fills rather than
+#' by the name the stored frame keeps it under. That is what carries a result's
+#' contrasts and its subgroups onto the pooled frames under the canonical
+#' headings, whichever vintage of the contract each result was written against.
+#'
 #' @param fit One result.
 #' @param effects The reading being pooled.
 #' @param call The call to report the error against, which is [pool_ipw()]'s
@@ -745,8 +759,7 @@ pool_surface <- function(fit, effects, call = sys.call(-1)) {
     estimate <- stats::coef(fit$outcome_mod)
     return(list(
       labels = names(estimate),
-      effect = names(estimate),
-      contrast = NULL,
+      key = list(effect = names(estimate)),
       estimate = unname(estimate),
       std.err = unname(sqrt(diag(covariance))),
       vcov = covariance,
@@ -755,15 +768,10 @@ pool_surface <- function(fit, effects, call = sys.call(-1)) {
   }
 
   estimates <- fit$estimates
-  contrast <- ipw_contrast_column(estimates)
+  columns <- ipw_identity_columns(estimates)
   list(
     labels = ipw_effect_labels(estimates),
-    effect = as.character(estimates$effect),
-    contrast = if (is.null(contrast)) {
-      NULL
-    } else {
-      as.character(estimates[[contrast]])
-    },
+    key = lapply(columns, function(column) as.character(estimates[[column]])),
     estimate = estimates$estimate,
     std.err = estimates$std.err,
     vcov = attr(estimates, "ipw_vcov", exact = TRUE),

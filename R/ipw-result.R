@@ -25,11 +25,11 @@
 #'
 #' `as.data.frame()` reports the effect estimates as a tidier-shaped table
 #' rather than as a copy of the `estimates` component. Its columns are `term`,
-#' then `contrast` when the result names contrasts, then `estimate`,
-#' `std.error`, `statistic`, and `p.value`. Those are the names the tidier
-#' convention uses, so a fitting package's `tidy()` method is this table read as
-#' a tibble and nothing more. The `estimates` component itself is unchanged by
-#' any of what follows.
+#' then `contrast` when the result names contrasts, then `group` when it names
+#' subgroups, then `estimate`, `std.error`, `statistic`, and `p.value`. Those
+#' are the names the tidier convention uses, so a fitting package's `tidy()`
+#' method is this table read as a tibble and nothing more. The `estimates`
+#' component itself is unchanged by any of what follows.
 #'
 #' `conf.int = TRUE` appends `conf.low` and `conf.high` after the other columns,
 #' and `conf.level` names the level they report. The level is an argument rather
@@ -60,10 +60,14 @@
 #' position that `print()` writes down the side of its table and that
 #' [`coef()`][ipw-accessors], [`vcov()`][ipw-accessors], and
 #' [`confint()`][ipw-accessors] name their results with. The label is the
-#' `effect` column on its own when there is no `contrast` column, and `effect`
-#' and `contrast` pasted together, such as `"rd b vs a"`, when there is. A
-#' categorical exposure repeats each effect measure across its contrasts, so
-#' `effect` alone would name several rows the same thing.
+#' columns that name a row, pasted together in the order they appear in the
+#' frame's contract: the `effect` column, then `contrast` when the result names
+#' contrasts, then `group` when it names subgroups. A binary exposure estimated
+#' for the whole sample is labelled `"rd"`, a categorical one `"rd b vs a"`, and
+#' one reported by subgroup `"rd b vs a sex = 0"`. A categorical exposure repeats
+#' each effect measure across its contrasts and a subgroup analysis repeats each
+#' one across its groups, so `effect` alone would name several rows the same
+#' thing.
 #'
 #' # The presentation mode
 #'
@@ -145,7 +149,18 @@
 #'     alias for the canonical one wherever the column is read, so a result
 #'     holding such a frame labels its rows and reports its table exactly as one
 #'     holding a `contrast` column does. A method written now writes
-#'     `contrast`.}
+#'     `contrast`. A result reported once per level of a grouping variable also
+#'     has a `group` column, placed after the contrast column, naming the
+#'     subgroup each row was estimated in as a `"var = value"` string such as
+#'     `"sex = 0"`. That column has one spelling and no alias. Both optional
+#'     columns are absent rather than constant when the result reports one
+#'     contrast or one group, since a column repeating a single value down the
+#'     table would read as a contrast or a subgroup that was named. `group` must
+#'     be character and must name a subgroup in every row; the constructor
+#'     refuses anything else with an error of class
+#'     `causalgenerics_invalid_argument_estimates`, and of the general class
+#'     `causalgenerics_invalid_argument`, since a label pasted from such a column
+#'     would relabel every row it keys without failing anywhere.}
 #'   \item{`se_method`}{The standard error method used, such as `"mestimation"`
 #'     or `"linearization"`.}
 #'   \item{`fit`}{The fitted object the variance estimator produced, or `NULL`.
@@ -216,6 +231,12 @@ new_ipw <- function(
   # stored unchecked would sit in the result until something downstream branched
   # on it and took the branch neither reading names.
   check_ipw_effects(effects)
+
+  # The optional `group` column is the one part of the estimates frame that is
+  # checked here. It completes a row's label, so a column of the wrong kind
+  # relabels every row it keys without failing anywhere, which is the shape of
+  # mistake a constructor is worth having.
+  check_estimates_group(estimates)
 
   structure(
     list(
@@ -304,16 +325,15 @@ print_marginal_estimates <- function(estimates) {
 
 #' Write an estimates frame as a coefficient table
 #'
-#' The rows are keyed by effect label, and the character columns the labels are
-#' built from are dropped from the numeric matrix `printCoefmat()` formats. Both
-#' spellings of the contrast column go, rather than whichever one
-#' `ipw_contrast_column()` reads: the question here is which columns must not
-#' reach `printCoefmat()`, which is every character column the frame might
-#' carry, and not which one the labels are built from. A frame carrying both
-#' would otherwise keep the unread one, and that does not error. It is
-#' factor-coded by `data.matrix()` into the first numeric position, which shifts
-#' every column along one and leaves `cs.ind` and `tst.ind` naming the wrong
-#' ones, so the standard errors are formatted as a test statistic.
+#' The rows are keyed by effect label, and the identity columns the labels are
+#' built from are dropped from the numeric matrix `printCoefmat()` formats. They
+#' are asked for under every spelling rather than the ones the labels read, for
+#' the reason `ipw_identity_columns()` documents: an identity column the frame
+#' carries and does not read is still a character column, and one left in the
+#' matrix does not error. It is factor-coded by `data.matrix()` into the first
+#' numeric position, which shifts every column along one and leaves `cs.ind` and
+#' `tst.ind` naming the wrong ones, so the standard errors are formatted as a
+#' test statistic.
 #'
 #' The estimate and its standard error are the first two columns of every frame
 #' this writes and the statistic is the third, whether that statistic is
@@ -329,7 +349,10 @@ print_marginal_estimates <- function(estimates) {
 #' @importFrom stats printCoefmat
 print_effect_table <- function(estimates) {
   numbers <- estimates[
-    setdiff(names(estimates), c("effect", "contrast", "comparison"))
+    setdiff(
+      names(estimates),
+      ipw_identity_columns(estimates, all_spellings = TRUE)
+    )
   ]
   rownames(numbers) <- ipw_effect_labels(estimates)
   stats::printCoefmat(numbers, has.Pvalue = TRUE, cs.ind = 1:2, tst.ind = 3)
@@ -455,14 +478,22 @@ print_conditional_estimates <- function(model) {
 #' surfaces cannot drift: a caller who reads a covariance out by the name
 #' `coef()` gave has to get the entry `print()` showed.
 #'
-#' A categorical exposure repeats each effect measure across its contrasts, so a
-#' frame that names contrasts needs both columns to name a row uniquely. The
-#' labels stay unique because the contrast labels are distinct.
+#' A categorical exposure repeats each effect measure across its contrasts, and
+#' a result reported by subgroup repeats each measure across those, so a frame
+#' that names either needs all of its identity columns to name a row uniquely.
+#' The labels stay unique because the contrast labels and the group labels are
+#' each distinct.
+#'
+#' The label is the identity columns pasted together in the order
+#' `ipw_identity_columns()` gives them, so a label reads as the measure, then
+#' the contrast it compares, then the subgroup it was estimated in:
+#' `"rd b vs a sex = 0"`. The group comes last because it qualifies the whole
+#' contrast rather than one side of it.
 #'
 #' The label is the same string whichever column name a stored frame keeps its
-#' contrasts under, since the column supplies the second half of the label and
-#' not its own name. A result built against the earlier contract therefore
-#' reports the labels it always reported.
+#' contrasts under, since the column supplies part of the label and not its own
+#' name. A result built against the earlier contract therefore reports the
+#' labels it always reported.
 #'
 #' @param estimates The `estimates` component of an `ipw` object.
 #'
@@ -470,11 +501,75 @@ print_conditional_estimates <- function(model) {
 #'
 #' @noRd
 ipw_effect_labels <- function(estimates) {
-  contrast <- ipw_contrast_column(estimates)
-  if (is.null(contrast)) {
-    return(as.character(estimates$effect))
+  columns <- ipw_identity_columns(estimates)
+  parts <- lapply(columns, function(column) as.character(estimates[[column]]))
+
+  # `paste()` handed one vector gives it back as a character vector, which is
+  # what a frame keyed by the effect alone needs, so the single-column case is
+  # the general one with nothing to join rather than a branch of its own. The
+  # names are dropped because they name the roles the columns fill, and
+  # `paste()` would read them as arguments of its own.
+  do.call(paste, unname(parts))
+}
+
+#' The columns of an estimates frame that name a row
+#'
+#' A row's identity is the `effect` column, the column naming the contrast when
+#' the frame reports contrasts, and the column naming the subgroup when it
+#' reports subgroups, in that order. Both of the last two are optional: a binary
+#' or continuous exposure has one contrast, and a result estimated for the whole
+#' sample has one group, so a column of either kind would repeat one value down
+#' the table and read as a contrast or a subgroup that was named.
+#'
+#' Four surfaces read that identity, and they have to read the same one: the
+#' labels `ipw_effect_labels()` builds, the columns `as.data.frame()` emits, the
+#' columns `print_effect_table()` keeps out of its numeric matrix, and the key
+#' the pooling carries onto its frames. A caller who reads a covariance out by
+#' the name `coef()` gave has to get the entry `print()` showed, and a pooled
+#' frame has to be keyed the way the frames it pooled were, so the answer is
+#' given here once rather than restated at each of them.
+#'
+#' The return is named by the role each column fills rather than by the name it
+#' goes under in the frame, since a frame stored against an earlier version of
+#' the contract keeps its contrasts under `comparison`. A caller building
+#' something keyed canonically, such as the pooling, reads the names; a caller
+#' reading values out of the frame reads the values.
+#'
+#' `all_spellings = TRUE` answers a different question: which columns of this
+#' frame are identity columns under any name one may be stored under, rather
+#' than which ones a label is built from. The two differ for a frame carrying
+#' both spellings of the contrast column, which is read under the canonical one.
+#' The unread column is still a character column, and `print_effect_table()`
+#' needs it gone for a reason that is not about labels: a character column left
+#' in the matrix `printCoefmat()` formats does not error, it is factor-coded
+#' into a column of numbers beside the real estimates.
+#'
+#' @param estimates The `estimates` component of an `ipw` or an `ipw_pooled`
+#'   object.
+#' @param all_spellings If `TRUE`, every identity column the frame carries,
+#'   under any name; otherwise the ones a row's identity is read from.
+#'
+#' @return A character vector of column names, named by the role each column
+#'   fills, in identity order.
+#'
+#' @noRd
+ipw_identity_columns <- function(estimates, all_spellings = FALSE) {
+  if (all_spellings) {
+    # `intersect()` keeps the order of its first argument, which is identity
+    # order with the contrast's two spellings side by side.
+    return(intersect(
+      c("effect", "contrast", "comparison", "group"),
+      names(estimates)
+    ))
   }
-  paste(estimates$effect, estimates[[contrast]])
+
+  # A `NULL` from either resolver drops out of the vector rather than becoming
+  # an element, which is what makes an absent column absent from the identity.
+  c(
+    effect = "effect",
+    contrast = ipw_contrast_column(estimates),
+    group = ipw_group_column(estimates)
+  )
 }
 
 #' The column of an estimates frame that names its contrasts
@@ -508,6 +603,30 @@ ipw_contrast_column <- function(estimates) {
     return(NULL)
   }
   columns[[1L]]
+}
+
+#' The column of an estimates frame that names its subgroups
+#'
+#' A result reported once per level of a grouping variable names each row's
+#' subgroup in a column of the `estimates` frame, and the [new_ipw()] contract
+#' calls that column `group`. There is one spelling and no alias: the column is
+#' newer than the contract's first version, so no stored frame keeps its
+#' subgroups anywhere else.
+#'
+#' It is still resolved through a function of its own rather than read inline,
+#' the way `ipw_contrast_column()` is. What the surfaces ask is whether this
+#' frame names subgroups, and asking it in one place is what keeps the label,
+#' the reported table, the printed rows, and the pooled key agreeing about which
+#' frames do.
+#'
+#' @param estimates The `estimates` component of an `ipw` object.
+#'
+#' @return A single string naming the column, or `NULL` when the frame names no
+#'   subgroups.
+#'
+#' @noRd
+ipw_group_column <- function(estimates) {
+  if ("group" %in% names(estimates)) "group" else NULL
 }
 
 #' Format a model's originating call for the `ipw()` summary
@@ -572,15 +691,22 @@ as.data.frame.ipw <- function(
   estimates <- x$estimates
 
   # `term` first, then the column naming the contrast it qualifies when the
-  # result reports one. A binary or continuous exposure has a single contrast,
-  # so a `contrast` column there would repeat one value down the table and read
-  # as a contrast that was named. The heading is the canonical one whichever
-  # name the stored frame used, since the heading is what a caller reads the
-  # table by.
+  # result reports one, then the column naming the subgroup it was estimated in
+  # when the result reports those. That is the order the labels paste them in,
+  # so the table names a row the way the printed form and the accessors do. A
+  # binary or continuous exposure has a single contrast and an ungrouped result
+  # has a single group, so a column of either kind there would repeat one value
+  # down the table and read as a contrast or a subgroup that was named. The
+  # headings are the canonical ones whichever names the stored frame used, since
+  # the heading is what a caller reads the table by.
   contrast <- ipw_contrast_column(estimates)
+  group <- ipw_group_column(estimates)
   columns <- list(term = as.character(estimates$effect))
   if (!is.null(contrast)) {
     columns$contrast <- estimates[[contrast]]
+  }
+  if (!is.null(group)) {
+    columns$group <- estimates[[group]]
   }
   columns$estimate <- estimates$estimate
   columns$std.error <- estimates$std.err
@@ -695,6 +821,72 @@ check_flag <- function(value, arg, call = sys.call(-1)) {
   }
 
   invisible(value)
+}
+
+#' Refuse an estimates frame whose subgroups are not named
+#'
+#' The `group` column completes a row's label, and a label is a string built by
+#' pasting the identity columns together, so anything at all pastes into
+#' something and nothing downstream errors. What comes out is a label the
+#' package that produced the result did not write, which is why the column is
+#' checked where the result is constructed rather than where a label is built.
+#'
+#' The values are `"var = value"` strings, so the column has to be character. A
+#' factor pastes as its levels rather than as what the frame holds, and it
+#' carries levels the frame may have no rows for; a number pastes as a formatted
+#' number, which names a value without saying which variable took it.
+#'
+#' Every row it groups has to name a group. A missing one pastes into a label
+#' reading `"rd NA"`, which describes no subgroup, and two of them paste into the
+#' same label, which leaves `coef()` naming two elements the same thing and
+#' `printCoefmat()` with row names it cannot be handed.
+#'
+#' A frame that names no subgroups is the frame every fitting package writes
+#' today, and there is nothing here for it to fail.
+#'
+#' @param estimates The `estimates` argument as the caller supplied it.
+#' @param call The call to report the error against, which is the
+#'   constructor's rather than this helper's.
+#'
+#' @return `estimates`, invisibly, when its subgroups are named.
+#'
+#' @noRd
+check_estimates_group <- function(estimates, call = sys.call(-1)) {
+  column <- ipw_group_column(estimates)
+  if (is.null(column)) {
+    return(invisible(estimates))
+  }
+
+  group <- estimates[[column]]
+
+  if (!is.character(group)) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "name its subgroups in a character `group` column, since a group is ",
+        "written as a \"var = value\" string, but the column this frame ",
+        "carries is <",
+        class(group)[[1L]],
+        ">"
+      ),
+      call = call
+    )
+  }
+
+  unnamed <- sum(is.na(group))
+  if (unnamed > 0L) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "name a subgroup in every row of its `group` column, but ",
+        unnamed,
+        if (unnamed == 1L) " row records none" else " rows record none"
+      ),
+      call = call
+    )
+  }
+
+  invisible(estimates)
 }
 
 #' Refuse a confidence level that is not a probability

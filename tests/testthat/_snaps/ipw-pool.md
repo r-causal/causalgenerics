@@ -150,3 +150,11 @@
       Error in `pool_ipw()`:
       ! The conditional reading reports the covariance the joint estimation of the weights and the outcome implies, and this result's outcome model records none; the package that produced the result attaches one by wrapping the model with `new_ipw_model()`.
 
+# pool_ipw() refuses results whose subgroups disagree
+
+    Code
+      pool_ipw(fits)
+    Condition
+      Error in `pool_ipw()`:
+      ! The effects reported must be the same in every result, but they report ("rd sex = 0", "log(rr) sex = 0", "log(or) sex = 0", "rd sex = 1", "log(rr) sex = 1", "log(or) sex = 1") and ("rd sex = 0", "log(rr) sex = 0", "log(or) sex = 0", "rd sex = 2", "log(rr) sex = 2", "log(or) sex = 2").
+

@@ -73,3 +73,65 @@
       Error in `as.data.frame.ipw_pooled()`:
       ! `exponentiate` needs coefficients on a scale an exponential undoes, and the outcome models were fitted with the "identity" link, whose coefficients are not on one; only the "logit" and "log" links exponentiate in the conditional reading.
 
+# print() keys pooled rows by the effect and the group
+
+    Code
+      print(res)
+    Output
+      Pooled Inverse Probability Weight Estimator
+      Estimand: ATE 
+      Effects: marginal (population-averaged) 
+      Imputations: 3 
+      Complete-data df: 17 
+      
+      Pooled marginal estimates:
+                      estimate  std.err      t      df  ci.lower ci.upper conf.level
+      rd sex = 0      0.100000 0.064807 1.5430 12.0585 -0.041127  0.24113       0.95
+      log(rr) sex = 0 0.200000 0.115614 1.7299 13.1864 -0.049411  0.44941       0.95
+      log(or) sex = 0 0.380000 0.217945 1.7436 13.7448 -0.088261  0.84826       0.95
+      rd sex = 1      0.200000 0.068557 2.9173  4.4904  0.017581  0.38242       0.95
+      log(rr) sex = 1 0.350000 0.110454 3.1688 10.5821  0.105717  0.59428       0.95
+      log(or) sex = 1 0.750000 0.211424 3.5474 10.1008  0.279555  1.22045       0.95
+                       p.value   
+      rd sex = 0      0.148648   
+      log(rr) sex = 0 0.106971   
+      log(or) sex = 0 0.103548   
+      rd sex = 1      0.037681 * 
+      log(rr) sex = 1 0.009355 **
+      log(or) sex = 1 0.005210 **
+      ---
+      Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+# print() keys pooled rows by effect, contrast, and group
+
+    Code
+      print(res)
+    Output
+      Pooled Inverse Probability Weight Estimator
+      Estimand: ATE 
+      Effects: marginal (population-averaged) 
+      Imputations: 3 
+      Complete-data df: 17 
+      
+      Pooled marginal estimates:
+                             estimate  std.err      t      df   ci.lower ci.upper
+      rd b vs a sex = 0      0.100000 0.064807 1.5430 12.0585 -0.0411272  0.24113
+      log(rr) b vs a sex = 0 0.200000 0.115614 1.7299 13.1864 -0.0494111  0.44941
+      rd c vs a sex = 0      0.200000 0.068557 2.9173  4.4904  0.0175810  0.38242
+      log(rr) c vs a sex = 0 0.350000 0.110454 3.1688 10.5821  0.1057168  0.59428
+      rd b vs a sex = 1      0.080000 0.074162 1.0787 12.9736 -0.0802504  0.24025
+      log(rr) b vs a sex = 1 0.160000 0.125167 1.2783 13.5659 -0.1092638  0.42926
+      rd c vs a sex = 1      0.150000 0.069761 2.1502  8.5361 -0.0091286  0.30913
+      log(rr) c vs a sex = 1 0.290000 0.119583 2.4251 11.3704  0.0278427  0.55216
+                             conf.level  p.value   
+      rd b vs a sex = 0            0.95 0.148648   
+      log(rr) b vs a sex = 0       0.95 0.106971   
+      rd c vs a sex = 0            0.95 0.037681 * 
+      log(rr) c vs a sex = 0       0.95 0.009355 **
+      rd b vs a sex = 1            0.95 0.300361   
+      log(rr) b vs a sex = 1       0.95 0.222583   
+      rd c vs a sex = 1            0.95 0.061641 . 
+      log(rr) c vs a sex = 1       0.95 0.033040 * 
+      ---
+      Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+

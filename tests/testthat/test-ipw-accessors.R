@@ -86,6 +86,103 @@ contrast_estimates <- function() {
   estimates
 }
 
+# A binary-exposure estimates frame reported once per level of a grouping
+# variable. Each effect measure repeats across the subgroups, so a column sits
+# after the effect saying which subgroup each row describes, written as the
+# `"var = value"` string the contract spells a group with. The frame names no
+# contrasts, so the group alone is what tells two rows of the same measure apart.
+group_estimates <- function() {
+  data.frame(
+    effect = rep(c("rd", "log(rr)", "log(or)"), times = 2),
+    group = rep(c("sex = 0", "sex = 1"), each = 3),
+    estimate = c(0.151234, 0.421887, 0.664215, 0.248531, 0.698742, 1.092408),
+    std.err = c(0.081422, 0.240118, 0.371244, 0.104663, 0.308951, 0.472183),
+    z = c(1.8574, 1.7570, 1.7892, 2.3746, 2.2617, 2.3135),
+    ci.lower = c(
+      -0.008350,
+      -0.048736,
+      -0.063410,
+      0.043395,
+      0.093209,
+      0.166946
+    ),
+    ci.upper = c(0.310818, 0.892510, 1.391840, 0.453667, 1.304275, 2.017870),
+    conf.level = 0.95,
+    p.value = c(
+      0.0632529,
+      0.0789180,
+      0.0735890,
+      0.0175688,
+      0.0237184,
+      0.0206937
+    )
+  )
+}
+
+# A categorical-exposure estimates frame crossing the contrast with the group:
+# two effect measures, two contrasts, and two subgroups. No one of the three
+# columns names a row, and no two of them do either, so this is the frame that
+# says a row's identity is all three together.
+contrast_group_estimates <- function() {
+  data.frame(
+    effect = rep(c("rd", "log(rr)"), times = 4),
+    contrast = rep(rep(c("b vs a", "c vs a"), each = 2), times = 2),
+    group = rep(c("sex = 0", "sex = 1"), each = 4),
+    estimate = c(
+      0.081945,
+      0.168870,
+      0.166939,
+      0.318293,
+      0.062318,
+      0.129441,
+      0.128507,
+      0.245106
+    ),
+    std.err = c(
+      0.050387,
+      0.104633,
+      0.045182,
+      0.091898,
+      0.041205,
+      0.085734,
+      0.037164,
+      0.075611
+    ),
+    z = c(1.6263, 1.6139, 3.6948, 3.4635, 1.5124, 1.5098, 3.4578, 3.2417),
+    ci.lower = c(
+      -0.016812,
+      -0.036207,
+      0.078384,
+      0.138176,
+      -0.018442,
+      -0.038595,
+      0.055667,
+      0.096911
+    ),
+    ci.upper = c(
+      0.180702,
+      0.373947,
+      0.255494,
+      0.498410,
+      0.143078,
+      0.297477,
+      0.201347,
+      0.393301
+    ),
+    conf.level = 0.95,
+    p.value = c(
+      0.1038832,
+      0.1065433,
+      0.0002200,
+      0.0005331,
+      0.1304349,
+      0.1310950,
+      0.0005445,
+      0.0011883
+    )
+  )
+}
+
 # A continuous-outcome estimates frame: a difference in means and nothing else,
 # so every accessor has to work on a single row.
 continuous_estimates <- function() {
@@ -148,6 +245,33 @@ categorical_labels <- function() {
   )
 }
 
+# The labels the two grouped frames carry. A group completes a label the way a
+# contrast does, and it comes last because it qualifies the whole contrast rather
+# than one side of it. Written out for the reason the labels above are.
+group_labels <- function() {
+  c(
+    "rd sex = 0",
+    "log(rr) sex = 0",
+    "log(or) sex = 0",
+    "rd sex = 1",
+    "log(rr) sex = 1",
+    "log(or) sex = 1"
+  )
+}
+
+contrast_group_labels <- function() {
+  c(
+    "rd b vs a sex = 0",
+    "log(rr) b vs a sex = 0",
+    "rd c vs a sex = 0",
+    "log(rr) c vs a sex = 0",
+    "rd b vs a sex = 1",
+    "log(rr) b vs a sex = 1",
+    "rd c vs a sex = 1",
+    "log(rr) c vs a sex = 1"
+  )
+}
+
 # A covariance matrix of the reported effects, in the shape a fitting package
 # attaches. The correlation falls off with the distance between rows, which is
 # an ordinary shape for effects estimated from the same weighted means and, more
@@ -176,6 +300,14 @@ categorical_vcov <- function() {
 
 continuous_vcov <- function() {
   effects_vcov(continuous_estimates()$std.err, "diff")
+}
+
+group_vcov <- function() {
+  effects_vcov(group_estimates()$std.err, group_labels())
+}
+
+contrast_group_vcov <- function() {
+  effects_vcov(contrast_group_estimates()$std.err, contrast_group_labels())
 }
 
 # Fixed rather than simulated data, so the models never move between runs.
@@ -1872,6 +2004,160 @@ test_that("estimand() does not read the mode", {
   expect_identical(estimand(as_conditional(res)), estimand(res))
   expect_identical(estimand(legacy), estimand(res))
   expect_identical(estimand(res), "ate")
+})
+
+# ---- the group column --------------------------------------------------------
+
+# A result may report each effect measure once per level of a grouping variable,
+# and the column naming that level is `group`. It is the third component of a
+# row's identity, after the effect and the column naming the contrast, and its
+# values are written as `"var = value"` strings such as `"sex = 0"`. A label is
+# then the three columns pasted together, `"rd b vs a sex = 0"`.
+#
+# The accessors read the labels through the same helper `print()` labels its rows
+# with, which is what makes the assertions below about the accessors rather than
+# about the rule: the names `coef()` gives, the dimnames `vcov()` carries, and the
+# rows `confint()` labels and matches a character `parm` against all have to be
+# the one set of strings. A group that reached one of them and not the rest would
+# leave a caller reading a covariance out by a name the printed table does not
+# use, and the reverse failure is worse: labels that leave the group out name two
+# rows the same thing, so `coef()` would return two elements answering to `"rd"`.
+
+test_that("coef() keys a grouped result by effect and group", {
+  res <- ipw_result(group_estimates())
+
+  expect_identical(
+    coef(res),
+    c(
+      "rd sex = 0" = 0.151234,
+      "log(rr) sex = 0" = 0.421887,
+      "log(or) sex = 0" = 0.664215,
+      "rd sex = 1" = 0.248531,
+      "log(rr) sex = 1" = 0.698742,
+      "log(or) sex = 1" = 1.092408
+    )
+  )
+  expect_identical(anyDuplicated(names(coef(res))), 0L)
+})
+
+test_that("coef() keys a crossed result by effect, contrast, and group", {
+  # All three columns at once. Dropping any one of them leaves a duplicated name,
+  # which is the failure worth guarding against: a caller who reads
+  # `coef(res)["rd b vs a"]` out of such a vector gets the first of two rows with
+  # nothing to say the other exists.
+  res <- ipw_result(contrast_group_estimates())
+
+  expect_identical(
+    coef(res),
+    setNames(contrast_group_estimates()$estimate, contrast_group_labels())
+  )
+  expect_identical(anyDuplicated(names(coef(res))), 0L)
+})
+
+test_that("vcov() names a grouped covariance by the full labels", {
+  covariance <- contrast_group_vcov()
+  res <- ipw_result(contrast_group_estimates(), vcov = covariance)
+
+  expect_identical(vcov(res), covariance)
+  expect_identical(dim(vcov(res)), c(8L, 8L))
+  expect_identical(rownames(vcov(res)), contrast_group_labels())
+  expect_identical(colnames(vcov(res)), contrast_group_labels())
+})
+
+test_that("confint() labels grouped rows and selects them by label", {
+  res <- ipw_result(group_estimates(), vcov = group_vcov())
+
+  expect_identical(rownames(confint(res)), group_labels())
+
+  # The label selects a row as well as naming one, which is the surface a caller
+  # addresses `confint()` through. A group that reached the labels and not the
+  # selection would refuse a label the result reports.
+  expect_identical(
+    rownames(confint(res, parm = "log(or) sex = 1")),
+    "log(or) sex = 1"
+  )
+  expect_identical(
+    rownames(confint(res, parm = c("rd sex = 1", "rd sex = 0"))),
+    c("rd sex = 1", "rd sex = 0")
+  )
+
+  # The effect on its own is no longer the name of a row, so asking for it is
+  # asking for something the result does not report.
+  expect_error(
+    confint(res, parm = "rd"),
+    class = "causalgenerics_invalid_argument_parm"
+  )
+  expect_error(
+    confint(res, parm = "rd"),
+    class = "causalgenerics_invalid_argument"
+  )
+})
+
+test_that("coef(), vcov(), and confint() agree on the grouped labels", {
+  # Each surface is asserted against a literal above; this is the assertion that
+  # they are the same literal. The printed table is in the comparison too, since
+  # the labels are what tie the four surfaces to each other.
+  res <- ipw_result(contrast_group_estimates(), vcov = contrast_group_vcov())
+  labels <- names(coef(res))
+
+  expect_identical(labels, contrast_group_labels())
+  expect_identical(rownames(vcov(res)), labels)
+  expect_identical(colnames(vcov(res)), labels)
+  expect_identical(rownames(confint(res)), labels)
+
+  out <- capture.output(print(res))
+  unlabelled <- labels[
+    !vapply(labels, function(l) labels_a_printed_row(out, l), logical(1))
+  ]
+  expect_identical(unlabelled, character())
+})
+
+test_that("the accessors key an ungrouped result the way they always did", {
+  # The backward-compatible half. Every frame a fitting package writes today
+  # names no subgroups, and reading a column that is not there must leave the
+  # labels the effect, or the effect and the contrast, on every surface at once.
+  binary <- ipw_result(binary_estimates(), vcov = binary_vcov())
+  categorical <- ipw_result(contrast_estimates(), vcov = categorical_vcov())
+
+  expect_identical(names(coef(binary)), binary_labels())
+  expect_identical(rownames(vcov(binary)), binary_labels())
+  expect_identical(rownames(confint(binary)), binary_labels())
+
+  expect_identical(names(coef(categorical)), categorical_labels())
+  expect_identical(rownames(vcov(categorical)), categorical_labels())
+  expect_identical(rownames(confint(categorical)), categorical_labels())
+
+  # The bare effect still names a row where there are no subgroups to qualify it.
+  expect_identical(rownames(confint(binary, parm = "rd")), "rd")
+  expect_identical(
+    rownames(confint(categorical, parm = "rd b vs a")),
+    "rd b vs a"
+  )
+})
+
+test_that("the group does not reach the conditional reading", {
+  # The conditional reading is the outcome model's coefficient surface, and its
+  # rows are that model's coefficient names. The grouping is a property of how
+  # the effects were reported rather than of the model, so a grouped result
+  # answers the conditional reading exactly as an ungrouped one does.
+  res <- ipw_result(
+    group_estimates(),
+    vcov = group_vcov(),
+    outcome_vcov = corrected_outcome_vcov()
+  )
+
+  expect_identical(
+    names(coef(res, effects = "conditional")),
+    conditional_labels()
+  )
+  expect_identical(
+    rownames(vcov(res, effects = "conditional")),
+    conditional_labels()
+  )
+  expect_identical(
+    rownames(confint(res, effects = "conditional")),
+    conditional_labels()
+  )
 })
 
 # ---- registration ------------------------------------------------------------

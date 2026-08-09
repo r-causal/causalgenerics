@@ -233,6 +233,137 @@ pool_categorical_fits <- function(
   })
 }
 
+# One imputation's estimates frame for a result reported once per level of a
+# grouping variable. The effect measures repeat across the subgroups, so a
+# column sits immediately after `effect` saying which subgroup each row
+# describes, written as the `"var = value"` string the contract spells a group
+# with. The numbers are the categorical fixture's, since what differs between
+# the two shapes is which column completes a row's identity rather than what the
+# other columns hold.
+pool_group_estimates <- function(
+  estimate,
+  std.err,
+  group = c("sex = 0", "sex = 1")
+) {
+  half_width <- stats::qnorm(0.975) * std.err
+  data.frame(
+    effect = rep(c("rd", "log(rr)", "log(or)"), times = 2),
+    group = rep(group, each = 3),
+    estimate = estimate,
+    std.err = std.err,
+    z = estimate / std.err,
+    ci.lower = estimate - half_width,
+    ci.upper = estimate + half_width,
+    conf.level = 0.95,
+    p.value = 2 * stats::pnorm(-abs(estimate / std.err))
+  )
+}
+
+pool_group_labels <- function() {
+  c(
+    "rd sex = 0",
+    "log(rr) sex = 0",
+    "log(or) sex = 0",
+    "rd sex = 1",
+    "log(rr) sex = 1",
+    "log(or) sex = 1"
+  )
+}
+
+pool_group_fits <- function(
+  estimate = pool_categorical_estimate(),
+  std_err = pool_categorical_std_err(),
+  vcov = FALSE,
+  group = c("sex = 0", "sex = 1"),
+  ...
+) {
+  lapply(seq_len(nrow(estimate)), function(i) {
+    covariance <- if (vcov) {
+      pool_effects_vcov(std_err[i, ], pool_group_labels())
+    } else {
+      NULL
+    }
+    pool_fit(
+      pool_group_estimates(estimate[i, ], std_err[i, ], group = group),
+      vcov = covariance,
+      ...
+    )
+  })
+}
+
+# One imputation's estimates frame crossing the contrast with the group: two
+# effect measures, two contrasts, and two subgroups. Eight rows, and no one of
+# the three key columns names one of them, nor any two of them together, which
+# is what makes this the fixture that says a row's identity is all three.
+pool_contrast_group_estimates <- function(
+  estimate,
+  std.err,
+  group = c("sex = 0", "sex = 1")
+) {
+  half_width <- stats::qnorm(0.975) * std.err
+  data.frame(
+    effect = rep(c("rd", "log(rr)"), times = 4),
+    contrast = rep(rep(c("b vs a", "c vs a"), each = 2), times = 2),
+    group = rep(group, each = 4),
+    estimate = estimate,
+    std.err = std.err,
+    z = estimate / std.err,
+    ci.lower = estimate - half_width,
+    ci.upper = estimate + half_width,
+    conf.level = 0.95,
+    p.value = 2 * stats::pnorm(-abs(estimate / std.err))
+  )
+}
+
+pool_contrast_group_estimate <- function() {
+  rbind(
+    c(0.08, 0.17, 0.16, 0.31, 0.06, 0.13, 0.12, 0.25),
+    c(0.10, 0.20, 0.20, 0.35, 0.08, 0.16, 0.15, 0.29),
+    c(0.12, 0.23, 0.24, 0.39, 0.10, 0.19, 0.18, 0.33)
+  )
+}
+
+pool_contrast_group_std_err <- function() {
+  rbind(
+    c(0.05, 0.10, 0.04, 0.09, 0.06, 0.11, 0.05, 0.10),
+    c(0.06, 0.11, 0.05, 0.10, 0.07, 0.12, 0.06, 0.11),
+    c(0.07, 0.12, 0.06, 0.11, 0.08, 0.13, 0.07, 0.12)
+  )
+}
+
+pool_contrast_group_labels <- function() {
+  c(
+    "rd b vs a sex = 0",
+    "log(rr) b vs a sex = 0",
+    "rd c vs a sex = 0",
+    "log(rr) c vs a sex = 0",
+    "rd b vs a sex = 1",
+    "log(rr) b vs a sex = 1",
+    "rd c vs a sex = 1",
+    "log(rr) c vs a sex = 1"
+  )
+}
+
+pool_contrast_group_fits <- function(
+  estimate = pool_contrast_group_estimate(),
+  std_err = pool_contrast_group_std_err(),
+  vcov = FALSE,
+  ...
+) {
+  lapply(seq_len(nrow(estimate)), function(i) {
+    covariance <- if (vcov) {
+      pool_effects_vcov(std_err[i, ], pool_contrast_group_labels())
+    } else {
+      NULL
+    }
+    pool_fit(
+      pool_contrast_group_estimates(estimate[i, ], std_err[i, ]),
+      vcov = covariance,
+      ...
+    )
+  })
+}
+
 # The same three results with one field replaced in each. Each step of the
 # complete-data degrees of freedom chain reads a different field, so each of
 # those tests needs fits that differ in one field and agree in the rest.
@@ -1990,4 +2121,218 @@ test_that("pool_ipw() warns once when nothing reports a complete-data df", {
 
   expect_length(refused$warnings, 1L)
   expect_identical(names(refused$value$alternate), c("effects", "reason"))
+})
+
+# ---- the group column --------------------------------------------------------
+
+# A result may report each effect measure once per level of a grouping variable,
+# and the column naming that level is `group`. It is the third component of a
+# row's identity, after the effect and the column naming the contrast, and its
+# values are written as `"var = value"` strings such as `"sex = 0"`.
+#
+# Pooling reads that identity twice over. The rows of the per-imputation frames
+# are aligned by it, so the `sex = 0` row of one imputation is averaged with the
+# `sex = 0` row of the next rather than with whatever sits in the same position;
+# and the columns that name a row are carried onto both pooled frames, so a
+# pooled result is keyed the way the results it pooled were. A pooling that read
+# only the effect would combine the two subgroups of each measure into one row
+# and report an average of estimates that answer different questions, which is
+# the failure this section guards against and which does not error.
+#
+# What the results have to agree on is unchanged: the effect labels, as an
+# ordered vector. The group is part of a label, so a set whose subgroups differ
+# disagrees about its labels and is refused through the condition that
+# disagreement already raises, rather than through one of its own.
+
+test_that("pool_ipw() keys a grouped result by effect and group", {
+  # Six rows, the group column in the position the identity puts it, and the
+  # labels in the order the results reported them. The numbers are the pooled
+  # ones for each column of the fixture, so a pooling that aligned the rows any
+  # other way would report a different average under the same label.
+  fits <- pool_group_fits()
+  estimate <- pool_categorical_estimate()
+  std_err <- pool_categorical_std_err()
+  res <- pool_ipw(fits, dfcom = 17)
+  expected <- rubin_rules_by_column(estimate, std_err, dfcom = 17)
+
+  expect_identical(nrow(res$estimates), 6L)
+  expect_identical(
+    names(res$estimates),
+    c(
+      "effect",
+      "group",
+      "estimate",
+      "std.err",
+      "t",
+      "df",
+      "ci.lower",
+      "ci.upper",
+      "conf.level",
+      "p.value"
+    )
+  )
+  expect_false("contrast" %in% names(res$estimates))
+  expect_identical(
+    res$estimates$effect,
+    rep(c("rd", "log(rr)", "log(or)"), times = 2)
+  )
+  expect_identical(res$estimates$group, rep(c("sex = 0", "sex = 1"), each = 3))
+  expect_equal(res$estimates$estimate, rubin_column(expected, "estimate"))
+  expect_equal(res$estimates$std.err, rubin_column(expected, "std.err"))
+
+  # The diagnostics frame is keyed the same way, so a row of one is found from a
+  # row of the other.
+  expect_identical(
+    names(res$pooling),
+    c("effect", "group", "ubar", "b", "riv", "lambda", "fmi")
+  )
+  expect_identical(res$pooling$effect, res$estimates$effect)
+  expect_identical(res$pooling$group, res$estimates$group)
+  expect_equal(res$pooling$fmi, rubin_column(expected, "fmi"))
+})
+
+test_that("pool_ipw() keys a crossed result by effect, contrast, and group", {
+  # All three columns at once, in the order the identity puts them. No two of
+  # them name a row here, so a pooled frame missing any one would carry rows a
+  # caller cannot tell apart.
+  fits <- pool_contrast_group_fits()
+  estimate <- pool_contrast_group_estimate()
+  std_err <- pool_contrast_group_std_err()
+  res <- pool_ipw(fits, dfcom = 17)
+  expected <- rubin_rules_by_column(estimate, std_err, dfcom = 17)
+
+  expect_identical(nrow(res$estimates), 8L)
+  expect_identical(names(res$estimates)[1:3], c("effect", "contrast", "group"))
+  expect_identical(
+    names(res$pooling),
+    c("effect", "contrast", "group", "ubar", "b", "riv", "lambda", "fmi")
+  )
+
+  expect_identical(res$estimates$effect, rep(c("rd", "log(rr)"), times = 4))
+  expect_identical(
+    res$estimates$contrast,
+    rep(rep(c("b vs a", "c vs a"), each = 2), times = 2)
+  )
+  expect_identical(res$estimates$group, rep(c("sex = 0", "sex = 1"), each = 4))
+  expect_equal(res$estimates$estimate, rubin_column(expected, "estimate"))
+  expect_equal(res$estimates$std.err, rubin_column(expected, "std.err"))
+})
+
+test_that("pool_ipw() names the pooled covariance by the grouped labels", {
+  # The dimnames are the effect labels, which carry the group, so a caller who
+  # reads an entry out by the name `coef()` gives gets the variance of the row
+  # that name belongs to.
+  res <- pool_ipw(pool_group_fits(vcov = TRUE), dfcom = 17)
+  covariance <- attr(res$estimates, "ipw_vcov", exact = TRUE)
+
+  expect_identical(dim(covariance), c(6L, 6L))
+  expect_identical(
+    dimnames(covariance),
+    list(pool_group_labels(), pool_group_labels())
+  )
+  expect_equal(diag(covariance), res$estimates$std.err^2, ignore_attr = TRUE)
+
+  crossed <- pool_ipw(pool_contrast_group_fits(vcov = TRUE), dfcom = 17)
+  expect_identical(
+    dimnames(attr(crossed$estimates, "ipw_vcov", exact = TRUE)),
+    list(pool_contrast_group_labels(), pool_contrast_group_labels())
+  )
+})
+
+test_that("pool_ipw() refuses results whose subgroups disagree", {
+  # Two imputations reporting different levels of the grouping variable, which
+  # is what a subgroup observed in one imputation and not in another produces.
+  # There is no row in the second set to average the `sex = 1` row of the first
+  # with, and pooling by position would combine `sex = 1` with `sex = 2`. The
+  # group is part of a label, so the refusal is the one a disagreement about the
+  # effects reported already raises rather than a second condition beside it.
+  fits <- pool_group_fits()
+  estimate <- pool_categorical_estimate()
+  std_err <- pool_categorical_std_err()
+  fits[[2]]$estimates <- pool_group_estimates(
+    estimate[2, ],
+    std_err[2, ],
+    group = c("sex = 0", "sex = 2")
+  )
+
+  expect_error(pool_ipw(fits), class = "causalgenerics_pool_mismatch_labels")
+  expect_error(pool_ipw(fits), class = "causalgenerics_pool_mismatch")
+
+  cnd <- tryCatch(pool_ipw(fits), error = identity)
+  expect_identical(cnd$field, "labels")
+  expect_true("log(or) sex = 2" %in% unlist(cnd$values))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits))
+})
+
+test_that("pool_ipw() refuses subgroups reported in different orders", {
+  # The same two subgroups the other way round. The set of labels matches, so a
+  # check that compared sets would take these as poolable and then average the
+  # `sex = 0` rows of one imputation with the `sex = 1` rows of another. The
+  # labels are what say which row is which, and the pooled frame reports them in
+  # an order, so the order is part of what has to agree. Nothing about this set
+  # errors on its own: the rows line up by position and the numbers combine, so
+  # the wrong answer is one a caller has no way to see.
+  fits <- pool_group_fits()
+  estimate <- pool_categorical_estimate()
+  std_err <- pool_categorical_std_err()
+  fits[[3]]$estimates <- pool_group_estimates(
+    estimate[3, ],
+    std_err[3, ],
+    group = c("sex = 1", "sex = 0")
+  )
+
+  expect_error(pool_ipw(fits), class = "causalgenerics_pool_mismatch_labels")
+  expect_error(pool_ipw(fits), class = "causalgenerics_pool_mismatch")
+})
+
+test_that("pool_ipw() refuses a set where only some results name subgroups", {
+  # One result reporting its effects for the whole sample and the others
+  # reporting them by subgroup. The rows do not correspond at all: three of
+  # these results name six and one names three. The row counts already tell
+  # them apart, and what the labels have to say is which rows the counts belong
+  # to, so the values the condition carries are the grouped labels rather than
+  # the bare effects on both sides.
+  fits <- pool_group_fits()
+  fits[[3]]$estimates <- pool_binary_estimates(
+    pool_binary_estimate()[3, ],
+    pool_binary_std_err()[3, ]
+  )
+
+  expect_error(pool_ipw(fits), class = "causalgenerics_pool_mismatch_labels")
+  expect_error(pool_ipw(fits), class = "causalgenerics_pool_mismatch")
+
+  cnd <- tryCatch(pool_ipw(fits), error = identity)
+  expect_identical(cnd$field, "labels")
+  expect_true("rd" %in% unlist(cnd$values))
+  expect_true("rd sex = 0" %in% unlist(cnd$values))
+})
+
+test_that("pool_ipw() keys an ungrouped result the way it always did", {
+  # The backward-compatible half. Every set a fitting package pools today names
+  # no subgroups, and reading a column that is not there must leave both pooled
+  # frames keyed by the effect, or by the effect and the contrast, and nothing
+  # else.
+  binary <- pool_ipw(pool_binary_fits(vcov = TRUE), dfcom = 17)
+  categorical <- pool_ipw(pool_categorical_fits(vcov = TRUE), dfcom = 17)
+
+  expect_false("group" %in% names(binary$estimates))
+  expect_false("group" %in% names(binary$pooling))
+  expect_false("group" %in% names(categorical$estimates))
+  expect_false("group" %in% names(categorical$pooling))
+
+  expect_identical(names(binary$estimates)[[1]], "effect")
+  expect_identical(
+    names(binary$pooling),
+    c("effect", "ubar", "b", "riv", "lambda", "fmi")
+  )
+  expect_identical(names(categorical$estimates)[1:2], c("effect", "contrast"))
+  expect_identical(
+    dimnames(attr(binary$estimates, "ipw_vcov", exact = TRUE)),
+    list(pool_binary_labels(), pool_binary_labels())
+  )
+  expect_identical(
+    dimnames(attr(categorical$estimates, "ipw_vcov", exact = TRUE)),
+    list(pool_categorical_labels(), pool_categorical_labels())
+  )
 })

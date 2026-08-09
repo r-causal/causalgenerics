@@ -2375,6 +2375,131 @@ test_that("the group column names the rows of every reported surface", {
   }
 })
 
+# The grouped fixture with its subgroups named in a factor rather than in
+# strings. The column is built from the lawful one, so the two frames differ in
+# the type of that column and in nothing else.
+factor_group_estimates <- function() {
+  estimates <- group_estimates()
+  estimates$group <- factor(estimates$group)
+  estimates
+}
+
+# The grouped fixture with its subgroups numbered rather than named, which is
+# the other kind of column the check refuses.
+numeric_group_estimates <- function() {
+  estimates <- group_estimates()
+  estimates$group <- rep(c(0, 1), each = 3)
+  estimates
+}
+
+# The grouped fixture with the first `rows` rows recording no subgroup. The
+# count is an argument because the refusal reports it, and the sentence it
+# reports it in agrees with it.
+unnamed_group_estimates <- function(rows) {
+  estimates <- group_estimates()
+  estimates$group[seq_len(rows)] <- NA_character_
+  estimates
+}
+
+test_that("new_ipw() refuses a group column that is not character", {
+  # A factor is the near miss the check is written for. It prints as the
+  # `"var = value"` strings the contract asks for and pastes into a label that
+  # reads like the real one, so nothing downstream fails on it; what the column
+  # holds is level codes, and it carries a set of levels the frame may have no
+  # rows for. A number pastes as a formatted number, which names a value without
+  # saying which variable took it.
+  expect_error(
+    ipw_result(factor_group_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(factor_group_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_result(numeric_group_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(numeric_group_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  expect_snapshot(error = TRUE, ipw_result(factor_group_estimates()))
+})
+
+test_that("new_ipw() refuses a group column that leaves a row unnamed", {
+  # A missing name pastes into a label reading `"rd NA"`, which describes no
+  # subgroup, and a second one pastes into the same label as the first, which
+  # leaves `coef()` naming two elements the same thing and `printCoefmat()` with
+  # row names it cannot be handed.
+  expect_error(
+    ipw_result(unnamed_group_estimates(1L)),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(unnamed_group_estimates(1L)),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_result(unnamed_group_estimates(2L)),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(unnamed_group_estimates(2L)),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  # Both counts are recorded, because the message counts the rows and the
+  # sentence reporting the count agrees with it.
+  expect_snapshot(error = TRUE, ipw_result(unnamed_group_estimates(1L)))
+  expect_snapshot(error = TRUE, ipw_result(unnamed_group_estimates(2L)))
+})
+
+test_that("new_ipw() constructs a result whose subgroups are named", {
+  # The lawful half of the check. A character column naming a subgroup in every
+  # row is the column the contract describes, so the constructor builds the
+  # result and stores the frame it was handed, and the rows carry the grouped
+  # labels.
+  estimates <- group_estimates()
+
+  res <- ipw_result(estimates)
+
+  expect_s3_class(res, "ipw", exact = TRUE)
+  expect_identical(res$estimates, estimates)
+  expect_identical(ipw_effect_labels(res$estimates), group_labels())
+
+  # Including the frame that names contrasts and subgroups at once, which is the
+  # shape with the most for the check to read.
+  crossed <- ipw_result(contrast_group_estimates())
+
+  expect_identical(crossed$estimates, contrast_group_estimates())
+  expect_identical(
+    ipw_effect_labels(crossed$estimates),
+    contrast_group_labels()
+  )
+})
+
+test_that("new_ipw() leaves a frame that names no subgroups alone", {
+  # The backward-compatible half. A frame that names no subgroups is the frame
+  # every fitting package writes today: there is no column for the check to
+  # read, so it has nothing to fail and nothing to change, and the result
+  # carries the frame it was given.
+  for (estimates in list(
+    binary_estimates(),
+    contrast_estimates(),
+    categorical_estimates(),
+    continuous_estimates()
+  )) {
+    expect_identical(ipw_result(estimates)$estimates, estimates)
+  }
+
+  expect_identical(
+    ipw_effect_labels(ipw_result(binary_estimates())$estimates),
+    c("rd", "log(rr)", "log(or)")
+  )
+})
+
 # ---- registration and export -------------------------------------------------
 
 test_that("the print and data frame methods are registered against ipw", {

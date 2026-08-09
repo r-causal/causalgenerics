@@ -279,3 +279,27 @@
       ---
       Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
+# new_ipw() refuses a group column that is not character
+
+    Code
+      ipw_result(factor_group_estimates())
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name its subgroups in a character `group` column, since a group is written as a "var = value" string, but the column this frame carries is <factor>.
+
+# new_ipw() refuses a group column that leaves a row unnamed
+
+    Code
+      ipw_result(unnamed_group_estimates(1L))
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name a subgroup in every row of its `group` column, but 1 row records none.
+
+---
+
+    Code
+      ipw_result(unnamed_group_estimates(2L))
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name a subgroup in every row of its `group` column, but 2 rows record none.
+

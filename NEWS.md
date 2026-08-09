@@ -30,15 +30,17 @@
   full set of cells, including `[`, `vctrs::vec_slice()`, `sort()`, a round trip
   through a data frame, and combining two joint exposures that declare the same
   crossing. Operations that narrow or rewrite the level set give it up and say
-  so: `droplevels()`, `x[i, drop = TRUE]`, `levels<-`, and combining with a
-  factor, with a character vector, or with a joint exposure declaring a
-  different crossing each warn under the general class
-  `causalgenerics_joint_exposure_downgrade` and return a plain factor over the
-  cells. Casting into the class is refused outright rather than degraded,
-  because a crossing cannot be recovered from labels that merely look like one.
-  Base `c()` is routed through `vctrs::vec_c()` so that it takes those same
-  rules, rather than reaching `c.factor()` and combining the codes into a bare
-  factor without a word. Two routes escape all of it and degrade silently,
+  so, each warning under the general class
+  `causalgenerics_joint_exposure_downgrade`: `droplevels()` and
+  `x[i, drop = TRUE]` return a plain factor over the cells that remain,
+  `levels<-` returns a plain factor with the new levels, and combining with a
+  factor or with a joint exposure declaring a different crossing returns a plain
+  factor over the levels of both; combining with a character vector returns a
+  character vector. Casting into the class is refused outright rather than
+  degraded, because a crossing cannot be recovered from labels that merely look
+  like one. Base `c()` is routed through `vctrs::vec_c()` so that it takes those
+  same rules, rather than reaching `c.factor()` and combining the codes into a
+  bare factor without a word. Two routes escape all of it and degrade silently,
   because neither reaches a method this package can register: `unlist()`
   combines the underlying codes in base C code without dispatching at all, and
   `c()` dispatches on its first argument, so a combine that begins with a plain
@@ -69,10 +71,10 @@
   columns pasted together, so anything at all pastes into something and nothing
   downstream errors: a factor pastes as its levels rather than as what the frame
   holds, a number names a value without saying which variable took it, and a
-  missing entry pastes into a label reading `"rd NA"`, two of which name two rows
-  the same thing. What comes out either way is a label the package that produced
-  the result did not write, which is why the column is checked where the result
-  is constructed.
+  missing entry pastes into a label reading `"rd NA"`; two of them paste into
+  the same label, naming two rows the same thing. What comes out either way is
+  a label the package that produced the result did not write, which is why the
+  column is checked where the result is constructed.
 
 * `pool_ipw()` pools both readings of the results it is given whenever both can
   be pooled, and stores the one the call did not name whole, as a tenth

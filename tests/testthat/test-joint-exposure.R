@@ -630,6 +630,54 @@ test_that("subsetting keeps the class and the whole declaration", {
   )
 })
 
+test_that("vec_slice() keeps the class and the whole declaration", {
+  # tibble and dplyr never reach a column through `[`. They slice it through
+  # `vec_proxy()`, `vec_slice()`, and `vec_restore()`, which is a separate path
+  # with its own way of going wrong: a proxy that drops to the bare integer
+  # codes and a restore that rebuilds around them gives back a vector with the
+  # right class and the right values and no crossing on it, and a
+  # `dplyr::filter()` or an `arrange()` would lose the declaration without a
+  # word. Nothing asserted against `[` reaches this path, so it is pinned on its
+  # own terms rather than as a corollary.
+  x <- joint_smoking()
+
+  sliced <- vctrs::vec_slice(x, 2:4)
+  expect_s3_class(sliced, joint_class(), exact = TRUE)
+  expect_joint_metadata_preserved(sliced, x)
+  expect_identical(levels(sliced), joint_smoking_levels())
+  expect_identical(as.character(sliced), joint_smoking_cells()[2:4])
+
+  # A slice holding two of the four cells keeps all four as levels, for the same
+  # reason a `[` slice does: the crossing is what was declared, not what the
+  # rows that survived a filter happen to contain.
+  partial <- vctrs::vec_slice(x, c(1L, 5L, 2L))
+  expect_s3_class(partial, joint_class(), exact = TRUE)
+  expect_joint_metadata_preserved(partial, x)
+  expect_identical(levels(partial), joint_smoking_levels())
+  expect_identical(joint_reference(partial), joint_reference(x))
+
+  # A logical subscript is how a filter arrives, and a reordering subscript is
+  # how a sort does. Both take the same route and neither may lose anything.
+  filtered <- vctrs::vec_slice(
+    x,
+    c(TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE)
+  )
+  expect_s3_class(filtered, joint_class(), exact = TRUE)
+  expect_joint_metadata_preserved(filtered, x)
+  expect_identical(
+    as.character(filtered),
+    joint_smoking_cells()[c(1L, 3L, 5L, 7L, 9L)]
+  )
+
+  arranged <- vctrs::vec_slice(x, c(10L, 1L, 5L, 2L))
+  expect_s3_class(arranged, joint_class(), exact = TRUE)
+  expect_joint_metadata_preserved(arranged, x)
+  expect_identical(
+    as.character(arranged),
+    joint_smoking_cells()[c(10L, 1L, 5L, 2L)]
+  )
+})
+
 test_that("a bare subscript returns the joint exposure unchanged", {
   x <- joint_smoking()
 

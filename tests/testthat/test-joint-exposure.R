@@ -301,6 +301,137 @@ test_that("the unnamed-component refusal states the contract", {
   )
 })
 
+test_that("joint_exposure() refuses two components sharing a name", {
+  # The names are what separates the two treatments in everything the
+  # declaration is read for, so one name used twice leaves a crossing nothing
+  # downstream can report. The cell labels name the same variable on both sides
+  # of every cell, `joint_components()` answers a list with one name twice, and
+  # the printed prototype writes the same treatment twice where the crossing
+  # should be. A package reading such a vector cannot tell which component a cell
+  # varies, and the distinction cannot be recovered from anything the vector
+  # carries, so the refusal is at construction rather than downstream.
+  #
+  # The linter's rule against duplicated arguments is suppressed wherever this
+  # section writes a call with one. The duplicate name is the fault under test,
+  # and assembling the call some other way to satisfy the rule would put the
+  # thing being tested somewhere a reader cannot see it.
+  # jarl-ignore duplicated_arguments: the duplicate name is under test
+  expect_error(
+    joint_exposure(qsmk = smoking_qsmk(), qsmk = smoking_exercise()),
+    class = "causalgenerics_joint_exposure_shared_name"
+  )
+  # jarl-ignore duplicated_arguments: the duplicate name is under test
+  expect_error(
+    joint_exposure(qsmk = smoking_qsmk(), qsmk = smoking_exercise()),
+    class = "causalgenerics_invalid_joint_exposure"
+  )
+
+  # These two components are a crossing in every other respect: both vary,
+  # neither admits a missing value, and all four cells are populated. Nothing but
+  # the shared name is wrong, so this is the refusal that has to fire, and no
+  # other refusal may stand in for it.
+  # jarl-ignore duplicated_arguments: the duplicate name is under test
+  cnd <- tryCatch(
+    joint_exposure(qsmk = smoking_qsmk(), qsmk = smoking_exercise()),
+    error = identity
+  )
+
+  expect_s3_class(cnd, "causalgenerics_joint_exposure_shared_name")
+  expect_false(inherits(cnd, "causalgenerics_joint_exposure_two_components"))
+  expect_false(inherits(cnd, "causalgenerics_joint_exposure_empty_cell"))
+})
+
+test_that("the shared-name refusal names the colliding name", {
+  # The name is a field as well as part of the sentence, so a handler reports it
+  # without parsing the message for it. The sentence names it too, and says what
+  # the caller has to do about it: the fault is in the call rather than in the
+  # data, and giving the two components distinct names is the whole of the fix.
+  # jarl-ignore duplicated_arguments: the duplicate name is under test
+  cnd <- tryCatch(
+    joint_exposure(qsmk = smoking_qsmk(), qsmk = smoking_exercise()),
+    error = identity
+  )
+
+  expect_identical(cnd$component, "qsmk")
+  expect_true(grepl("qsmk", conditionMessage(cnd), fixed = TRUE))
+  expect_true(grepl("distinct", conditionMessage(cnd), fixed = TRUE))
+})
+
+test_that("the shared-name refusal states the contract", {
+  # jarl-ignore duplicated_arguments: the duplicate name is under test
+  expect_snapshot(
+    error = TRUE,
+    joint_exposure(qsmk = smoking_qsmk(), qsmk = smoking_exercise())
+  )
+})
+
+test_that("the same component passed twice refuses on the name", {
+  # Passing one column twice is how a caller meets this by accident, and the
+  # crossing it declares leaves every off-diagonal cell empty, so the positivity
+  # refusal applies on its own terms. It would be the wrong answer: it names
+  # cells like "qsmk = 0, qsmk = 1", which read as nonsense rather than as cells,
+  # and it sends the caller to coarsen a component or restrict the analysis when
+  # what they have to do is name the second treatment. The name is settled before
+  # the cells are counted for that reason.
+  # jarl-ignore duplicated_arguments: the duplicate name is under test
+  expect_error(
+    joint_exposure(qsmk = smoking_qsmk(), qsmk = smoking_qsmk()),
+    class = "causalgenerics_joint_exposure_shared_name"
+  )
+
+  # jarl-ignore duplicated_arguments: the duplicate name is under test
+  cnd <- tryCatch(
+    joint_exposure(qsmk = smoking_qsmk(), qsmk = smoking_qsmk()),
+    error = identity
+  )
+
+  expect_false(inherits(cnd, "causalgenerics_joint_exposure_empty_cell"))
+})
+
+test_that("three components sharing a name refuse on the count", {
+  # Both faults are present and the count is the one reported. A caller who
+  # supplied three treatments has to drop one before the names of the two that
+  # remain are a question at all, and the count refusal already names the number
+  # supplied. The order is pinned so that a caller matching on one class knows
+  # which refusal a call carrying both faults raises.
+  # jarl-ignore duplicated_arguments: the duplicate name is under test
+  cnd <- tryCatch(
+    joint_exposure(
+      qsmk = smoking_qsmk(),
+      qsmk = smoking_exercise(),
+      qsmk = smoking_qsmk()
+    ),
+    error = identity
+  )
+
+  expect_s3_class(cnd, "causalgenerics_joint_exposure_two_components")
+  expect_false(inherits(cnd, "causalgenerics_joint_exposure_shared_name"))
+})
+
+test_that("distinct names carrying the same levels declare a crossing", {
+  # The refusal is keyed to the names, not to the data behind them. Two
+  # treatments recorded on the same scale, here 0/1 both, are an ordinary
+  # crossing, and a check written against the components rather than their names
+  # would refuse it.
+  x <- joint_exposure(qsmk = c(0, 1, 0, 1), exercise = c(0, 0, 1, 1))
+
+  expect_s3_class(x, joint_class(), exact = TRUE)
+  expect_identical(
+    levels(x),
+    c(
+      "qsmk = 0, exercise = 0",
+      "qsmk = 1, exercise = 0",
+      "qsmk = 0, exercise = 1",
+      "qsmk = 1, exercise = 1"
+    )
+  )
+  expect_identical(
+    joint_components(x),
+    list(qsmk = c("0", "1"), exercise = c("0", "1"))
+  )
+  expect_identical(joint_reference(x), "qsmk = 0, exercise = 0")
+})
+
 test_that("joint_exposure() refuses a component with one observed level", {
   # A component that never varies is not a treatment in these data, and the
   # crossing it produces has half its cells empty. The refusal is keyed to the
@@ -442,6 +573,56 @@ test_that("an unpopulated NA level refuses as a missing value", {
     joint_exposure(qsmk = c(0, 1, 0, 1), exercise = declared_only),
     class = "causalgenerics_invalid_joint_exposure"
   )
+})
+
+test_that("both components are checked whichever position the fault is in", {
+  # The per-component checks run over the components rather than over their
+  # names, so the fault is found and named for the right component in either
+  # position. With shared names refused ahead of these checks, position is all
+  # that separates the two components, and a check that looked each one up by
+  # name would read the first one twice and pass a fault in the second.
+  first_constant <- tryCatch(
+    joint_exposure(qsmk = rep(1, 4), exercise = c("no", "no", "yes", "yes")),
+    error = identity
+  )
+  second_constant <- tryCatch(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = rep("no", 4)),
+    error = identity
+  )
+
+  expect_s3_class(
+    first_constant,
+    "causalgenerics_joint_exposure_constant_component"
+  )
+  expect_identical(first_constant$component, "qsmk")
+  expect_s3_class(
+    second_constant,
+    "causalgenerics_joint_exposure_constant_component"
+  )
+  expect_identical(second_constant$component, "exercise")
+
+  first_missing <- tryCatch(
+    joint_exposure(
+      qsmk = c(0, NA, 0, 1),
+      exercise = c("no", "no", "yes", "yes")
+    ),
+    error = identity
+  )
+  second_missing <- tryCatch(
+    joint_exposure(qsmk = c(0, 1, 0, 1), exercise = c("no", NA, "yes", "yes")),
+    error = identity
+  )
+
+  expect_s3_class(
+    first_missing,
+    "causalgenerics_joint_exposure_missing_value"
+  )
+  expect_identical(first_missing$component, "qsmk")
+  expect_s3_class(
+    second_missing,
+    "causalgenerics_joint_exposure_missing_value"
+  )
+  expect_identical(second_missing$component, "exercise")
 })
 
 test_that("joint_exposure() refuses a crossing with an empty cell", {

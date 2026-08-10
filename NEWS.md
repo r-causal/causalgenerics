@@ -1,5 +1,85 @@
 # causalgenerics (development version)
 
+* New `joint_exposure()` crosses two discrete treatments into one categorical
+  exposure and records the declaration on the vector it returns: which two
+  treatments were crossed, in what order, which levels each of them takes, and
+  which cell the effects are reported against. `is_joint_exposure()`,
+  `joint_components()`, and `joint_reference()` read that back, so the package
+  that builds the weights, the package that checks balance over the cells, and
+  the package that reports the effects agree on which cells exist without any of
+  them owning the declaration. Conditioning on a variable and jointly
+  intervening on two treatments are different causal questions, and the class
+  serves the second. The result is a factor, with `"factor"` ahead of
+  `"vctrs_vctr"` in its class vector so that `model.matrix()` gives exactly what
+  a plain factor over the same cells gives, and the cells are ordered with the
+  first component varying fastest, which is what puts the cell crossing the two
+  components' own reference levels first. Construction refuses a crossing with a
+  cell nothing falls in, with an error of class
+  `causalgenerics_joint_exposure_empty_cell`: an empty cell is a positivity
+  violation rather than a small sample, so the joint effect is not identified in
+  those data and no weight, contrast, or balance check over the crossing can be
+  computed. A component with a missing value is refused with
+  `causalgenerics_joint_exposure_missing_value`, and so is a factor component
+  that declares `NA` as one of its levels even when nothing currently takes it,
+  since such a level gives its missing observations an ordinary code and the
+  cell the crossing would write for them names an absence rather than a
+  treatment. A component observed at one level, an unnamed component, and
+  anything other than exactly two components are refused as well, each under the
+  general class `causalgenerics_invalid_joint_exposure` alongside a class keyed
+  to the fault. So are two components sharing a name, with
+  `causalgenerics_joint_exposure_shared_name`: the names are what tell the two
+  treatments apart in the cells, so one name used twice would label every cell
+  with the same variable on either side of it and leave nothing downstream able
+  to tell which component a cell varies. The declaration then survives every
+  operation that keeps the full set of cells, including `[`,
+  `vctrs::vec_slice()`, `sort()`, a round trip through a data frame, and
+  combining two joint exposures that declare the same crossing. Operations that
+  narrow or rewrite the level set give it up and say so, each warning under the
+  general class `causalgenerics_joint_exposure_downgrade`: `droplevels()` and
+  `x[i, drop = TRUE]` return a plain factor over the cells that remain,
+  `levels<-` returns a plain factor with the new levels, and combining with a
+  factor or with a joint exposure declaring a different crossing returns a plain
+  factor over the levels of both; combining with a character vector returns a
+  character vector. Casting into the class is refused outright rather than
+  degraded, because a crossing cannot be recovered from labels that merely look
+  like one. Base `c()` is routed through `vctrs::vec_c()` so that it takes those
+  same rules, rather than reaching `c.factor()` and combining the codes into a
+  bare factor without a word. Two routes escape all of it and degrade silently,
+  because neither reaches a method this package can register: `unlist()`
+  combines the underlying codes in base C code without dispatching at all, and
+  `c()` dispatches on its first argument, so a combine that begins with a plain
+  factor never reaches this class. Reach for `vctrs::vec_c()` where either could
+  apply.
+
+* The `estimates` frame of an `ipw` result may carry a `group` column, naming
+  the subgroup each row was estimated in as a `"var = value"` string such as
+  `"sex = 0"`. A row's identity is the `effect` column, then `contrast` when the
+  result names contrasts, then `group` when it names subgroups, and every
+  surface that reads that identity reads the new column with it. An effect label
+  pastes the group on last, so a subgroup row is labelled `"rd b vs a sex = 0"`;
+  `print()` writes those labels down the side of its table and keeps the column
+  out of the numeric matrix it formats; `coef()` names its vector and `vcov()`
+  its dimnames with them; `as.data.frame()` heads a `group` column after
+  `contrast` and before `estimate`, on a result and on a pooled one alike; and
+  `pool_ipw()` keys its pooled frames by the same columns, so a set of results
+  reporting different subgroups, or the same subgroups in different orders,
+  disagrees about its labels and is refused through that requirement rather than
+  through one of its own. The column has one spelling and no alias, unlike
+  `contrast`: it is newer than the first version of the contract, so no stored
+  frame keeps its subgroups anywhere else. It is absent rather than constant
+  when a result reports one group, since a column repeating one value down the
+  table would read as a subgroup that was named. `new_ipw()` refuses a `group`
+  column that is not character, and one that leaves any row without a subgroup,
+  with an error of class `causalgenerics_invalid_argument_estimates`, and of the
+  general class `causalgenerics_invalid_argument`. A label is the identity
+  columns pasted together, so anything at all pastes into something and nothing
+  downstream errors: a factor pastes as its levels rather than as what the frame
+  holds, a number names a value without saying which variable took it, and a
+  missing entry pastes into a label reading `"rd NA"`; two of them paste into
+  the same label, naming two rows the same thing. What comes out either way is
+  a label the package that produced the result did not write, which is why the
+  column is checked where the result is constructed.
+
 * `pool_ipw()` pools both readings of the results it is given whenever both can
   be pooled, and stores the one the call did not name whole, as a tenth
   `alternate` component holding that reading's pooled estimates and pooling

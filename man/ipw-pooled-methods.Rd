@@ -94,10 +94,11 @@ of class \code{causalgenerics_invalid_argument}.
 \code{nobs()} returns a single integer.
 
 \code{as.data.frame()} returns a plain data frame with the columns \code{term}, then
-\code{contrast} when the result names contrasts, then \code{estimate}, \code{std.error},
-\code{statistic}, \code{df}, and \code{p.value}, with \code{conf.low} and \code{conf.high} appended
-when they are asked for. The pooled covariance travels on it under the
-\code{ipw_vcov} attribute unless the table was exponentiated.
+\code{contrast} when the result names contrasts, then \code{group} when it names
+subgroups, then \code{estimate}, \code{std.error}, \code{statistic}, \code{df}, and \code{p.value},
+with \code{conf.low} and \code{conf.high} appended when they are asked for. The pooled
+covariance travels on it under the \code{ipw_vcov} attribute unless the table was
+exponentiated.
 
 \code{estimand()} returns the estimand the pooled results agreed on, which is the
 one the weights their estimates were computed under targeted.

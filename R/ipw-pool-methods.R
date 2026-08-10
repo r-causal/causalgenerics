@@ -160,10 +160,11 @@
 #' `nobs()` returns a single integer.
 #'
 #' `as.data.frame()` returns a plain data frame with the columns `term`, then
-#' `contrast` when the result names contrasts, then `estimate`, `std.error`,
-#' `statistic`, `df`, and `p.value`, with `conf.low` and `conf.high` appended
-#' when they are asked for. The pooled covariance travels on it under the
-#' `ipw_vcov` attribute unless the table was exponentiated.
+#' `contrast` when the result names contrasts, then `group` when it names
+#' subgroups, then `estimate`, `std.error`, `statistic`, `df`, and `p.value`,
+#' with `conf.low` and `conf.high` appended when they are asked for. The pooled
+#' covariance travels on it under the `ipw_vcov` attribute unless the table was
+#' exponentiated.
 #'
 #' `estimand()` returns the estimand the pooled results agreed on, which is the
 #' one the weights their estimates were computed under targeted.
@@ -419,13 +420,18 @@ as.data.frame.ipw_pooled <- function(
   }
 
   # `term` first, then the column naming the contrast it qualifies when the
-  # result reports one. `df` sits after the statistic, since that is what the
-  # statistic beside it is referred to and a table without it leaves a reader
-  # nothing to refer it to.
+  # result reports one, then the column naming the subgroup it was estimated in
+  # when the result reports those, which is the order the labels paste them in.
+  # `df` sits after the statistic, since that is what the statistic beside it is
+  # referred to and a table without it leaves a reader nothing to refer it to.
   contrast <- ipw_contrast_column(estimates)
+  group <- ipw_group_column(estimates)
   columns <- list(term = as.character(estimates$effect))
   if (!is.null(contrast)) {
     columns$contrast <- estimates[[contrast]]
+  }
+  if (!is.null(group)) {
+    columns$group <- estimates[[group]]
   }
   columns$estimate <- estimates$estimate
   columns$std.error <- estimates$std.err

@@ -93,7 +93,19 @@ contract names that column \code{comparison}. The older name is read as an
 alias for the canonical one wherever the column is read, so a result
 holding such a frame labels its rows and reports its table exactly as one
 holding a \code{contrast} column does. A method written now writes
-\code{contrast}.}
+\code{contrast}. A result reported once per level of a grouping variable also
+has a \code{group} column, placed after the contrast column when one is
+present and after \code{effect} when the result names no contrasts, naming the
+subgroup each row was estimated in as a \code{"var = value"} string such as
+\code{"sex = 0"}. That column has one spelling and no alias. Both optional
+columns are absent rather than constant when the result reports one
+contrast or one group, since a column repeating a single value down the
+table would read as a contrast or a subgroup that was named. \code{group} must
+be character and must name a subgroup in every row; the constructor
+refuses anything else with an error of class
+\code{causalgenerics_invalid_argument_estimates}, and of the general class
+\code{causalgenerics_invalid_argument}, since a label pasted from such a column
+would relabel every row it keys without failing anywhere.}
 \item{\code{se_method}}{The standard error method used, such as \code{"mestimation"}
 or \code{"linearization"}.}
 \item{\code{fit}}{The fitted object the variance estimator produced, or \code{NULL}.
@@ -135,11 +147,11 @@ describes the two modes and what each one tabulates.
 
 \code{as.data.frame()} reports the effect estimates as a tidier-shaped table
 rather than as a copy of the \code{estimates} component. Its columns are \code{term},
-then \code{contrast} when the result names contrasts, then \code{estimate},
-\code{std.error}, \code{statistic}, and \code{p.value}. Those are the names the tidier
-convention uses, so a fitting package's \code{tidy()} method is this table read as
-a tibble and nothing more. The \code{estimates} component itself is unchanged by
-any of what follows.
+then \code{contrast} when the result names contrasts, then \code{group} when it names
+subgroups, then \code{estimate}, \code{std.error}, \code{statistic}, and \code{p.value}. Those
+are the names the tidier convention uses, so a fitting package's \code{tidy()}
+method is this table read as a tibble and nothing more. The \code{estimates}
+component itself is unchanged by any of what follows.
 
 \code{conf.int = TRUE} appends \code{conf.low} and \code{conf.high} after the other columns,
 and \code{conf.level} names the level they report. The level is an argument rather
@@ -169,10 +181,14 @@ Every row of \code{estimates} has a label, and it is the label rather than the
 position that \code{print()} writes down the side of its table and that
 \code{\link[=ipw-accessors]{coef()}}, \code{\link[=ipw-accessors]{vcov()}}, and
 \code{\link[=ipw-accessors]{confint()}} name their results with. The label is the
-\code{effect} column on its own when there is no \code{contrast} column, and \code{effect}
-and \code{contrast} pasted together, such as \code{"rd b vs a"}, when there is. A
-categorical exposure repeats each effect measure across its contrasts, so
-\code{effect} alone would name several rows the same thing.
+columns that name a row, pasted together in the order they appear in the
+frame's contract: the \code{effect} column, then \code{contrast} when the result names
+contrasts, then \code{group} when it names subgroups. A binary exposure estimated
+for the whole sample is labelled \code{"rd"}, a categorical one \code{"rd b vs a"}, and
+one reported by subgroup \code{"rd b vs a sex = 0"}. A categorical exposure repeats
+each effect measure across its contrasts and a subgroup analysis repeats each
+one across its groups, so \code{effect} alone would name several rows the same
+thing.
 }
 
 \section{The presentation mode}{

@@ -209,3 +209,97 @@
       Error in `as.data.frame.ipw()`:
       ! `exponentiate` must be a single logical value, either `TRUE` or `FALSE`.
 
+# print() keys rows by the effect and the group together
+
+    Code
+      print(res)
+    Output
+      Inverse Probability Weight Estimator
+      Estimand: ATE 
+      Effects: marginal (population-averaged) 
+      
+      Weight Estimator:
+        Call: glm(formula = z ~ x, family = binomial(), data = dat) 
+      
+      Outcome Model:
+        Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
+      
+      Marginal estimates:
+                      estimate  std.err      z  ci.lower ci.upper conf.level p.value
+      rd sex = 0      0.151234 0.081422 1.8574 -0.008350  0.31082       0.95 0.06325
+      log(rr) sex = 0 0.421887 0.240118 1.7570 -0.048736  0.89251       0.95 0.07892
+      log(or) sex = 0 0.664215 0.371244 1.7892 -0.063410  1.39184       0.95 0.07359
+      rd sex = 1      0.248531 0.104663 2.3746  0.043395  0.45367       0.95 0.01757
+      log(rr) sex = 1 0.698742 0.308951 2.2617  0.093209  1.30428       0.95 0.02372
+      log(or) sex = 1 1.092408 0.472183 2.3135  0.166946  2.01787       0.95 0.02069
+                       
+      rd sex = 0      .
+      log(rr) sex = 0 .
+      log(or) sex = 0 .
+      rd sex = 1      *
+      log(rr) sex = 1 *
+      log(or) sex = 1 *
+      ---
+      Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+# print() keys rows by effect, contrast, and group together
+
+    Code
+      print(res)
+    Output
+      Inverse Probability Weight Estimator
+      Estimand: ATE 
+      Effects: marginal (population-averaged) 
+      
+      Weight Estimator:
+        Call: glm(formula = z ~ x, family = binomial(), data = dat) 
+      
+      Outcome Model:
+        Call: glm(formula = y ~ z, family = quasibinomial(), data = dat) 
+      
+      Marginal estimates:
+                             estimate  std.err      z  ci.lower ci.upper conf.level
+      rd b vs a sex = 0      0.081945 0.050387 1.6263 -0.016812  0.18070       0.95
+      log(rr) b vs a sex = 0 0.168870 0.104633 1.6139 -0.036207  0.37395       0.95
+      rd c vs a sex = 0      0.166939 0.045182 3.6948  0.078384  0.25549       0.95
+      log(rr) c vs a sex = 0 0.318293 0.091898 3.4635  0.138176  0.49841       0.95
+      rd b vs a sex = 1      0.062318 0.041205 1.5124 -0.018442  0.14308       0.95
+      log(rr) b vs a sex = 1 0.129441 0.085734 1.5098 -0.038595  0.29748       0.95
+      rd c vs a sex = 1      0.128507 0.037164 3.4578  0.055667  0.20135       0.95
+      log(rr) c vs a sex = 1 0.245106 0.075611 3.2417  0.096911  0.39330       0.95
+                               p.value    
+      rd b vs a sex = 0      0.1038832    
+      log(rr) b vs a sex = 0 0.1065433    
+      rd c vs a sex = 0      0.0002200 ***
+      log(rr) c vs a sex = 0 0.0005331 ***
+      rd b vs a sex = 1      0.1304349    
+      log(rr) b vs a sex = 1 0.1310950    
+      rd c vs a sex = 1      0.0005445 ***
+      log(rr) c vs a sex = 1 0.0011883 ** 
+      ---
+      Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+# new_ipw() refuses a group column that is not character
+
+    Code
+      ipw_result(factor_group_estimates())
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name its subgroups in a character `group` column, since a group is written as a "var = value" string, but the column this frame carries is <factor>.
+
+# new_ipw() refuses a group column that leaves a row unnamed
+
+    Code
+      ipw_result(unnamed_group_estimates(1L))
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name a subgroup in every row of its `group` column, but 1 row records none.
+
+---
+
+    Code
+      ipw_result(unnamed_group_estimates(2L))
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name a subgroup in every row of its `group` column, but 2 rows record none.
+

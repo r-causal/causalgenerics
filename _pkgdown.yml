@@ -28,3 +28,11 @@ reference:
   - ipw-pooled-methods
   - new_causal_wts
   - causal_wts_ptype2
+- title: Exposure declarations
+  desc: >
+    Classes for the exposure an analysis is estimated from rather than for what
+    it returns. A package handed such a column reads the declaration off it
+    instead of inferring the design from the values it holds.
+  contents:
+  - joint_exposure
+  - joint-exposure-accessors

@@ -35,7 +35,8 @@ components, in this order.
 \item{\code{estimand}}{The causal estimand every pooled result targeted.}
 \item{\code{estimates}}{A data frame with one row per effect and the following
 columns: \code{effect} (the measure name), \code{contrast} after it when the
-results name contrasts, \code{estimate} (the pooled point estimate),
+results name contrasts, \code{group} after that when they name subgroups,
+\code{estimate} (the pooled point estimate),
 \code{std.err} (the pooled standard error), \code{t} (the test statistic),
 \code{df} (the pooled degrees of freedom), \code{ci.lower} and \code{ci.upper},
 \code{conf.level}, and \code{p.value}. The statistic and the p-value are referred
@@ -45,8 +46,8 @@ frame as the \code{ipw_vcov} attribute, with the effect labels as dimnames on
 both margins; when any of them carried none, no attribute is attached,
 since a matrix built from a subset of the imputations would sit beside
 estimates built from all of them.}
-\item{\code{pooling}}{A data frame keyed by the same \code{effect} and \code{contrast}
-columns, holding \code{ubar} (the within-imputation variance), \code{b} (the
+\item{\code{pooling}}{A data frame keyed by the same columns that name a row of
+the frame above, holding \code{ubar} (the within-imputation variance), \code{b} (the
 between-imputation variance), \code{riv} (the relative increase in variance),
 \code{lambda} (the proportion of the total variance due to missingness), and
 \code{fmi} (the fraction of missing information).}
@@ -148,6 +149,14 @@ The effects have to agree as an ordered vector rather than as a set. The
 labels are what say which row is which, so two results reporting the same
 contrasts in different orders would otherwise have the \verb{b vs a} rows of one
 averaged with the \verb{c vs a} rows of the other.
+
+A label carries the subgroup a row was estimated in along with the effect and
+the contrast, so a set whose results report different subgroups, or the same
+subgroups in different orders, disagrees about its labels and is refused
+through that requirement rather than through one of its own. A subgroup
+observed in one imputation and not in another is the case this answers: there
+is no row to average the missing one with, and pooling by position would
+combine two subgroups that answer different questions.
 
 Two of those agreements are only required when the argument that would settle
 the question is left at \code{NULL}. Naming \code{effects} says which surface to pool

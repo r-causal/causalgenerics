@@ -196,6 +196,114 @@ pool_categorical_fits <- function(vcov = TRUE) {
   })
 }
 
+# One imputation's estimates frame for a result reported once per level of a
+# grouping variable, and one crossing that grouping with the contrast. The
+# column naming the subgroup is `group`, its values are the `"var = value"`
+# strings the contract spells a group with, and it is the third component of a
+# row's identity after the effect and the contrast. The numbers are the
+# categorical fixture's, since what differs between the shapes is which column
+# completes a row's identity rather than what the other columns hold.
+pool_group_estimates <- function(estimate, std.err) {
+  half_width <- stats::qnorm(0.975) * std.err
+  data.frame(
+    effect = rep(c("rd", "log(rr)", "log(or)"), times = 2),
+    group = rep(c("sex = 0", "sex = 1"), each = 3),
+    estimate = estimate,
+    std.err = std.err,
+    z = estimate / std.err,
+    ci.lower = estimate - half_width,
+    ci.upper = estimate + half_width,
+    conf.level = 0.95,
+    p.value = 2 * stats::pnorm(-abs(estimate / std.err))
+  )
+}
+
+pool_group_labels <- function() {
+  c(
+    "rd sex = 0",
+    "log(rr) sex = 0",
+    "log(or) sex = 0",
+    "rd sex = 1",
+    "log(rr) sex = 1",
+    "log(or) sex = 1"
+  )
+}
+
+pool_contrast_group_estimates <- function(estimate, std.err) {
+  half_width <- stats::qnorm(0.975) * std.err
+  data.frame(
+    effect = rep(c("rd", "log(rr)"), times = 4),
+    contrast = rep(rep(c("b vs a", "c vs a"), each = 2), times = 2),
+    group = rep(c("sex = 0", "sex = 1"), each = 4),
+    estimate = estimate,
+    std.err = std.err,
+    z = estimate / std.err,
+    ci.lower = estimate - half_width,
+    ci.upper = estimate + half_width,
+    conf.level = 0.95,
+    p.value = 2 * stats::pnorm(-abs(estimate / std.err))
+  )
+}
+
+pool_contrast_group_estimate <- function() {
+  rbind(
+    c(0.08, 0.17, 0.16, 0.31, 0.06, 0.13, 0.12, 0.25),
+    c(0.10, 0.20, 0.20, 0.35, 0.08, 0.16, 0.15, 0.29),
+    c(0.12, 0.23, 0.24, 0.39, 0.10, 0.19, 0.18, 0.33)
+  )
+}
+
+pool_contrast_group_std_err <- function() {
+  rbind(
+    c(0.05, 0.10, 0.04, 0.09, 0.06, 0.11, 0.05, 0.10),
+    c(0.06, 0.11, 0.05, 0.10, 0.07, 0.12, 0.06, 0.11),
+    c(0.07, 0.12, 0.06, 0.11, 0.08, 0.13, 0.07, 0.12)
+  )
+}
+
+pool_contrast_group_labels <- function() {
+  c(
+    "rd b vs a sex = 0",
+    "log(rr) b vs a sex = 0",
+    "rd c vs a sex = 0",
+    "log(rr) c vs a sex = 0",
+    "rd b vs a sex = 1",
+    "log(rr) b vs a sex = 1",
+    "rd c vs a sex = 1",
+    "log(rr) c vs a sex = 1"
+  )
+}
+
+pool_group_fits <- function(vcov = TRUE) {
+  estimate <- pool_categorical_estimate()
+  std_err <- pool_categorical_std_err()
+  lapply(1:3, function(i) {
+    pool_fit(
+      pool_group_estimates(estimate[i, ], std_err[i, ]),
+      vcov = if (vcov) {
+        pool_effects_vcov(std_err[i, ], pool_group_labels())
+      } else {
+        NULL
+      }
+    )
+  })
+}
+
+pool_contrast_group_fits <- function(vcov = TRUE) {
+  estimate <- pool_contrast_group_estimate()
+  std_err <- pool_contrast_group_std_err()
+  lapply(1:3, function(i) {
+    pool_fit(
+      pool_contrast_group_estimates(estimate[i, ], std_err[i, ]),
+      vcov = if (vcov) {
+        pool_effects_vcov(std_err[i, ], pool_contrast_group_labels())
+      } else {
+        NULL
+      }
+    )
+  })
+}
+
 # The outcome models of three imputations, wrapped with the corrected covariance
 # the joint estimation implies. The conditional reading pools that surface, so
 # every pooled conditional result carries a covariance and the labels are
@@ -242,6 +350,14 @@ pooled_binary <- function(vcov = TRUE) {
 
 pooled_categorical <- function() {
   pool_ipw(pool_categorical_fits(), dfcom = 17)
+}
+
+pooled_group <- function() {
+  pool_ipw(pool_group_fits(), dfcom = 17)
+}
+
+pooled_contrast_group <- function() {
+  pool_ipw(pool_contrast_group_fits(), dfcom = 17)
 }
 
 pooled_conditional <- function(models = pool_conditional_models()) {
@@ -1551,6 +1667,157 @@ test_that("the pooled accessors refuse an effects value that names no reading", 
     as.data.frame(res, effects = c("marginal", "conditional")),
     class = "causalgenerics_invalid_argument_effects"
   )
+})
+
+# ---- the group column --------------------------------------------------------
+
+# A pooled result carries the identity columns the results it pooled were keyed
+# by, and `group` is the third of them: the effect, the column naming the
+# contrast, and the column naming the subgroup, whose values are the
+# `"var = value"` strings the contract spells a group with. The methods here read
+# that identity through the same helpers their unpooled counterparts read it
+# with, so the labels a caller was reading before they pooled are the labels they
+# read afterwards.
+
+test_that("print() keys pooled rows by the effect and the group", {
+  # The group is an identity column, so it leaves the frame with the effect
+  # before `printCoefmat()` sees it and comes back as part of the row label.
+  # Dropping the effect alone does not error: `data.matrix()` factor-codes the
+  # character column left behind into a column reading `1.000000` and `2.000000`
+  # beside the real estimates.
+  res <- pooled_group()
+
+  expect_snapshot(print(res))
+
+  out <- capture.output(print(res))
+
+  for (label in pool_group_labels()) {
+    expect_true(labels_a_printed_row(out, label))
+  }
+  expect_false(any(grepl("group", out, fixed = TRUE)))
+  expect_false(any(grepl("effect", out, fixed = TRUE)))
+})
+
+test_that("print() keys pooled rows by effect, contrast, and group", {
+  res <- pooled_contrast_group()
+
+  expect_snapshot(print(res))
+
+  out <- capture.output(print(res))
+
+  for (label in pool_contrast_group_labels()) {
+    expect_true(labels_a_printed_row(out, label))
+  }
+  expect_false(any(grepl("group", out, fixed = TRUE)))
+  expect_false(any(grepl("contrast", out, fixed = TRUE)))
+  expect_false(any(grepl("effect", out, fixed = TRUE)))
+})
+
+test_that("the pooled accessors agree on the grouped labels", {
+  # The names `coef()` gives, the dimnames `vcov()` carries, and the rows
+  # `confint()` labels are one set of strings, and the printed table writes the
+  # same ones. A group that reached one surface and not the rest would leave a
+  # caller reading a covariance out by a name the table does not use.
+  res <- pooled_contrast_group()
+  labels <- names(coef(res))
+
+  expect_identical(labels, pool_contrast_group_labels())
+  expect_identical(anyDuplicated(labels), 0L)
+  expect_identical(rownames(vcov(res)), labels)
+  expect_identical(colnames(vcov(res)), labels)
+  expect_identical(rownames(confint(res)), labels)
+
+  # The label selects a row as well as naming one.
+  expect_identical(
+    rownames(confint(res, parm = "log(rr) c vs a sex = 1")),
+    "log(rr) c vs a sex = 1"
+  )
+
+  out <- capture.output(print(res))
+  unlabelled <- labels[
+    !vapply(labels, function(l) labels_a_printed_row(out, l), logical(1))
+  ]
+  expect_identical(unlabelled, character())
+})
+
+test_that("as.data.frame() puts group after the contrast column", {
+  # The pooled table carries the same three identity columns the labels are built
+  # from, in the same order, with `df` after the statistic the way the pooled
+  # table always reports it.
+  res <- pooled_contrast_group()
+
+  df <- as.data.frame(res)
+
+  expect_identical(
+    names(df),
+    c(
+      "term",
+      "contrast",
+      "group",
+      "estimate",
+      "std.error",
+      "statistic",
+      "df",
+      "p.value"
+    )
+  )
+  expect_identical(df$term, res$estimates$effect)
+  expect_identical(df$contrast, res$estimates$contrast)
+  expect_identical(df$group, res$estimates$group)
+
+  # The bounds go on the end, so asking for an interval adds to the table rather
+  # than rearranging the columns that name a row.
+  expect_identical(
+    names(as.data.frame(res, conf.int = TRUE))[1:3],
+    c("term", "contrast", "group")
+  )
+})
+
+test_that("as.data.frame() puts group after term when no contrast is named", {
+  res <- pooled_group()
+
+  df <- as.data.frame(res)
+
+  expect_identical(
+    names(df),
+    c(
+      "term",
+      "group",
+      "estimate",
+      "std.error",
+      "statistic",
+      "df",
+      "p.value"
+    )
+  )
+  expect_false("contrast" %in% names(df))
+  expect_identical(df$group, rep(c("sex = 0", "sex = 1"), each = 3))
+})
+
+test_that("the pooled methods key an ungrouped result as they always did", {
+  # The backward-compatible half. Every set a fitting package pools today names
+  # no subgroups, and the pooled table, the labels, and the printed rows are the
+  # ones they always were.
+  binary <- pooled_binary()
+  categorical <- pooled_categorical()
+
+  expect_identical(
+    names(as.data.frame(binary)),
+    c("term", "estimate", "std.error", "statistic", "df", "p.value")
+  )
+  expect_identical(
+    names(as.data.frame(categorical))[1:2],
+    c("term", "contrast")
+  )
+  expect_false("group" %in% names(as.data.frame(binary)))
+  expect_false("group" %in% names(as.data.frame(categorical)))
+
+  expect_identical(names(coef(binary)), pool_binary_labels())
+  expect_identical(names(coef(categorical)), pool_categorical_labels())
+  expect_identical(rownames(confint(categorical)), pool_categorical_labels())
+
+  out <- capture.output(print(categorical))
+  expect_false(any(grepl("sex", out, fixed = TRUE)))
 })
 
 # ---- registration ------------------------------------------------------------

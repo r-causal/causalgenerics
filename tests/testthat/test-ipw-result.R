@@ -67,6 +67,104 @@ contrast_estimates <- function() {
   estimates
 }
 
+# A binary-exposure estimates frame reported once per level of a grouping
+# variable. Each effect measure repeats across the subgroups, so a column sits
+# after the effect saying which subgroup each row describes, written as the
+# `"var = value"` string the contract spells a group with. The frame names no
+# contrasts, which is what makes it the shape where the group alone tells two
+# rows of the same measure apart.
+group_estimates <- function() {
+  data.frame(
+    effect = rep(c("rd", "log(rr)", "log(or)"), times = 2),
+    group = rep(c("sex = 0", "sex = 1"), each = 3),
+    estimate = c(0.151234, 0.421887, 0.664215, 0.248531, 0.698742, 1.092408),
+    std.err = c(0.081422, 0.240118, 0.371244, 0.104663, 0.308951, 0.472183),
+    z = c(1.8574, 1.7570, 1.7892, 2.3746, 2.2617, 2.3135),
+    ci.lower = c(
+      -0.008350,
+      -0.048736,
+      -0.063410,
+      0.043395,
+      0.093209,
+      0.166946
+    ),
+    ci.upper = c(0.310818, 0.892510, 1.391840, 0.453667, 1.304275, 2.017870),
+    conf.level = 0.95,
+    p.value = c(
+      0.0632529,
+      0.0789180,
+      0.0735890,
+      0.0175688,
+      0.0237184,
+      0.0206937
+    )
+  )
+}
+
+# A categorical-exposure estimates frame crossing the contrast with the group:
+# two effect measures, two contrasts, and two subgroups. None of the three
+# columns names a row on its own, and no two of them do either, so this is the
+# frame that says a row's identity is all three together.
+contrast_group_estimates <- function() {
+  data.frame(
+    effect = rep(c("rd", "log(rr)"), times = 4),
+    contrast = rep(rep(c("b vs a", "c vs a"), each = 2), times = 2),
+    group = rep(c("sex = 0", "sex = 1"), each = 4),
+    estimate = c(
+      0.081945,
+      0.168870,
+      0.166939,
+      0.318293,
+      0.062318,
+      0.129441,
+      0.128507,
+      0.245106
+    ),
+    std.err = c(
+      0.050387,
+      0.104633,
+      0.045182,
+      0.091898,
+      0.041205,
+      0.085734,
+      0.037164,
+      0.075611
+    ),
+    z = c(1.6263, 1.6139, 3.6948, 3.4635, 1.5124, 1.5098, 3.4578, 3.2417),
+    ci.lower = c(
+      -0.016812,
+      -0.036207,
+      0.078384,
+      0.138176,
+      -0.018442,
+      -0.038595,
+      0.055667,
+      0.096911
+    ),
+    ci.upper = c(
+      0.180702,
+      0.373947,
+      0.255494,
+      0.498410,
+      0.143078,
+      0.297477,
+      0.201347,
+      0.393301
+    ),
+    conf.level = 0.95,
+    p.value = c(
+      0.1038832,
+      0.1065433,
+      0.0002200,
+      0.0005331,
+      0.1304349,
+      0.1310950,
+      0.0005445,
+      0.0011883
+    )
+  )
+}
+
 # A continuous-outcome estimates frame. There is only a difference in means, so
 # neither ratio row is present and `exponentiate = TRUE` has nothing to act on.
 continuous_estimates <- function() {
@@ -1978,6 +2076,428 @@ test_that("a frame carrying both columns is read under the canonical name", {
 
   expect_identical(out, capture.output(print(expected)))
   expect_false(any(grepl("x vs y", out, fixed = TRUE)))
+})
+
+# ---- the group column --------------------------------------------------------
+
+# A result may report each effect measure once per level of a grouping variable,
+# and the column naming that level is `group`. It is the third component of a
+# row's identity, after the effect and the column naming the contrast, and it is
+# optional in the way the contrast column is: a result that reports one set of
+# effects for the whole sample carries no such column, and its rows read exactly
+# as they always have.
+#
+# The values are written as `"var = value"` strings, such as `"sex = 0"`, so that
+# a row says which subgroup it describes without the frame carrying the variable
+# name in a column of its own. A label is then the three columns pasted together,
+# `"rd b vs a sex = 0"`, and those strings are what `print()` writes down the side
+# of its table and what `coef()`, `vcov()`, and `confint()` name their results
+# with.
+#
+# Four surfaces read a row's identity, and the group has to reach all four or
+# none: `ipw_effect_labels()`, `as.data.frame()`, `print_effect_table()`, and the
+# pooling. The first three are here and the fourth is in `test-ipw-pool.R`. The
+# damage a missed surface does is silent rather than loud, and it differs by
+# surface. A label that leaves the group out names two rows the same thing, which
+# `coef()` and `confint()` report as duplicates and which `printCoefmat()` cannot
+# be handed as row names at all; and a `group` column left in the numeric matrix
+# is factor-coded by `data.matrix()` into a column reading `1.000000` and
+# `2.000000` beside the real estimates.
+
+# The labels the rows of each grouped fixture carry, written out rather than
+# pasted together. The label rule is what these assertions are for, so restating
+# it with the `paste()` the implementation uses would assert nothing.
+group_labels <- function() {
+  c(
+    "rd sex = 0",
+    "log(rr) sex = 0",
+    "log(or) sex = 0",
+    "rd sex = 1",
+    "log(rr) sex = 1",
+    "log(or) sex = 1"
+  )
+}
+
+contrast_group_labels <- function() {
+  c(
+    "rd b vs a sex = 0",
+    "log(rr) b vs a sex = 0",
+    "rd c vs a sex = 0",
+    "log(rr) c vs a sex = 0",
+    "rd b vs a sex = 1",
+    "log(rr) b vs a sex = 1",
+    "rd c vs a sex = 1",
+    "log(rr) c vs a sex = 1"
+  )
+}
+
+# The covariance of a grouped fixture's effects, in the shape a method attaches
+# it: a square matrix labelled on both margins by effect label, with off-diagonal
+# entries, since effects computed from the same weighted means are correlated.
+labelled_vcov <- function(std_err, labels) {
+  index <- seq_along(std_err)
+  covariance <- 0.9^abs(outer(index, index, "-")) * outer(std_err, std_err)
+  dimnames(covariance) <- list(labels, labels)
+  covariance
+}
+
+test_that("the group completes the label of every row it keys", {
+  # The label is the effect and the group together when the frame names no
+  # contrasts, and all three columns together when it names both. Nothing else
+  # about a label changes: the pieces are joined the way the effect and the
+  # contrast already were, and the group comes last because it qualifies the
+  # whole contrast rather than one side of it.
+  expect_identical(ipw_effect_labels(group_estimates()), group_labels())
+  expect_identical(
+    ipw_effect_labels(contrast_group_estimates()),
+    contrast_group_labels()
+  )
+
+  # The labels stay unique, which is the property the surfaces that key rows by
+  # them depend on.
+  expect_identical(anyDuplicated(ipw_effect_labels(group_estimates())), 0L)
+  expect_identical(
+    anyDuplicated(ipw_effect_labels(contrast_group_estimates())),
+    0L
+  )
+})
+
+test_that("a frame with no group column labels its rows as it always did", {
+  # The backward-compatible half. A frame that names no subgroups is every frame
+  # a fitting package writes today, and reading a column that is not there must
+  # leave the label the effect, or the effect and the contrast, and nothing else.
+  expect_identical(
+    ipw_effect_labels(binary_estimates()),
+    c("rd", "log(rr)", "log(or)")
+  )
+  expect_identical(ipw_effect_labels(contrast_estimates()), contrast_labels())
+  expect_identical(ipw_effect_labels(continuous_estimates()), "diff")
+
+  # Including a frame stored under the older contrast spelling, which is read as
+  # one that names contrasts and as one that names no subgroups.
+  expect_identical(
+    ipw_effect_labels(categorical_estimates()),
+    contrast_labels()
+  )
+})
+
+test_that("as.data.frame() puts group after the contrast column", {
+  # The tidier-shaped table carries the same three identity columns the labels
+  # are built from, in the same order: the term, the contrast it qualifies, and
+  # the subgroup it was estimated in. The group follows the contrast rather than
+  # sitting among the numbers, for the reason the contrast follows the term.
+  estimates <- contrast_group_estimates()
+  res <- ipw_result(estimates)
+
+  df <- as.data.frame(res)
+
+  expect_identical(
+    names(df),
+    c(
+      "term",
+      "contrast",
+      "group",
+      "estimate",
+      "std.error",
+      "statistic",
+      "p.value"
+    )
+  )
+  expect_identical(names(df)[1:3], c("term", "contrast", "group"))
+  expect_identical(df$term, rep(c("rd", "log(rr)"), times = 4))
+  expect_identical(df$contrast, estimates$contrast)
+  expect_identical(df$group, estimates$group)
+  expect_identical(df$estimate, estimates$estimate)
+  expect_identical(df$std.error, estimates$std.err)
+
+  # The bounds go on the end, so asking for an interval adds to the table rather
+  # than rearranging the columns that name a row.
+  expect_identical(
+    names(as.data.frame(res, conf.int = TRUE)),
+    c(
+      "term",
+      "contrast",
+      "group",
+      "estimate",
+      "std.error",
+      "statistic",
+      "p.value",
+      "conf.low",
+      "conf.high"
+    )
+  )
+})
+
+test_that("as.data.frame() puts group after term when no contrast is named", {
+  # A result with one contrast and several subgroups names no contrast column,
+  # and the group takes the place after the term that the contrast would have
+  # had. The column is absent rather than present and constant, which is the rule
+  # the contrast column already follows.
+  estimates <- group_estimates()
+  res <- ipw_result(estimates)
+
+  df <- as.data.frame(res)
+
+  expect_identical(
+    names(df),
+    c("term", "group", "estimate", "std.error", "statistic", "p.value")
+  )
+  expect_false("contrast" %in% names(df))
+  expect_identical(df$term, rep(c("rd", "log(rr)", "log(or)"), times = 2))
+  expect_identical(df$group, estimates$group)
+})
+
+test_that("as.data.frame() omits group when the frame names none", {
+  # The backward-compatible half. Every frame a fitting package writes today
+  # names no subgroups, and its table is the one it always was: a `group` column
+  # of one repeated value would stack with a grouped result's table and read as a
+  # subgroup that was named.
+  for (estimates in list(
+    binary_estimates(),
+    contrast_estimates(),
+    categorical_estimates(),
+    continuous_estimates()
+  )) {
+    df <- as.data.frame(ipw_result(estimates))
+    expect_false("group" %in% names(df))
+  }
+
+  expect_identical(
+    names(as.data.frame(ipw_result(binary_estimates()))),
+    c("term", "estimate", "std.error", "statistic", "p.value")
+  )
+  expect_identical(
+    names(as.data.frame(ipw_result(contrast_estimates()), conf.int = TRUE)),
+    c(
+      "term",
+      "contrast",
+      "estimate",
+      "std.error",
+      "statistic",
+      "p.value",
+      "conf.low",
+      "conf.high"
+    )
+  )
+})
+
+test_that("print() keys rows by the effect and the group together", {
+  # The group is an identity column, so it leaves the frame with the effect
+  # before `printCoefmat()` sees it and comes back as part of the row label. The
+  # failure this guards against does not error: a `group` column left in the
+  # numeric matrix is factor-coded by `data.matrix()` into the first numeric
+  # position, which shifts every column along one so that `cs.ind` and `tst.ind`
+  # name the wrong ones and the standard errors are formatted as a statistic.
+  res <- ipw_result(group_estimates())
+
+  expect_snapshot(print(res))
+
+  out <- capture.output(print(res))
+
+  expect_match(out, "^rd sex = 0 +0\\.151234 ", all = FALSE)
+  expect_match(out, "^log\\(rr\\) sex = 0 +0\\.421887 ", all = FALSE)
+  expect_match(out, "^log\\(or\\) sex = 1 +1\\.092408 ", all = FALSE)
+
+  for (label in group_labels()) {
+    expect_true(labels_a_printed_row(out, label))
+  }
+
+  # Neither identity column is formatted as a number, and neither heading
+  # reaches the table.
+  expect_false(any(grepl("group", out, fixed = TRUE)))
+  expect_false(any(grepl("effect", out, fixed = TRUE)))
+  expect_false(any(grepl("1.000000", out, fixed = TRUE)))
+})
+
+test_that("print() keys rows by effect, contrast, and group together", {
+  # All three columns at once, which is the shape where dropping any one of them
+  # leaves a duplicated row label. `printCoefmat()` cannot be handed one at all,
+  # so a reader that missed the group would not print a wrong table here so much
+  # as fail to print one.
+  res <- ipw_result(contrast_group_estimates())
+
+  expect_snapshot(print(res))
+
+  out <- capture.output(print(res))
+
+  expect_match(out, "^rd b vs a sex = 0 +0\\.081945 ", all = FALSE)
+  expect_match(out, "^log\\(rr\\) c vs a sex = 1 +0\\.245106 ", all = FALSE)
+
+  for (label in contrast_group_labels()) {
+    expect_true(labels_a_printed_row(out, label))
+  }
+
+  expect_false(any(grepl("group", out, fixed = TRUE)))
+  expect_false(any(grepl("contrast", out, fixed = TRUE)))
+  expect_false(any(grepl("effect", out, fixed = TRUE)))
+})
+
+test_that("print() keys an ungrouped result the way it always did", {
+  # The backward-compatible half of the printed form. A frame that names no
+  # subgroups is labelled by the effect, or the effect and the contrast, and the
+  # rows read as they read before the group column existed.
+  binary <- capture.output(print(ipw_result(binary_estimates())))
+  categorical <- capture.output(print(ipw_result(contrast_estimates())))
+
+  expect_match(binary, "^rd +0\\.199882 ", all = FALSE)
+  expect_match(categorical, "^rd b vs a +0\\.081945 ", all = FALSE)
+
+  # Nothing in either output says a subgroup was named, and no row label carries
+  # one on the end.
+  expect_false(any(grepl("group", binary, fixed = TRUE)))
+  expect_false(any(grepl("group", categorical, fixed = TRUE)))
+  expect_false(any(grepl("sex", binary, fixed = TRUE)))
+  expect_false(any(grepl("sex", categorical, fixed = TRUE)))
+})
+
+test_that("the group column names the rows of every reported surface", {
+  # The labels are one rule read by four surfaces, and this is the assertion that
+  # they are the same rule. A caller who reads a covariance out by the name
+  # `coef()` gave has to get the entry `print()` showed, whether the name it gave
+  # carries a group or not.
+  estimates <- contrast_group_estimates()
+  covariance <- labelled_vcov(estimates$std.err, contrast_group_labels())
+  res <- ipw_result(with_vcov(estimates, covariance))
+
+  expect_identical(names(coef(res)), contrast_group_labels())
+  expect_identical(rownames(confint(res)), contrast_group_labels())
+  expect_identical(
+    dimnames(vcov(res)),
+    list(contrast_group_labels(), contrast_group_labels())
+  )
+
+  expect_identical(rownames(vcov(res)), names(coef(res)))
+  expect_identical(rownames(confint(res)), names(coef(res)))
+
+  out <- capture.output(print(res))
+  for (label in names(coef(res))) {
+    expect_true(labels_a_printed_row(out, label))
+  }
+})
+
+# The grouped fixture with its subgroups named in a factor rather than in
+# strings. The column is built from the lawful one, so the two frames differ in
+# the type of that column and in nothing else.
+factor_group_estimates <- function() {
+  estimates <- group_estimates()
+  estimates$group <- factor(estimates$group)
+  estimates
+}
+
+# The grouped fixture with its subgroups numbered rather than named, which is
+# the other kind of column the check refuses.
+numeric_group_estimates <- function() {
+  estimates <- group_estimates()
+  estimates$group <- rep(c(0, 1), each = 3)
+  estimates
+}
+
+# The grouped fixture with the first `rows` rows recording no subgroup. The
+# count is an argument because the refusal reports it, and the sentence it
+# reports it in agrees with it.
+unnamed_group_estimates <- function(rows) {
+  estimates <- group_estimates()
+  estimates$group[seq_len(rows)] <- NA_character_
+  estimates
+}
+
+test_that("new_ipw() refuses a group column that is not character", {
+  # A factor is the near miss the check is written for. It prints as the
+  # `"var = value"` strings the contract asks for and pastes into a label that
+  # reads like the real one, so nothing downstream fails on it; what the column
+  # holds is level codes, and it carries a set of levels the frame may have no
+  # rows for. A number pastes as a formatted number, which names a value without
+  # saying which variable took it.
+  expect_error(
+    ipw_result(factor_group_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(factor_group_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_result(numeric_group_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(numeric_group_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  expect_snapshot(error = TRUE, ipw_result(factor_group_estimates()))
+})
+
+test_that("new_ipw() refuses a group column that leaves a row unnamed", {
+  # A missing name pastes into a label reading `"rd NA"`, which describes no
+  # subgroup, and a second one pastes into the same label as the first, which
+  # leaves `coef()` naming two elements the same thing and `printCoefmat()` with
+  # row names it cannot be handed.
+  expect_error(
+    ipw_result(unnamed_group_estimates(1L)),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(unnamed_group_estimates(1L)),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_result(unnamed_group_estimates(2L)),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(unnamed_group_estimates(2L)),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  # Both counts are recorded, because the message counts the rows and the
+  # sentence reporting the count agrees with it.
+  expect_snapshot(error = TRUE, ipw_result(unnamed_group_estimates(1L)))
+  expect_snapshot(error = TRUE, ipw_result(unnamed_group_estimates(2L)))
+})
+
+test_that("new_ipw() constructs a result whose subgroups are named", {
+  # The lawful half of the check. A character column naming a subgroup in every
+  # row is the column the contract describes, so the constructor builds the
+  # result and stores the frame it was handed, and the rows carry the grouped
+  # labels.
+  estimates <- group_estimates()
+
+  res <- ipw_result(estimates)
+
+  expect_s3_class(res, "ipw", exact = TRUE)
+  expect_identical(res$estimates, estimates)
+  expect_identical(ipw_effect_labels(res$estimates), group_labels())
+
+  # Including the frame that names contrasts and subgroups at once, which is the
+  # shape with the most for the check to read.
+  crossed <- ipw_result(contrast_group_estimates())
+
+  expect_identical(crossed$estimates, contrast_group_estimates())
+  expect_identical(
+    ipw_effect_labels(crossed$estimates),
+    contrast_group_labels()
+  )
+})
+
+test_that("new_ipw() leaves a frame that names no subgroups alone", {
+  # The backward-compatible half. A frame that names no subgroups is the frame
+  # every fitting package writes today: there is no column for the check to
+  # read, so it has nothing to fail and nothing to change, and the result
+  # carries the frame it was given.
+  for (estimates in list(
+    binary_estimates(),
+    contrast_estimates(),
+    categorical_estimates(),
+    continuous_estimates()
+  )) {
+    expect_identical(ipw_result(estimates)$estimates, estimates)
+  }
+
+  expect_identical(
+    ipw_effect_labels(ipw_result(binary_estimates())$estimates),
+    c("rd", "log(rr)", "log(or)")
+  )
 })
 
 # ---- registration and export -------------------------------------------------

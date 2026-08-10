@@ -760,7 +760,7 @@ test_that("pool_ipw() names the mode a mismatched set does not", {
   # These results differ from a set that agrees on the mode in the stored field
   # and in nothing else, so naming the mode has to give back exactly what that
   # set gives. An implementation that refused first and read the argument second
-  # would never reach this, and one that let the stored field colour the result
+  # would never reach this, and one that let the stored field color the result
   # would answer with something else.
   expect_identical(res, pool_ipw(pool_binary_fits(), dfcom = 17))
 })
@@ -842,7 +842,7 @@ test_that("pool_ipw() refuses stored levels that disagree with no level named", 
 test_that("pool_ipw() refuses outcome models fitted on different links", {
   # The effects are on the scale the outcome model's link puts them on, so a
   # `log(or)` row from a logit fit and a `log(rr)` row from a log one are not
-  # the same quantity even when they are labelled the same way. The link is
+  # the same quantity even when they are labeled the same way. The link is
   # capturable from both of these models, which is what makes them separable.
   logit <- pool_outcome_model()
   identity_link <- glm(y ~ z, family = gaussian(), data = pool_data())
@@ -1887,7 +1887,7 @@ test_that("pool_ipw() resolves the level of each surface on its own", {
   expect_identical(flipped$alternate$estimates$conf.level, rep(0.95, 2))
 
   # The bounds are built at the level the frame records rather than merely
-  # labelled with it.
+  # labeled with it.
   half_width <- stats::qt(0.95, alternate$df) * alternate$std.err
 
   expect_equal(alternate$ci.lower, alternate$estimate - half_width)

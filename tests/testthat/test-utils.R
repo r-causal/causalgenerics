@@ -165,9 +165,9 @@ test_that("stop_conditional_vcov_mismatch() builds the documented condition", {
   expect_identical(
     conditionMessage(cnd),
     paste0(
-      "The conditional covariance is labelled \"theta1\", \"theta2\" and the ",
+      "The conditional covariance is labeled \"theta1\", \"theta2\" and the ",
       "outcome model reports coefficients named \"(Intercept)\", \"z\"; the ",
-      "package that produced the result attaches the block labelled by ",
+      "package that produced the result attaches the block labeled by ",
       "coefficient name with `new_ipw_model()`."
     )
   )
@@ -198,9 +198,9 @@ test_that("stop_conditional_vcov_mismatch() names coefficients that have none", 
   expect_identical(
     conditionMessage(cnd),
     paste0(
-      "The conditional covariance is labelled \"theta1\", \"theta2\" and the ",
+      "The conditional covariance is labeled \"theta1\", \"theta2\" and the ",
       "outcome model reports unnamed coefficients; the package that produced ",
-      "the result attaches the block labelled by coefficient name with ",
+      "the result attaches the block labeled by coefficient name with ",
       "`new_ipw_model()`."
     )
   )

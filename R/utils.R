@@ -295,11 +295,11 @@ stop_conditional_vcov_mismatch <- function(
     )
   }
   message <- paste0(
-    "The conditional covariance is labelled ",
+    "The conditional covariance is labeled ",
     toString(encodeString(block_labels, quote = '"')),
     " and the outcome model ",
     reported,
-    "; the package that produced the result attaches the block labelled by ",
+    "; the package that produced the result attaches the block labeled by ",
     "coefficient name with `new_ipw_model()`."
   )
   stop(errorCondition(
@@ -526,7 +526,7 @@ warn_joint_exposure_dropped_levels <- function(call = sys.call(-1)) {
 # cells without touching the crossing they were written from, which would leave a
 # vector claiming a declaration its labels no longer match, and nothing
 # downstream could detect that. The operation degrades rather than being refused
-# so that relabelling a factor stays available to the caller who wants it.
+# so that relabeling a factor stays available to the caller who wants it.
 warn_joint_exposure_replaced_levels <- function(call = sys.call(-1)) {
   warning(warningCondition(
     paste0(

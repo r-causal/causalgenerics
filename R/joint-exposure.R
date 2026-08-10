@@ -29,7 +29,7 @@
 #' natively: `model.matrix()` gives exactly what a plain factor over the same
 #' cells gives, `assign` and `contrasts` attributes included.
 #'
-#' The cells are the crossing of the two components' levels, labelled
+#' The cells are the crossing of the two components' levels, labeled
 #' `"name1 = level1, name2 = level2"` and ordered with the first component
 #' varying fastest, which is the order [interaction()] produces. The reference
 #' cell crosses the two components' own reference levels, and that ordering is
@@ -332,7 +332,7 @@ joint_cell_codes <- function(crossed) {
 #' Give up the declaration and keep the cells
 #'
 #' The vector a degrading operation hands back. It holds the same observations
-#' labelled the same way and says nothing about the crossing, which is what
+#' labeled the same way and says nothing about the crossing, which is what
 #' makes it a plain factor rather than a joint exposure with a field removed.
 #'
 #' @param x A joint exposure.

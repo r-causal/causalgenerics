@@ -180,7 +180,7 @@ in coefficient order whatever order it was attached in, so the variance read
 beside a coefficient is that coefficient's. A block whose labels cannot be
 paired with the coefficients raises an error of class
 \code{causalgenerics_conditional_vcov_mismatch}. A block of another size, one
-labelled with the parameter names of a stacked system, and a model whose
+labeled with the parameter names of a stacked system, and a model whose
 coefficients carry no names are the three ways the pairing fails. Reading such
 a block by position instead would report the covariance of other parameters
 under this model's coefficient names.

@@ -338,7 +338,7 @@ outcome_model <- function(wts = outcome_weights()) {
 
 # The corrected covariance of that model's coefficients, in the shape a fitting
 # package hands to `new_ipw_model()`: the outcome block of the stacked sandwich,
-# labelled with the coefficient names. It is built from the model's own
+# labeled with the coefficient names. It is built from the model's own
 # covariance so that the dimnames agree without being restated, and scaled so
 # that it differs from it. Accounting for the weights having been estimated
 # ordinarily widens the block, and the scaling is what makes "the conditional
@@ -348,7 +348,7 @@ corrected_outcome_vcov <- function(mod = outcome_model()) {
   stats::vcov(mod) * 1.4
 }
 
-# The corrected block labelled in the reverse of the coefficient order, which is
+# The corrected block labeled in the reverse of the coefficient order, which is
 # the shape a fitting package produces when its stacked system holds the outcome
 # parameters the other way round. The labels are what say which coefficient each
 # entry belongs to, so a block read by position rather than by name reports the
@@ -374,10 +374,10 @@ coefficient_order_vcov <- function() {
   )
 }
 
-# A block labelled with the parameter names of a stacked system rather than with
+# A block labeled with the parameter names of a stacked system rather than with
 # the model's coefficient names. `new_ipw_model()` takes it, deliberately: only
 # the fitting package knows which block of the sandwich belongs to which model,
-# so the constructor checks that both margins are labelled rather than what the
+# so the constructor checks that both margins are labeled rather than what the
 # labels say. Where the block meets the coefficients is where the pairing has to
 # be made, and there is none to make here.
 theta_outcome_vcov <- function() {
@@ -388,7 +388,7 @@ theta_outcome_vcov <- function() {
   )
 }
 
-# A three by three block for a model with two coefficients, labelled with both
+# A three by three block for a model with two coefficients, labeled with both
 # coefficient names and one more. The extra term is what makes it discriminating:
 # indexing it by the coefficient names alone gives a two by two matrix, so an
 # implementation that only reordered would answer with the covariance of two
@@ -405,7 +405,7 @@ oversized_outcome_vcov <- function() {
 }
 
 # A conditional result whose outcome model reports its coefficients without
-# names, carrying a block that is labelled. The two cannot be paired at all:
+# names, carrying a block that is labeled. The two cannot be paired at all:
 # there is nothing to match the labels against, and matching them by position is
 # what the labels exist to prevent. The class carries no `coef()` method of its
 # own, so the test that uses this registers one.
@@ -504,12 +504,12 @@ legacy_result <- function(estimates = binary_estimates(), vcov = NULL) {
   structure(fields, class = "ipw")
 }
 
-# Whether `print()` writes a row labelled exactly `label`.
+# Whether `print()` writes a row labeled exactly `label`.
 #
 # The estimate columns are numeric, so a row label is a line whose remainder
 # after the label is spaces and then a number. Testing only that a line starts
 # with the label would hold for a prefix of the real one: a `coef()` that
-# labelled a categorical result `rd` would still match the line `print()` writes
+# labeled a categorical result `rd` would still match the line `print()` writes
 # for `rd b vs a`, and the two surfaces would have drifted with nothing to say
 # so. `printCoefmat()` also wraps significance stars onto lines of their own
 # under the same labels when the frame is wide, and requiring a number is what
@@ -593,10 +593,10 @@ test_that("coef() names its result the way print() labels its rows", {
 
     expect_length(labels, nrow(estimates))
 
-    unlabelled <- labels[
+    unlabeled <- labels[
       !vapply(labels, function(l) labels_a_printed_row(out, l), logical(1))
     ]
-    expect_identical(unlabelled, character())
+    expect_identical(unlabeled, character())
   }
 })
 
@@ -824,7 +824,7 @@ test_that("confint() gives a numeric parm its ordinary subscript meaning", {
 
   expect_true(is.matrix(none))
   expect_identical(dim(none), c(0L, 2L))
-  # An empty selection is still a labelled matrix, so a caller who built one
+  # An empty selection is still a labeled matrix, so a caller who built one
   # from a filter that matched nothing can read its columns or bind it to
   # another without treating the case apart.
   expect_identical(colnames(none), c("2.5 %", "97.5 %"))
@@ -1357,7 +1357,7 @@ test_that("vcov() reorders a conditional block into coefficient order", {
   )
   expect_identical(names(coef(res)), rownames(vcov(res)))
   # The variance each label names travels with it, which is what separates
-  # reordering the matrix from relabelling it. Relabelling would produce a
+  # reordering the matrix from relabeling it. Relabeling would produce a
   # matrix that satisfies every assertion about the dimnames while reporting
   # the intercept's variance for the slope.
   expect_identical(diag(vcov(res)), c("(Intercept)" = 0.25, "z" = 0.0625))
@@ -1366,7 +1366,7 @@ test_that("vcov() reorders a conditional block into coefficient order", {
   expect_false(identical(vcov(res), reversed_outcome_vcov()))
 })
 
-test_that("vcov() refuses a conditional block labelled for other parameters", {
+test_that("vcov() refuses a conditional block labeled for other parameters", {
   # `new_ipw_model()` takes the block's labels on trust, since only the fitting
   # package knows which block of the sandwich belongs to which model. The
   # accessor is where they meet the coefficients, and labels that name a
@@ -1592,7 +1592,7 @@ test_that("confint() recomputes in the conditional mode at every level", {
     ci[, 2],
     setNames(estimate + half_width, conditional_labels())
   )
-  # The columns are labelled the way the marginal reading labels them, since a
+  # The columns are labeled the way the marginal reading labels them, since a
   # caller reading a limit out by column name is entitled to the same names in
   # either mode.
   expect_identical(
@@ -1637,7 +1637,7 @@ test_that("confint() selects conditional rows by position and by name", {
 test_that("confint() empties a conditional selection the same way", {
   # A subscript means the same thing in either reading. The two build their
   # limits in different places in the method, so an empty selection that came
-  # back as a labelled matrix in one and as something else in the other would be
+  # back as a labeled matrix in one and as something else in the other would be
   # a difference a caller who switched modes would meet with nothing to warn
   # them.
   res <- ipw_result(
@@ -2106,10 +2106,10 @@ test_that("coef(), vcov(), and confint() agree on the grouped labels", {
   expect_identical(rownames(confint(res)), labels)
 
   out <- capture.output(print(res))
-  unlabelled <- labels[
+  unlabeled <- labels[
     !vapply(labels, function(l) labels_a_printed_row(out, l), logical(1))
   ]
-  expect_identical(unlabelled, character())
+  expect_identical(unlabeled, character())
 })
 
 test_that("the accessors key an ungrouped result the way they always did", {

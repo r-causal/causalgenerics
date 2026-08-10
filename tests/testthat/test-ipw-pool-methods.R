@@ -422,7 +422,7 @@ pooled_rd_df <- function() {
   9639 / 1048
 }
 
-# Whether `print()` writes a row labelled exactly `label`. The estimate columns
+# Whether `print()` writes a row labeled exactly `label`. The estimate columns
 # are numeric, so a row label is a line whose remainder after the label is
 # spaces and then a number. Testing only that a line starts with the label would
 # hold for a prefix of the real one, and `printCoefmat()` wraps significance
@@ -433,7 +433,7 @@ labels_a_printed_row <- function(out, label) {
   any(grepl("^ +-?[0-9]", remainder))
 }
 
-# The numbers `print()` writes on the row labelled `label`. Which columns the
+# The numbers `print()` writes on the row labeled `label`. Which columns the
 # table carries is the implementation's to choose, and the estimate and its
 # standard error are the first two whichever others are there, so reading by
 # position lets an assertion name those two without fixing the rest.
@@ -769,7 +769,7 @@ test_that("confint() reads the stored level row by row", {
   # `confint()` keeps the rule row by row, which is what `confint()` on an
   # unpooled result does: a matrix of limits is read a row at a time and says
   # which level it is at in its column names, so a row reported at that level
-  # can answer with what it stored while its neighbours are rebuilt.
+  # can answer with what it stored while its neighbors are rebuilt.
   #
   # `as.data.frame()` is deliberately the other way, all or nothing across the
   # frame, and the test of that is with the rest of the tidier-shaped table
@@ -871,7 +871,7 @@ test_that("confint() refuses a parm the pooled result does not report", {
 
 test_that("confint() gives a numeric parm its ordinary subscript meaning", {
   # Zero selects nothing and a negative position drops the row it names, the way
-  # a subscript reads everywhere else. An empty selection is still a labelled
+  # a subscript reads everywhere else. An empty selection is still a labeled
   # matrix, so a caller who built one from a filter that matched nothing can
   # read its columns or bind it to another without treating the case apart.
   res <- pooled_binary()
@@ -1196,7 +1196,7 @@ test_that("as.data.frame() exponentiates the pooled ratio rows", {
   # Exactly `as.data.frame.ipw()`'s semantics on a marginal table. The rows to
   # move are matched on the labels `log(rr)` and `log(or)` exactly, so a table
   # whose ratios are already on the natural scale is left alone rather than
-  # exponentiated twice, and the two terms are relabelled with the scale they
+  # exponentiated twice, and the two terms are relabeled with the scale they
   # now carry.
   res <- pooled_binary()
   plain <- as.data.frame(res)
@@ -1258,10 +1258,10 @@ test_that("as.data.frame() drops the covariance when it exponentiates", {
 })
 
 test_that("as.data.frame() exponentiates a conditional table on a log link", {
-  # A conditional table has no rows labelled as ratios to pick out, so the
+  # A conditional table has no rows labeled as ratios to pick out, so the
   # stored link settles whether there is anything for an exponential to undo. A
   # logit link puts every coefficient on the log odds scale, which is such a
-  # scale, so every estimate moves and no term is relabelled: the terms are
+  # scale, so every estimate moves and no term is relabeled: the terms are
   # coefficient names, and a coefficient does not change its name with the scale
   # its estimate is reported on.
   res <- pooled_conditional()
@@ -1474,7 +1474,7 @@ test_that("as.data.frame() tabulates the reading its argument names", {
 test_that("as.data.frame() exponentiates the reading it was asked for", {
   # The reading is settled before the scale is, so `exponentiate = TRUE` beside
   # a named reading means what it means on the object that reading belongs to. A
-  # conditional table has no rows labelled as ratios, so the link settles it for
+  # conditional table has no rows labeled as ratios, so the link settles it for
   # every row at once: a logit link moves every estimate and relabels no term.
   res <- pooled_both()
   flipped <- as_conditional(res)
@@ -1734,10 +1734,10 @@ test_that("the pooled accessors agree on the grouped labels", {
   )
 
   out <- capture.output(print(res))
-  unlabelled <- labels[
+  unlabeled <- labels[
     !vapply(labels, function(l) labels_a_printed_row(out, l), logical(1))
   ]
-  expect_identical(unlabelled, character())
+  expect_identical(unlabeled, character())
 })
 
 test_that("as.data.frame() puts group after the contrast column", {

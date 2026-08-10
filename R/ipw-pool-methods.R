@@ -90,20 +90,20 @@
 #' # Exponentiating
 #'
 #' On a marginal table `exponentiate = TRUE` means what it means for an unpooled
-#' result. The rows labelled `log(rr)` and `log(or)` are matched exactly, their
+#' result. The rows labeled `log(rr)` and `log(or)` are matched exactly, their
 #' estimate and their bounds move to the natural scale, and the two terms are
-#' relabelled `rr` and `or`. The interval is settled before the scale is, so a
+#' relabeled `rr` and `or`. The interval is settled before the scale is, so a
 #' rebuilt bound is a t half width on the log scale added to an estimate on the
 #' log scale and exponentiated afterwards. The standard error, the statistic,
 #' and the p-value describe the log scale and stay there, and the `ipw_vcov`
 #' attribute is dropped rather than carried, since it would describe neither the
 #' table it sits on nor anything else.
 #'
-#' A conditional table has no rows labelled as ratios to pick out, so the link
+#' A conditional table has no rows labeled as ratios to pick out, so the link
 #' the outcome models were fitted with settles the question for the whole table:
 #' a `logit` link puts every coefficient on the log odds scale and a `log` link
 #' puts every coefficient on the log risk scale, and both are scales an
-#' exponential undoes. Every estimate moves and no term is relabelled, since the
+#' exponential undoes. Every estimate moves and no term is relabeled, since the
 #' terms are coefficient names and a coefficient does not change its name with
 #' the scale its estimate is reported on. Every other link raises an error of
 #' class `causalgenerics_exponentiate_link`, and of the classes
@@ -466,7 +466,7 @@ as.data.frame.ipw_pooled <- function(
 
     # The label names the scale, so it moves with the value it labels. A
     # coefficient name does not: it names the term rather than the scale, and a
-    # conditional table relabelled here would report a coefficient the outcome
+    # conditional table relabeled here would report a coefficient the outcome
     # model never had.
     if (effects != "conditional") {
       columns$term[is_log_rr] <- "rr"
@@ -579,7 +579,7 @@ pooled_interval_bounds <- function(estimates, conf.level) {
 #' Refuse to exponentiate coefficients that are not on a log scale
 #'
 #' The conditional reading reports the outcome model's coefficients, and there
-#' are no rows labelled as ratios among them to pick out. The link the models
+#' are no rows labeled as ratios among them to pick out. The link the models
 #' were fitted with is what says whether there is anything for an exponential to
 #' undo: a logit link puts every coefficient on the log odds scale and a log
 #' link puts every coefficient on the log risk scale, and a coefficient on any

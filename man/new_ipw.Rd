@@ -69,7 +69,7 @@ standard error. Default is \code{0.95}.}
 
 \item{exponentiate}{If \code{TRUE}, exponentiate the log risk ratio and log odds
 ratio to produce risk ratios and odds ratios on their natural scale,
-relabelling the two terms \code{"rr"} and \code{"or"}. The confidence bounds move with
+relabeling the two terms \code{"rr"} and \code{"or"}. The confidence bounds move with
 them. Standard errors, statistics, and p-values remain on the log scale, and
 the \code{ipw_vcov} attribute is dropped rather than carried, since it describes
 the estimates on the scale they were estimated on. Default is \code{FALSE}.}
@@ -167,7 +167,7 @@ estimate and its standard error.
 
 With \code{exponentiate = TRUE} the \code{log(rr)} and \code{log(or)} rows move to their
 natural scale, exponentiating the point estimate and the confidence bounds and
-relabelling the two terms \code{"rr"} and \code{"or"}. Standard errors, statistics, and
+relabeling the two terms \code{"rr"} and \code{"or"}. Standard errors, statistics, and
 p-values stay on the log scale, where the inference is done, and the interval
 is settled before the scale is: bounds recomputed at another level are built
 on the log scale and exponentiated afterwards. The covariance described below
@@ -184,7 +184,7 @@ position that \code{print()} writes down the side of its table and that
 columns that name a row, pasted together in the order they appear in the
 frame's contract: the \code{effect} column, then \code{contrast} when the result names
 contrasts, then \code{group} when it names subgroups. A binary exposure estimated
-for the whole sample is labelled \code{"rd"}, a categorical one \code{"rd b vs a"}, and
+for the whole sample is labeled \code{"rd"}, a categorical one \code{"rd b vs a"}, and
 one reported by subgroup \code{"rd b vs a sex = 0"}. A categorical exposure repeats
 each effect measure across its contrasts and a subgroup analysis repeats each
 one across its groups, so \code{effect} alone would name several rows the same

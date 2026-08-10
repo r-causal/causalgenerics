@@ -65,7 +65,7 @@
 #' beside a coefficient is that coefficient's. A block whose labels cannot be
 #' paired with the coefficients raises an error of class
 #' `causalgenerics_conditional_vcov_mismatch`. A block of another size, one
-#' labelled with the parameter names of a stacked system, and a model whose
+#' labeled with the parameter names of a stacked system, and a model whose
 #' coefficients carry no names are the three ways the pairing fails. Reading such
 #' a block by position instead would report the covariance of other parameters
 #' under this model's coefficient names.
@@ -418,9 +418,9 @@ estimand.ipw <- function(x, ...) {
 #'
 #' The block and the coefficients are paired by name, which is what
 #' [new_ipw_model()] leaves to be done here: the constructor checks that both
-#' margins are labelled rather than what the labels say, since only the fitting
+#' margins are labeled rather than what the labels say, since only the fitting
 #' package knows which block of its stacked system belongs to which model. A
-#' block labelled with the same names in another order is reported in
+#' block labeled with the same names in another order is reported in
 #' coefficient order, so the variance a caller reads beside a coefficient is that
 #' coefficient's. Anything the labels cannot be paired with is refused: a block
 #' of another size, one naming other parameters, and a model whose coefficients

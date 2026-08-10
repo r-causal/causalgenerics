@@ -24,7 +24,7 @@
 #' The dimnames of `vcov` are the fitting package's to choose. They are
 #' ordinarily `names(coef(model))`, but a method whose stacked system is
 #' parameterized some other way labels the block with its own parameter names.
-#' The constructor checks that both margins are labelled rather than what the
+#' The constructor checks that both margins are labeled rather than what the
 #' labels say, since only the fitting package knows which block of the sandwich
 #' belongs to which model.
 #'

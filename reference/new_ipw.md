@@ -104,12 +104,12 @@ as.data.frame(
 - exponentiate:
 
   If `TRUE`, exponentiate the log risk ratio and log odds ratio to
-  produce risk ratios and odds ratios on their natural scale,
-  relabelling the two terms `"rr"` and `"or"`. The confidence bounds
-  move with them. Standard errors, statistics, and p-values remain on
-  the log scale, and the `ipw_vcov` attribute is dropped rather than
-  carried, since it describes the estimates on the scale they were
-  estimated on. Default is `FALSE`.
+  produce risk ratios and odds ratios on their natural scale, relabeling
+  the two terms `"rr"` and `"or"`. The confidence bounds move with them.
+  Standard errors, statistics, and p-values remain on the log scale, and
+  the `ipw_vcov` attribute is dropped rather than carried, since it
+  describes the estimates on the scale they were estimated on. Default
+  is `FALSE`.
 
 ## Value
 
@@ -231,7 +231,7 @@ standard error.
 
 With `exponentiate = TRUE` the `log(rr)` and `log(or)` rows move to
 their natural scale, exponentiating the point estimate and the
-confidence bounds and relabelling the two terms `"rr"` and `"or"`.
+confidence bounds and relabeling the two terms `"rr"` and `"or"`.
 Standard errors, statistics, and p-values stay on the log scale, where
 the inference is done, and the interval is settled before the scale is:
 bounds recomputed at another level are built on the log scale and
@@ -254,8 +254,8 @@ name their results with. The label is the columns that name a row,
 pasted together in the order they appear in the frame's contract: the
 `effect` column, then `contrast` when the result names contrasts, then
 `group` when it names subgroups. A binary exposure estimated for the
-whole sample is labelled `"rd"`, a categorical one `"rd b vs a"`, and
-one reported by subgroup `"rd b vs a sex = 0"`. A categorical exposure
+whole sample is labeled `"rd"`, a categorical one `"rd b vs a"`, and one
+reported by subgroup `"rd b vs a sex = 0"`. A categorical exposure
 repeats each effect measure across its contrasts and a subgroup analysis
 repeats each one across its groups, so `effect` alone would name several
 rows the same thing.

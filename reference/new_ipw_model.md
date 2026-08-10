@@ -76,7 +76,7 @@ the corrected covariance travel with the model rather than beside it.
 The dimnames of `vcov` are the fitting package's to choose. They are
 ordinarily `names(coef(model))`, but a method whose stacked system is
 parameterized some other way labels the block with its own parameter
-names. The constructor checks that both margins are labelled rather than
+names. The constructor checks that both margins are labeled rather than
 what the labels say, since only the fitting package knows which block of
 the sandwich belongs to which model.
 
@@ -119,5 +119,5 @@ vcov(wrapped)
 # Everything else about the model reaches its own methods.
 coef(wrapped)
 #>  (Intercept)            z 
-#> 3.919028e-01 6.859992e-16 
+#> 3.919028e-01 1.012353e-15 
 ```

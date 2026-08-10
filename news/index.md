@@ -78,7 +78,7 @@
   then `contrast` when the result names contrasts, then `group` when it
   names subgroups, and every surface that reads that identity reads the
   new column with it. An effect label pastes the group on last, so a
-  subgroup row is labelled `"rd b vs a sex = 0"`;
+  subgroup row is labeled `"rd b vs a sex = 0"`;
   [`print()`](https://rdrr.io/r/base/print.html) writes those labels
   down the side of its table and keeps the column out of the numeric
   matrix it formats; [`coef()`](https://rdrr.io/r/stats/coef.html) names
@@ -173,7 +173,7 @@
   to 0.95. `exponentiate = TRUE` moves the `log(rr)` and `log(or)` rows
   of a marginal table to their natural scale as it does for an unpooled
   result; on a conditional table it moves every coefficient when the
-  outcome models were fitted with a `logit` or `log` link, relabelling
+  outcome models were fitted with a `logit` or `log` link, relabeling
   nothing, and raises an error of class
   `causalgenerics_exponentiate_link` on any other link. There is
   deliberately no
@@ -276,7 +276,7 @@
   writes each standard error against the coefficient it belongs to. A
   block whose labels cannot be paired with the coefficients is refused
   with an error of class `causalgenerics_conditional_vcov_mismatch`. A
-  block of another size, one labelled with the parameter names of a
+  block of another size, one labeled with the parameter names of a
   stacked system, and a model whose coefficients carry no names are the
   three ways the pairing fails, and reading such a block by position
   would report the covariance of other parameters under this model’s
@@ -293,9 +293,9 @@
   wrapper no longer carries a covariance, rather than returning `NULL`.
   The class and the attribute go on together, so a model carrying one
   without the other passed through code that dropped its attributes and
-  kept its class. `NULL` travelled from there: standard errors taken
-  from it are an empty vector, and the limits built from those come back
-  as `NA` with nothing said about why.
+  kept its class. `NULL` traveled from there: standard errors taken from
+  it are an empty vector, and the limits built from those come back as
+  `NA` with nothing said about why.
   [`print()`](https://rdrr.io/r/base/print.html) on a conditional result
   whose wrapper lost its covariance refuses for the same reason, rather
   than printing the coefficients under a note telling the reader to wrap

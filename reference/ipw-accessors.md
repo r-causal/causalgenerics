@@ -242,7 +242,7 @@ reported in coefficient order whatever order it was attached in, so the
 variance read beside a coefficient is that coefficient's. A block whose
 labels cannot be paired with the coefficients raises an error of class
 `causalgenerics_conditional_vcov_mismatch`. A block of another size, one
-labelled with the parameter names of a stacked system, and a model whose
+labeled with the parameter names of a stacked system, and a model whose
 coefficients carry no names are the three ways the pairing fails.
 Reading such a block by position instead would report the covariance of
 other parameters under this model's coefficient names.
@@ -349,7 +349,7 @@ estimand(res)
 # rather than the effects.
 coef(res, effects = "conditional")
 #>  (Intercept)            z 
-#> 3.919028e-01 6.859992e-16 
+#> 3.919028e-01 1.012353e-15 
 
 # Its covariance is the corrected block a fitting package attaches to the
 # outcome model. This one carries none, and the covariance the model computed
@@ -377,7 +377,7 @@ conditional <- as_conditional(new_ipw(
 # named at the call site.
 coef(conditional)
 #>  (Intercept)            z 
-#> 3.919028e-01 6.859992e-16 
+#> 3.919028e-01 1.012353e-15 
 vcov(conditional)
 #>             (Intercept)         z
 #> (Intercept)    0.646421 -0.646421

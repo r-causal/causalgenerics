@@ -267,9 +267,9 @@ limits are rebuilt at `0.95`.
 ## Exponentiating
 
 On a marginal table `exponentiate = TRUE` means what it means for an
-unpooled result. The rows labelled `log(rr)` and `log(or)` are matched
+unpooled result. The rows labeled `log(rr)` and `log(or)` are matched
 exactly, their estimate and their bounds move to the natural scale, and
-the two terms are relabelled `rr` and `or`. The interval is settled
+the two terms are relabeled `rr` and `or`. The interval is settled
 before the scale is, so a rebuilt bound is a t half width on the log
 scale added to an estimate on the log scale and exponentiated
 afterwards. The standard error, the statistic, and the p-value describe
@@ -277,12 +277,12 @@ the log scale and stay there, and the `ipw_vcov` attribute is dropped
 rather than carried, since it would describe neither the table it sits
 on nor anything else.
 
-A conditional table has no rows labelled as ratios to pick out, so the
+A conditional table has no rows labeled as ratios to pick out, so the
 link the outcome models were fitted with settles the question for the
 whole table: a `logit` link puts every coefficient on the log odds scale
 and a `log` link puts every coefficient on the log risk scale, and both
 are scales an exponential undoes. Every estimate moves and no term is
-relabelled, since the terms are coefficient names and a coefficient does
+relabeled, since the terms are coefficient names and a coefficient does
 not change its name with the scale its estimate is reported on. Every
 other link raises an error of class `causalgenerics_exponentiate_link`,
 and of the classes `causalgenerics_invalid_argument_exponentiate` and

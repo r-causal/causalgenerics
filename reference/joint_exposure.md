@@ -57,7 +57,7 @@ a joint exposure natively:
 exactly what a plain factor over the same cells gives, `assign` and
 `contrasts` attributes included.
 
-The cells are the crossing of the two components' levels, labelled
+The cells are the crossing of the two components' levels, labeled
 `"name1 = level1, name2 = level2"` and ordered with the first component
 varying fastest, which is the order
 [`interaction()`](https://rdrr.io/r/base/interaction.html) produces. The

@@ -101,7 +101,8 @@ components, in this order.</p><dl><dt><code>estimand</code></dt>
 <dt><code>estimates</code></dt>
 <dd><p>A data frame with one row per effect and the following
 columns: <code>effect</code> (the measure name), <code>contrast</code> after it when the
-results name contrasts, <code>estimate</code> (the pooled point estimate),
+results name contrasts, <code>group</code> after that when they name subgroups,
+<code>estimate</code> (the pooled point estimate),
 <code>std.err</code> (the pooled standard error), <code>t</code> (the test statistic),
 <code>df</code> (the pooled degrees of freedom), <code>ci.lower</code> and <code>ci.upper</code>,
 <code>conf.level</code>, and <code>p.value</code>. The statistic and the p-value are referred
@@ -113,8 +114,8 @@ since a matrix built from a subset of the imputations would sit beside
 estimates built from all of them.</p></dd>
 
 <dt><code>pooling</code></dt>
-<dd><p>A data frame keyed by the same <code>effect</code> and <code>contrast</code>
-columns, holding <code>ubar</code> (the within-imputation variance), <code>b</code> (the
+<dd><p>A data frame keyed by the same columns that name a row of
+the frame above, holding <code>ubar</code> (the within-imputation variance), <code>b</code> (the
 between-imputation variance), <code>riv</code> (the relative increase in variance),
 <code>lambda</code> (the proportion of the total variance due to missingness), and
 <code>fmi</code> (the fraction of missing information).</p></dd>
@@ -221,6 +222,13 @@ refused.</p>
 labels are what say which row is which, so two results reporting the same
 contrasts in different orders would otherwise have the <code>b vs a</code> rows of one
 averaged with the <code>c vs a</code> rows of the other.</p>
+<p>A label carries the subgroup a row was estimated in along with the effect and
+the contrast, so a set whose results report different subgroups, or the same
+subgroups in different orders, disagrees about its labels and is refused
+through that requirement rather than through one of its own. A subgroup
+observed in one imputation and not in another is the case this answers: there
+is no row to average the missing one with, and pooling by position would
+combine two subgroups that answer different questions.</p>
 <p>Two of those agreements are only required when the argument that would settle
 the question is left at <code>NULL</code>. Naming <code>effects</code> says which surface to pool
 and the stored mode is not read at all; naming <code>conf_level</code> says what the

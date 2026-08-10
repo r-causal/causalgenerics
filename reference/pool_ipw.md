@@ -59,21 +59,22 @@ components, in this order.
 
   A data frame with one row per effect and the following columns:
   `effect` (the measure name), `contrast` after it when the results name
-  contrasts, `estimate` (the pooled point estimate), `std.err` (the
-  pooled standard error), `t` (the test statistic), `df` (the pooled
-  degrees of freedom), `ci.lower` and `ci.upper`, `conf.level`, and
-  `p.value`. The statistic and the p-value are referred to t on `df`
-  rather than to the normal. When every pooled result carried the
-  covariance of its effects, the pooled covariance is attached to this
-  frame as the `ipw_vcov` attribute, with the effect labels as dimnames
-  on both margins; when any of them carried none, no attribute is
-  attached, since a matrix built from a subset of the imputations would
-  sit beside estimates built from all of them.
+  contrasts, `group` after that when they name subgroups, `estimate`
+  (the pooled point estimate), `std.err` (the pooled standard error),
+  `t` (the test statistic), `df` (the pooled degrees of freedom),
+  `ci.lower` and `ci.upper`, `conf.level`, and `p.value`. The statistic
+  and the p-value are referred to t on `df` rather than to the normal.
+  When every pooled result carried the covariance of its effects, the
+  pooled covariance is attached to this frame as the `ipw_vcov`
+  attribute, with the effect labels as dimnames on both margins; when
+  any of them carried none, no attribute is attached, since a matrix
+  built from a subset of the imputations would sit beside estimates
+  built from all of them.
 
 - `pooling`:
 
-  A data frame keyed by the same `effect` and `contrast` columns,
-  holding `ubar` (the within-imputation variance), `b` (the
+  A data frame keyed by the same columns that name a row of the frame
+  above, holding `ubar` (the within-imputation variance), `b` (the
   between-imputation variance), `riv` (the relative increase in
   variance), `lambda` (the proportion of the total variance due to
   missingness), and `fmi` (the fraction of missing information).
@@ -199,6 +200,15 @@ The effects have to agree as an ordered vector rather than as a set. The
 labels are what say which row is which, so two results reporting the
 same contrasts in different orders would otherwise have the `b vs a`
 rows of one averaged with the `c vs a` rows of the other.
+
+A label carries the subgroup a row was estimated in along with the
+effect and the contrast, so a set whose results report different
+subgroups, or the same subgroups in different orders, disagrees about
+its labels and is refused through that requirement rather than through
+one of its own. A subgroup observed in one imputation and not in another
+is the case this answers: there is no row to average the missing one
+with, and pooling by position would combine two subgroups that answer
+different questions.
 
 Two of those agreements are only required when the argument that would
 settle the question is left at `NULL`. Naming `effects` says which

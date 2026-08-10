@@ -184,10 +184,11 @@ character <code>parm</code> naming an effect the result does not report raises a
 of class <code>causalgenerics_invalid_argument</code>.</p>
 <p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code> returns a single integer.</p>
 <p><code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> returns a plain data frame with the columns <code>term</code>, then
-<code>contrast</code> when the result names contrasts, then <code>estimate</code>, <code>std.error</code>,
-<code>statistic</code>, <code>df</code>, and <code>p.value</code>, with <code>conf.low</code> and <code>conf.high</code> appended
-when they are asked for. The pooled covariance travels on it under the
-<code>ipw_vcov</code> attribute unless the table was exponentiated.</p>
+<code>contrast</code> when the result names contrasts, then <code>group</code> when it names
+subgroups, then <code>estimate</code>, <code>std.error</code>, <code>statistic</code>, <code>df</code>, and <code>p.value</code>,
+with <code>conf.low</code> and <code>conf.high</code> appended when they are asked for. The pooled
+covariance travels on it under the <code>ipw_vcov</code> attribute unless the table was
+exponentiated.</p>
 <p><code><a href="causal-weights.html">estimand()</a></code> returns the estimand the pooled results agreed on, which is the
 one the weights their estimates were computed under targeted.</p>
     </div>

@@ -153,10 +153,11 @@ naming an effect the result does not report raises an error of class
 
 [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) returns a
 plain data frame with the columns `term`, then `contrast` when the
-result names contrasts, then `estimate`, `std.error`, `statistic`, `df`,
-and `p.value`, with `conf.low` and `conf.high` appended when they are
-asked for. The pooled covariance travels on it under the `ipw_vcov`
-attribute unless the table was exponentiated.
+result names contrasts, then `group` when it names subgroups, then
+`estimate`, `std.error`, `statistic`, `df`, and `p.value`, with
+`conf.low` and `conf.high` appended when they are asked for. The pooled
+covariance travels on it under the `ipw_vcov` attribute unless the table
+was exponentiated.
 
 [`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
 returns the estimand the pooled results agreed on, which is the one the

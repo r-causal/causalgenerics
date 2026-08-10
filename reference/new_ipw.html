@@ -178,7 +178,19 @@ contract names that column <code>comparison</code>. The older name is read as an
 alias for the canonical one wherever the column is read, so a result
 holding such a frame labels its rows and reports its table exactly as one
 holding a <code>contrast</code> column does. A method written now writes
-<code>contrast</code>.</p></dd>
+<code>contrast</code>. A result reported once per level of a grouping variable also
+has a <code>group</code> column, placed after the contrast column when one is
+present and after <code>effect</code> when the result names no contrasts, naming the
+subgroup each row was estimated in as a <code>"var = value"</code> string such as
+<code>"sex = 0"</code>. That column has one spelling and no alias. Both optional
+columns are absent rather than constant when the result reports one
+contrast or one group, since a column repeating a single value down the
+table would read as a contrast or a subgroup that was named. <code>group</code> must
+be character and must name a subgroup in every row; the constructor
+refuses anything else with an error of class
+<code>causalgenerics_invalid_argument_estimates</code>, and of the general class
+<code>causalgenerics_invalid_argument</code>, since a label pasted from such a column
+would relabel every row it keys without failing anywhere.</p></dd>
 
 <dt><code>se_method</code></dt>
 <dd><p>The standard error method used, such as <code>"mestimation"</code>
@@ -219,11 +231,11 @@ table of the surface the result's presentation mode names. The section below
 describes the two modes and what each one tabulates.</p>
 <p><code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> reports the effect estimates as a tidier-shaped table
 rather than as a copy of the <code>estimates</code> component. Its columns are <code>term</code>,
-then <code>contrast</code> when the result names contrasts, then <code>estimate</code>,
-<code>std.error</code>, <code>statistic</code>, and <code>p.value</code>. Those are the names the tidier
-convention uses, so a fitting package's <code>tidy()</code> method is this table read as
-a tibble and nothing more. The <code>estimates</code> component itself is unchanged by
-any of what follows.</p>
+then <code>contrast</code> when the result names contrasts, then <code>group</code> when it names
+subgroups, then <code>estimate</code>, <code>std.error</code>, <code>statistic</code>, and <code>p.value</code>. Those
+are the names the tidier convention uses, so a fitting package's <code>tidy()</code>
+method is this table read as a tibble and nothing more. The <code>estimates</code>
+component itself is unchanged by any of what follows.</p>
 <p><code>conf.int = TRUE</code> appends <code>conf.low</code> and <code>conf.high</code> after the other columns,
 and <code>conf.level</code> names the level they report. The level is an argument rather
 than a column, since a column would repeat one number down every row and be
@@ -252,10 +264,14 @@ neither the table it sits on nor anything else.</p>
 position that <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> writes down the side of its table and that
 <code><a href="ipw-accessors.html">coef()</a></code>, <code><a href="ipw-accessors.html">vcov()</a></code>, and
 <code><a href="ipw-accessors.html">confint()</a></code> name their results with. The label is the
-<code>effect</code> column on its own when there is no <code>contrast</code> column, and <code>effect</code>
-and <code>contrast</code> pasted together, such as <code>"rd b vs a"</code>, when there is. A
-categorical exposure repeats each effect measure across its contrasts, so
-<code>effect</code> alone would name several rows the same thing.</p>
+columns that name a row, pasted together in the order they appear in the
+frame's contract: the <code>effect</code> column, then <code>contrast</code> when the result names
+contrasts, then <code>group</code> when it names subgroups. A binary exposure estimated
+for the whole sample is labelled <code>"rd"</code>, a categorical one <code>"rd b vs a"</code>, and
+one reported by subgroup <code>"rd b vs a sex = 0"</code>. A categorical exposure repeats
+each effect measure across its contrasts and a subgroup analysis repeats each
+one across its groups, so <code>effect</code> alone would name several rows the same
+thing.</p>
     </div>
     <div class="section level2">
     <h2 id="the-presentation-mode">The presentation mode<a class="anchor" aria-label="anchor" href="#the-presentation-mode"></a></h2>

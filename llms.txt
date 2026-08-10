@@ -128,3 +128,16 @@ their own.
 - [`causal_wts_ptype2()`](https://r-causal.github.io/causalgenerics/reference/causal_wts_ptype2.md)
   : Common type of two causal weight vectors of the same class
 
+## Exposure declarations
+
+Classes for the exposure an analysis is estimated from rather than for
+what it returns. A package handed such a column reads the declaration
+off it instead of inferring the design from the values it holds.
+
+- [`joint_exposure()`](https://r-causal.github.io/causalgenerics/reference/joint_exposure.md)
+  : Declare an exposure that crosses two treatments
+- [`is_joint_exposure()`](https://r-causal.github.io/causalgenerics/reference/joint-exposure-accessors.md)
+  [`joint_components()`](https://r-causal.github.io/causalgenerics/reference/joint-exposure-accessors.md)
+  [`joint_reference()`](https://r-causal.github.io/causalgenerics/reference/joint-exposure-accessors.md)
+  : Read the declaration a joint exposure carries
+

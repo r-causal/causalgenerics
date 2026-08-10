@@ -9,7 +9,8 @@ joint_exposure(...)
 \arguments{
 \item{...}{Exactly two named vectors, one per treatment, recycled to a common
 length. Each may be a factor, a character vector, or a numeric or logical
-vector. The names are the treatment names the cell labels are written from.}
+vector. The names are the treatment names the cell labels are written from,
+and the two must be distinct.}
 }
 \value{
 A vector of class
@@ -61,6 +62,11 @@ treatments is not identified in those data, and no weight, contrast, or
 balance check over the crossing can be computed. Construction refuses it, as
 it refuses a component that never varies and a component with a missing
 value.
+
+The two components must also be named distinctly. The names are what tell the
+treatments apart in the cells, so one name used twice would label every cell
+with the same variable on either side of it and leave nothing downstream able
+to tell which component a cell varies. Construction refuses that as well.
 
 The declaration survives every operation that keeps the full set of cells,
 including \code{[}, \code{vctrs::vec_slice()}, \code{sort()}, and a round trip through a

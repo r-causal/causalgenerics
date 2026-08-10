@@ -26,12 +26,16 @@
   treatment. A component observed at one level, an unnamed component, and
   anything other than exactly two components are refused as well, each under the
   general class `causalgenerics_invalid_joint_exposure` alongside a class keyed
-  to the fault. The declaration then survives every operation that keeps the
-  full set of cells, including `[`, `vctrs::vec_slice()`, `sort()`, a round trip
-  through a data frame, and combining two joint exposures that declare the same
-  crossing. Operations that narrow or rewrite the level set give it up and say
-  so, each warning under the general class
-  `causalgenerics_joint_exposure_downgrade`: `droplevels()` and
+  to the fault. So are two components sharing a name, with
+  `causalgenerics_joint_exposure_shared_name`: the names are what tell the two
+  treatments apart in the cells, so one name used twice would label every cell
+  with the same variable on either side of it and leave nothing downstream able
+  to tell which component a cell varies. The declaration then survives every
+  operation that keeps the full set of cells, including `[`,
+  `vctrs::vec_slice()`, `sort()`, a round trip through a data frame, and
+  combining two joint exposures that declare the same crossing. Operations that
+  narrow or rewrite the level set give it up and say so, each warning under the
+  general class `causalgenerics_joint_exposure_downgrade`: `droplevels()` and
   `x[i, drop = TRUE]` return a plain factor over the cells that remain,
   `levels<-` returns a plain factor with the new levels, and combining with a
   factor or with a joint exposure declaring a different crossing returns a plain

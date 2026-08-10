@@ -14,6 +14,14 @@
       Error in `joint_exposure()`:
       ! Every component of a joint exposure must be named, because the names are the treatment names its cell labels are written from; pass each treatment as `name = value`.
 
+# the shared-name refusal states the contract
+
+    Code
+      joint_exposure(qsmk = smoking_qsmk(), qsmk = smoking_exercise())
+    Condition
+      Error in `joint_exposure()`:
+      ! Both components of a joint exposure are named `qsmk`, so its cells would name that one treatment twice and nothing reading the declaration could tell which component a cell varies; give the two treatments distinct names.
+
 # the constant-component refusal names the component
 
     Code

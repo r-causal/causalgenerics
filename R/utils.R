@@ -356,6 +356,33 @@ stop_joint_exposure_unnamed_component <- function(call = sys.call(-1)) {
   ))
 }
 
+# Signal that both components of a joint exposure arrived under one name. The
+# names are what separate the two treatments in everything the declaration is
+# read for: each cell label names a variable on either side of it, and
+# `joint_components()` reports one component per name. One name used twice
+# leaves a crossing nothing downstream can read, and which component a cell
+# varies cannot be recovered from anything the vector carries. The name is a
+# field as well as part of the sentence, so a handler reports it without parsing
+# the message for it.
+stop_joint_exposure_shared_name <- function(component, call = sys.call(-1)) {
+  message <- paste0(
+    "Both components of a joint exposure are named `",
+    component,
+    "`, so its cells would name that one treatment twice and nothing reading ",
+    "the declaration could tell which component a cell varies; give the two ",
+    "treatments distinct names."
+  )
+  stop(errorCondition(
+    message,
+    component = component,
+    class = c(
+      "causalgenerics_joint_exposure_shared_name",
+      "causalgenerics_invalid_joint_exposure"
+    ),
+    call = call
+  ))
+}
+
 # Signal that a component takes one value in the data it was given. The refusal
 # is keyed to the component rather than to the cells the crossing would leave
 # empty, so that the message points at the variable the caller can do something

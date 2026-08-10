@@ -45,6 +45,11 @@
 #' it refuses a component that never varies and a component with a missing
 #' value.
 #'
+#' The two components must also be named distinctly. The names are what tell the
+#' treatments apart in the cells, so one name used twice would label every cell
+#' with the same variable on either side of it and leave nothing downstream able
+#' to tell which component a cell varies. Construction refuses that as well.
+#'
 #' The declaration survives every operation that keeps the full set of cells,
 #' including `[`, `vctrs::vec_slice()`, `sort()`, and a round trip through a
 #' data frame, and it survives combining two joint exposures that declare the
@@ -64,7 +69,8 @@
 #'
 #' @param ... Exactly two named vectors, one per treatment, recycled to a common
 #'   length. Each may be a factor, a character vector, or a numeric or logical
-#'   vector. The names are the treatment names the cell labels are written from.
+#'   vector. The names are the treatment names the cell labels are written from,
+#'   and the two must be distinct.
 #'
 #' @return A vector of class
 #'   `c("joint_exposure", "factor", "vctrs_vctr", "integer")` with one level per
@@ -106,13 +112,21 @@ joint_exposure <- function(...) {
     stop_joint_exposure_unnamed_component()
   }
 
+  # Settled before the crossing is built, so that a caller who passed one column
+  # twice is sent to name the second treatment rather than told that the cells
+  # the duplicate leaves empty violate positivity.
+  if (identical(component_names[[1L]], component_names[[2L]])) {
+    stop_joint_exposure_shared_name(component_names[[1L]])
+  }
+
   # Recycling before the per-component checks so that the checks and the codes
   # below see the same lengths. Two exposures measured on the same units already
   # agree, so in practice this is where a caller learns that theirs do not.
   components <- do.call(vctrs::vec_recycle_common, components)
 
-  # By position rather than by name, so that two components sharing a name are
-  # both checked rather than the first one being checked twice.
+  # Indexed by position, which pairs each component with the name it arrived
+  # under, so that a fault is reported against the component carrying it
+  # whichever of the two positions that component is in.
   for (i in seq_along(components)) {
     component <- components[[i]]
     name <- component_names[[i]]

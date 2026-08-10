@@ -268,7 +268,7 @@ conditional_models <- function() {
 
 # The corrected covariance of that model's coefficients, in the shape a fitting
 # package hands to `new_ipw_model()`: the outcome block of the stacked sandwich,
-# labelled with the coefficient names. It is built from the model's own
+# labeled with the coefficient names. It is built from the model's own
 # covariance so that the dimnames agree without being restated, and scaled so
 # that it differs from it. Accounting for the weights having been estimated
 # ordinarily widens the block, and the scaling is what separates "the printed
@@ -278,7 +278,7 @@ corrected_outcome_vcov <- function(mod) {
   stats::vcov(mod) * 1.4
 }
 
-# The corrected block labelled in the reverse of the coefficient order, which is
+# The corrected block labeled in the reverse of the coefficient order, which is
 # the shape a fitting package produces when its stacked system holds the outcome
 # parameters the other way round. The two diagonal entries are far apart, so a
 # table that took the standard errors off the diagonal by position rather than
@@ -292,7 +292,7 @@ reversed_outcome_vcov <- function() {
   )
 }
 
-# A block labelled with the parameter names of a stacked system rather than with
+# A block labeled with the parameter names of a stacked system rather than with
 # the model's coefficient names. `new_ipw_model()` takes it, since only the
 # fitting package knows which block of the sandwich belongs to which model, and
 # there is no reading of it against these coefficients.
@@ -546,7 +546,7 @@ heading_index <- function(out, heading) {
   index
 }
 
-# Whether `print()` writes a row labelled exactly `label`.
+# Whether `print()` writes a row labeled exactly `label`.
 #
 # The estimate columns are numeric, so a row label is a line whose remainder
 # after the label is spaces and then a number. Testing only that a line starts
@@ -559,7 +559,7 @@ labels_a_printed_row <- function(out, label) {
   any(grepl("^ +-?[0-9]", remainder))
 }
 
-# The numbers `print()` writes on the row labelled `label`.
+# The numbers `print()` writes on the row labeled `label`.
 #
 # Which columns a coefficient table carries is the implementation's to choose,
 # and the estimate and its standard error are the first two whichever others are
@@ -601,7 +601,7 @@ test_that("print() summarizes a binary-exposure result", {
 
   expect_match(out, "^Marginal estimates:$", all = FALSE)
 
-  # Rows are labelled by effect, and the character `effect` column is gone
+  # Rows are labeled by effect, and the character `effect` column is gone
   # rather than formatted as a number.
   expect_match(out, "^rd +0\\.199882 ", all = FALSE)
   expect_match(out, "^log\\(rr\\) +0\\.560414 ", all = FALSE)
@@ -795,7 +795,7 @@ test_that("print() builds the conditional table from the corrected covariance", 
 })
 
 test_that("print() pairs each coefficient with its own standard error", {
-  # The block a fitting package attaches is labelled, and the labels are what
+  # The block a fitting package attaches is labeled, and the labels are what
   # say which coefficient each variance belongs to. A table that took the
   # standard errors off the diagonal by position instead prints one
   # coefficient's uncertainty against another's and looks exactly like a
@@ -894,7 +894,7 @@ test_that("print() refuses a conditional result whose wrapper carries nothing", 
   expect_error(capture.output(print(res)), class = "causalgenerics_no_vcov")
 })
 
-test_that("print() refuses a conditional block labelled for other parameters", {
+test_that("print() refuses a conditional block labeled for other parameters", {
   # A model that was never wrapped is reported rather than refused: the note
   # says what is missing and the coefficients are still worth looking at. This
   # is not that case. The block is there and cannot be read against these
@@ -1094,7 +1094,7 @@ test_that("format_model_call() joins a call that deparses to several lines", {
 test_that("format_model_call() falls back to a class label with no call", {
   # `getCall()` returns `NULL` for an object that is subsettable but records no
   # call, which is the ordinary case for a weighting object that was not fitted
-  # by a modelling function.
+  # by a modeling function.
   expect_identical(
     format_model_call(structure(list(), class = "cg_no_call")),
     "<cg_no_call>"
@@ -1187,7 +1187,7 @@ exponentiated_estimates <- function() {
 }
 
 # The covariance of the binary fixture's three effects, in the shape a method
-# attaches it: a square matrix labelled on both margins by effect label, with
+# attaches it: a square matrix labeled on both margins by effect label, with
 # off-diagonal entries, since effects computed from the same weighted means are
 # correlated.
 binary_vcov <- function() {
@@ -1514,7 +1514,7 @@ test_that("as.data.frame(exponentiate = TRUE) keeps every contrast label", {
 })
 
 test_that("as.data.frame(exponentiate = TRUE) matches the log labels exactly", {
-  # The rows to move are the ones labelled `log(rr)` and `log(or)`, not every
+  # The rows to move are the ones labeled `log(rr)` and `log(or)`, not every
   # row whose label happens to contain `rr` or `or`. A frame whose ratios are
   # already on the natural scale is the fixture that separates the two: its
   # labels are `rr` and `or`, so a substring match would exponentiate it a
@@ -1899,7 +1899,7 @@ contrast_labels <- function() {
 }
 
 # The covariance of those six effects, in the shape a method attaches it: a
-# square matrix labelled on both margins by effect label, with off-diagonal
+# square matrix labeled on both margins by effect label, with off-diagonal
 # entries, since effects computed from the same weighted means are correlated.
 contrast_vcov <- function() {
   std_err <- contrast_estimates()$std.err
@@ -2132,9 +2132,9 @@ contrast_group_labels <- function() {
 }
 
 # The covariance of a grouped fixture's effects, in the shape a method attaches
-# it: a square matrix labelled on both margins by effect label, with off-diagonal
+# it: a square matrix labeled on both margins by effect label, with off-diagonal
 # entries, since effects computed from the same weighted means are correlated.
-labelled_vcov <- function(std_err, labels) {
+labeled_vcov <- function(std_err, labels) {
   index <- seq_along(std_err)
   covariance <- 0.9^abs(outer(index, index, "-")) * outer(std_err, std_err)
   dimnames(covariance) <- list(labels, labels)
@@ -2334,7 +2334,7 @@ test_that("print() keys rows by effect, contrast, and group together", {
 
 test_that("print() keys an ungrouped result the way it always did", {
   # The backward-compatible half of the printed form. A frame that names no
-  # subgroups is labelled by the effect, or the effect and the contrast, and the
+  # subgroups is labeled by the effect, or the effect and the contrast, and the
   # rows read as they read before the group column existed.
   binary <- capture.output(print(ipw_result(binary_estimates())))
   categorical <- capture.output(print(ipw_result(contrast_estimates())))
@@ -2356,7 +2356,7 @@ test_that("the group column names the rows of every reported surface", {
   # `coef()` gave has to get the entry `print()` showed, whether the name it gave
   # carries a group or not.
   estimates <- contrast_group_estimates()
-  covariance <- labelled_vcov(estimates$std.err, contrast_group_labels())
+  covariance <- labeled_vcov(estimates$std.err, contrast_group_labels())
   res <- ipw_result(with_vcov(estimates, covariance))
 
   expect_identical(names(coef(res)), contrast_group_labels())

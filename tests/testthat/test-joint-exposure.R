@@ -49,7 +49,7 @@ joint_smoking <- function() {
   joint_exposure(qsmk = smoking_qsmk(), exercise = smoking_exercise())
 }
 
-# The crossing, labelled and ordered as the contract states: the first component
+# The crossing, labeled and ordered as the contract states: the first component
 # varies fastest within the second, and the cell where both components sit at
 # their reference level comes first.
 joint_smoking_levels <- function() {
@@ -146,7 +146,7 @@ test_that("joint_exposure() builds the documented class vector", {
   expect_length(x, 10L)
 })
 
-test_that("joint_exposure() crosses the two components into labelled levels", {
+test_that("joint_exposure() crosses the two components into labeled levels", {
   x <- joint_smoking()
 
   expect_identical(levels(x), joint_smoking_levels())

@@ -47,7 +47,7 @@ ahead of \code{"vctrs_vctr"} so that the formula machinery treats a joint exposu
 natively: \code{model.matrix()} gives exactly what a plain factor over the same
 cells gives, \code{assign} and \code{contrasts} attributes included.
 
-The cells are the crossing of the two components' levels, labelled
+The cells are the crossing of the two components' levels, labeled
 \code{"name1 = level1, name2 = level2"} and ordered with the first component
 varying fastest, which is the order \code{\link[=interaction]{interaction()}} produces. The reference
 cell crosses the two components' own reference levels, and that ordering is

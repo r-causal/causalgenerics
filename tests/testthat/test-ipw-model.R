@@ -257,7 +257,7 @@ test_that("new_ipw_model() rejects a covariance with no dimnames", {
   # The labels are what make the matrix readable: a caller pulls a variance out
   # by coefficient name, and a summary lines the diagonal up with `coef()` by
   # name rather than by position. Both margins are needed, because a matrix
-  # labelled down one side only cannot be indexed by name in both directions
+  # labeled down one side only cannot be indexed by name in both directions
   # and, on a square matrix, gives no way to notice a transposed block.
   mod <- outcome_model()
 

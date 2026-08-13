@@ -71,45 +71,55 @@ export("estimand<-")
 export(as_conditional)
 export(as_marginal)
 export(causal_wts_ptype2)
+export(check_forced_type)
+export(detect_exposure_type)
 export(ess)
 export(estimand)
+export(has_two_levels)
 export(ipw)
+export(is_categorical)
 export(is_causal_wt)
 export(is_joint_exposure)
 export(joint_components)
 export(joint_exposure)
 export(joint_reference)
+export(match_exposure_type)
 export(new_causal_wts)
 export(new_ipw)
 export(new_ipw_model)
+export(observed_values)
 export(pool_ipw)
-importFrom(stats,coef)
-importFrom(stats,confint)
-importFrom(stats,cov)
-importFrom(stats,df.residual)
-importFrom(stats,getCall)
-importFrom(stats,median)
-importFrom(stats,model.frame)
-importFrom(stats,model.weights)
-importFrom(stats,nobs)
-importFrom(stats,pnorm)
-importFrom(stats,printCoefmat)
-importFrom(stats,pt)
-importFrom(stats,qnorm)
-importFrom(stats,qt)
-importFrom(stats,quantile)
-importFrom(stats,setNames)
-importFrom(stats,var)
-importFrom(stats,vcov)
-importFrom(stats,weights)
-importFrom(vctrs,new_vctr)
-importFrom(vctrs,vec_assert)
-importFrom(vctrs,vec_cast)
-importFrom(vctrs,vec_data)
-importFrom(vctrs,vec_math)
-importFrom(vctrs,vec_math_base)
-importFrom(vctrs,vec_ptype2)
-importFrom(vctrs,vec_ptype_abbr)
-importFrom(vctrs,vec_ptype_full)
-importFrom(vctrs,vec_recycle_common)
-importFrom(vctrs,vec_restore)
+importFrom(stats,
+  coef,
+  confint,
+  cov,
+  df.residual,
+  getCall,
+  median,
+  model.frame,
+  model.weights,
+  nobs,
+  pnorm,
+  printCoefmat,
+  pt,
+  qnorm,
+  qt,
+  quantile,
+  setNames,
+  var,
+  vcov,
+  weights
+)
+importFrom(vctrs,
+  new_vctr,
+  vec_assert,
+  vec_cast,
+  vec_data,
+  vec_math,
+  vec_math_base,
+  vec_ptype2,
+  vec_ptype_abbr,
+  vec_ptype_full,
+  vec_recycle_common,
+  vec_restore
+)

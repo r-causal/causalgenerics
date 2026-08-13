@@ -1,5 +1,35 @@
 # causalgenerics (development version)
 
+* New exposure-type machinery gives the ecosystem one reading of whether an
+  exposure is binary, categorical, or continuous. `detect_exposure_type()`
+  classifies a vector, `match_exposure_type()` resolves the type a caller
+  declared against the types a function supports, `check_forced_type()` refuses
+  a declaration the data cannot carry, and `observed_values()`,
+  `has_two_levels()`, and `is_categorical()` are the readings those are built
+  from. The classification was duplicated as an internal in four packages, and
+  the copies had drifted: two of them counted a missing value as a level of its
+  own, which reads a binary exposure recorded with any missingness as a
+  three-level one and takes it off the binary path entirely. The reading here
+  counts only the values an exposure is observed at, so a single-level factor is
+  a degenerate binary exposure, a numeric vector is categorical when it takes
+  fewer distinct values than 20 percent of its non-missing observations, and
+  everything else is continuous. Detection announces what it read in a line
+  naming the exposure argument and the type, which a caller silences for one
+  call with `announce = FALSE` and a user silences for every call with
+  `options(causalgenerics.quiet = TRUE)`. A declared type wins over the
+  heuristics and is returned without the data being consulted at all, since a
+  ten-level dose declared continuous is fitted as a dose; a type this package
+  reads but the calling function does not support is refused with
+  `causalgenerics_unsupported_exposure_type`, whether the caller named it or
+  detection reached it, and a declaration no data of that shape could support is
+  refused with `causalgenerics_forced_exposure_type`. Both carry the umbrella
+  class `causalgenerics_error` and report the environment passed as `call`, so a
+  consumer package names its own function in the refusal. These are the first
+  conditions in the package built with `cli` rather than base
+  `errorCondition()`, which is what keeps their wording identical to the
+  refusals the consuming packages already show; the conditions raised elsewhere
+  in the package are unchanged. `cli` and `rlang` are new imports.
+
 * New `joint_exposure()` crosses two discrete treatments into one categorical
   exposure and records the declaration on the vector it returns: which two
   treatments were crossed, in what order, which levels each of them takes, and

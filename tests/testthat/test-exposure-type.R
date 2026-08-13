@@ -448,21 +448,23 @@ test_that("the unsupported refusal covers a detected type as well", {
   # Naming a type and letting it be detected reach the same refusal, so a
   # caller cannot get further by leaving the type off. Detection still
   # announces what it read before the refusal, which is what makes the refusal
-  # legible: the reading is the reason for it.
+  # legible: the reading is the reason for it. The snapshot below is where that
+  # announcement is asserted; the two class assertions silence it, since a
+  # message escaping a test is output nobody asked for.
   expect_error(
-    match_exposure_type(
+    suppressMessages(match_exposure_type(
       "auto",
       cg_continuous_numeric(),
       valid_types = c("auto", "binary", "categorical")
-    ),
+    )),
     class = "causalgenerics_unsupported_exposure_type"
   )
   expect_error(
-    match_exposure_type(
+    suppressMessages(match_exposure_type(
       "auto",
       cg_continuous_numeric(),
       valid_types = c("auto", "binary", "categorical")
-    ),
+    )),
     class = "causalgenerics_error"
   )
   expect_snapshot(

@@ -36,3 +36,14 @@ reference:
   contents:
   - joint_exposure
   - joint-exposure-accessors
+- title: Exposure types
+  desc: >
+    The reading of whether an exposure is binary, categorical, or continuous,
+    and the resolution of the type a caller declared against the types a
+    function supports. Packages take the reading from here so that the same
+    column is treated the same way wherever it is analyzed.
+  contents:
+  - detect_exposure_type
+  - match_exposure_type
+  - check_forced_type
+  - exposure-type-helpers

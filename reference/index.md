@@ -67,3 +67,21 @@ off it instead of inferring the design from the values it holds.
   [`joint_components()`](https://r-causal.github.io/causalgenerics/reference/joint-exposure-accessors.md)
   [`joint_reference()`](https://r-causal.github.io/causalgenerics/reference/joint-exposure-accessors.md)
   : Read the declaration a joint exposure carries
+
+## Exposure types
+
+The reading of whether an exposure is binary, categorical, or
+continuous, and the resolution of the type a caller declared against the
+types a function supports. Packages take the reading from here so that
+the same column is treated the same way wherever it is analyzed.
+
+- [`detect_exposure_type()`](https://r-causal.github.io/causalgenerics/reference/detect_exposure_type.md)
+  : Detect the type of an exposure
+- [`match_exposure_type()`](https://r-causal.github.io/causalgenerics/reference/match_exposure_type.md)
+  : Resolve the exposure type a function will work on
+- [`check_forced_type()`](https://r-causal.github.io/causalgenerics/reference/check_forced_type.md)
+  : Refuse an exposure type the data cannot carry
+- [`observed_values()`](https://r-causal.github.io/causalgenerics/reference/exposure-type-helpers.md)
+  [`has_two_levels()`](https://r-causal.github.io/causalgenerics/reference/exposure-type-helpers.md)
+  [`is_categorical()`](https://r-causal.github.io/causalgenerics/reference/exposure-type-helpers.md)
+  : Read the values an exposure takes

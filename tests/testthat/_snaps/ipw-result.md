@@ -14,6 +14,30 @@
       Error in `new_ipw()`:
       ! `effects` must be a single string, either "marginal" or "conditional".
 
+# the readings error states the contract
+
+    Code
+      ipw_with_readings("everything")
+    Condition
+      Error in `new_ipw()`:
+      ! `readings` must be a character vector of one or both of "marginal" and "conditional", each named at most once.
+
+---
+
+    Code
+      ipw_with_readings(c("marginal", "marginal"))
+    Condition
+      Error in `new_ipw()`:
+      ! `readings` must be a character vector of one or both of "marginal" and "conditional", each named at most once.
+
+---
+
+    Code
+      ipw_with_readings("marginal", effects = "conditional")
+    Condition
+      Error in `new_ipw()`:
+      ! `readings` must include the reading the result records, since a result cannot record a reading it does not support, and this one records the "conditional" reading.
+
 # print() summarizes a binary-exposure result
 
     Code
@@ -208,6 +232,30 @@
     Condition
       Error in `as.data.frame.ipw()`:
       ! `exponentiate` must be a single logical value, either `TRUE` or `FALSE`.
+
+# as.data.frame() refuses to exponentiate an unexponentiable link
+
+    Code
+      as.data.frame(res, exponentiate = TRUE)
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! `exponentiate` needs coefficients on a scale an exponential undoes, and the outcome models were fitted with the "identity" link, whose coefficients are not on one; only the "logit" and "log" links exponentiate in the conditional reading.
+
+# as.data.frame() refuses a conditional reading with no block
+
+    Code
+      as.data.frame(res)
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! The conditional reading reports the covariance the joint estimation of the weights and the outcome implies, and this result's outcome model records none; the package that produced the result attaches one by wrapping the model with `new_ipw_model()`.
+
+# as.data.frame() refuses a reading the result does not support
+
+    Code
+      as.data.frame(res, effects = "conditional")
+    Condition
+      Error in `as.data.frame.ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.
 
 # print() keys rows by the effect and the group together
 

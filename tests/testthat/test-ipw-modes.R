@@ -9,15 +9,26 @@
 # table, and a caller writing against a result would then get whichever package
 # was installed last rather than the contract.
 #
-# The `ipw` methods are total. Every result has one of the two modes, so asking
-# for either is always answerable: the methods never error, they are idempotent,
-# and they round-trip. They set one field and read nothing else, which is what
-# the assertions below say by comparing the whole object rather than a few
+# The `ipw` methods were once total, and they are no longer. A result records
+# which of the two readings it supports, in the `readings` field, and most
+# results support both: asking either of those for either reading is always
+# answerable, the methods never error on one, they are idempotent, and they
+# round-trip. They set one field and read nothing else, which is what the
+# assertions below say by comparing the whole object rather than a few
 # components of it.
 #
-# A result produced before the field existed carries six fields rather than
-# seven. `ipw_effects()` reads that shape as marginal, so an older result and a
-# result built today behave the same way.
+# A result that supports one reading is what a fitting package builds when the
+# other reading has no meaning for the analysis it ran: an exposure entering the
+# outcome model through several columns has no single coefficient to read as the
+# conditional effect. Asking such a result for the reading it does not support
+# is refused rather than answered with a surface it does not have. The reading
+# it does support is still the no-op it is on a result carrying both, so the two
+# kinds of result behave the same way wherever they can.
+#
+# A result produced before either field existed carries six fields rather than
+# eight. `ipw_effects()` reads that shape as marginal and `ipw_readings()` reads
+# it as supporting both, so an older result and a result built today behave the
+# same way.
 #
 # A pooled result carries both readings too, in the active fields and in the
 # `alternate` component beside them, so the generics are a swap there rather
@@ -112,6 +123,32 @@ conditional_result <- function(estimates = binary_estimates()) {
     fit = NULL,
     effects = "conditional"
   )
+}
+
+# A result that supports one reading only. The mode it records is that reading,
+# since a result cannot record a reading it does not support, so the fixture
+# takes one argument and writes both fields from it.
+narrow_result <- function(reading) {
+  mods <- ipw_models()
+  new_ipw(
+    estimand = "ate",
+    wt_mod = mods$wt_mod,
+    outcome_mod = mods$outcome_mod,
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = reading,
+    readings = reading
+  )
+}
+
+# The other shape an absent set of readings takes: the field is there and holds
+# `NULL`, which is what building the list with `readings = NULL` gives. A reader
+# that tested for the name rather than the value would take this one for a set.
+null_readings_result <- function() {
+  fields <- unclass(marginal_result())
+  fields["readings"] <- list(NULL)
+  structure(fields, class = "ipw")
 }
 
 # A result with the covariance attached, which is where the `new_ipw()` contract
@@ -472,6 +509,141 @@ test_that("as_marginal() leaves a result with no mode reading as marginal", {
   expect_identical(unclass(marginal)[names(legacy)], unclass(legacy))
 })
 
+# ---- the readings a result supports ------------------------------------------
+
+test_that("ipw_readings() reads the set a result records", {
+  # The field holds the readings the result can present, and the helper is how
+  # every method here asks for them, so a result that records a set is read as
+  # that set and nothing is added to it.
+  expect_identical(
+    ipw_readings(marginal_result()),
+    c("marginal", "conditional")
+  )
+  expect_identical(
+    ipw_readings(narrow_result("marginal")),
+    "marginal"
+  )
+  expect_identical(
+    ipw_readings(narrow_result("conditional")),
+    "conditional"
+  )
+})
+
+test_that("ipw_readings() reads a result with no set as supporting both", {
+  # Three shapes record no set. A result stored before either field existed has
+  # six fields; one stored between them has seven; and a list built with
+  # `readings = NULL` has eight, one of them empty. Both readings were assumed
+  # to exist on every result when none of them recorded otherwise, so all three
+  # are read as supporting both rather than refused.
+  legacy <- legacy_result()
+  null_effects <- null_effects_result()
+  null_readings <- null_readings_result()
+
+  expect_length(legacy, 6L)
+  expect_false("readings" %in% names(legacy))
+  expect_identical(
+    ipw_readings(legacy),
+    c("marginal", "conditional")
+  )
+
+  expect_length(null_effects, 7L)
+  expect_false("readings" %in% names(null_effects))
+  expect_identical(
+    ipw_readings(null_effects),
+    c("marginal", "conditional")
+  )
+
+  expect_length(null_readings, 8L)
+  expect_true("readings" %in% names(null_readings))
+  expect_null(null_readings$readings)
+  expect_identical(
+    ipw_readings(null_readings),
+    c("marginal", "conditional")
+  )
+})
+
+test_that("as_conditional() refuses a result that supports marginal only", {
+  # The reading is not there to be presented, so the request is refused rather
+  # than answered by writing a mode the result cannot report in. The specific
+  # class names the reading that was asked for, which is what a caller who wants
+  # only that one matches on, and the general class is for a caller who cares
+  # that a reading is absent rather than which.
+  res <- narrow_result("marginal")
+
+  expect_error(
+    as_conditional(res),
+    class = "causalgenerics_unsupported_reading_conditional"
+  )
+  expect_error(
+    as_conditional(res),
+    class = "causalgenerics_unsupported_reading"
+  )
+  expect_snapshot(error = TRUE, as_conditional(res))
+
+  # The reading asked for and the ones the result supports travel on the
+  # condition, so a handler reports them without parsing the sentence for them.
+  cnd <- tryCatch(as_conditional(res), error = identity)
+  expect_identical(cnd$effects, "conditional")
+  expect_identical(cnd$readings, "marginal")
+})
+
+test_that("as_marginal() refuses a result that supports conditional only", {
+  # The refusal the other way round, from the result a continuous exposure
+  # entering the outcome model through several columns produces.
+  res <- narrow_result("conditional")
+
+  expect_error(
+    as_marginal(res),
+    class = "causalgenerics_unsupported_reading_marginal"
+  )
+  expect_error(as_marginal(res), class = "causalgenerics_unsupported_reading")
+  expect_snapshot(error = TRUE, as_marginal(res))
+
+  cnd <- tryCatch(as_marginal(res), error = identity)
+  expect_identical(cnd$effects, "marginal")
+  expect_identical(cnd$readings, "conditional")
+})
+
+test_that("the mode generics answer for the reading a narrow result supports", {
+  # The absent reading says nothing about the one the result does present, so
+  # asking for that one is the no-op it is on a result carrying both, and
+  # applying the generic twice says what applying it once said.
+  marginal <- narrow_result("marginal")
+  conditional <- narrow_result("conditional")
+
+  expect_no_error(as_marginal(marginal))
+  expect_identical(as_marginal(marginal), marginal)
+  expect_identical(as_marginal(as_marginal(marginal)), marginal)
+
+  expect_no_error(as_conditional(conditional))
+  expect_identical(as_conditional(conditional), conditional)
+  expect_identical(as_conditional(as_conditional(conditional)), conditional)
+})
+
+test_that("the readings a result records survive the round trip", {
+  # The generics set the mode and read nothing else, so the set of readings goes
+  # out and comes back as it went in. A result whose readings were rewritten on
+  # the way through would support a different set afterwards, and the round trip
+  # would no longer be the object that went in.
+  res <- marginal_result()
+
+  expect_identical(
+    as_conditional(res)$readings,
+    c("marginal", "conditional")
+  )
+  expect_identical(as_marginal(as_conditional(res)), res)
+
+  # An older result gains the mode on the way through and keeps the set it never
+  # recorded, which is still read as both.
+  legacy <- legacy_result()
+
+  expect_false("readings" %in% names(as_conditional(legacy)))
+  expect_identical(
+    ipw_readings(as_conditional(legacy)),
+    c("marginal", "conditional")
+  )
+})
+
 # ---- pooled results ----------------------------------------------------------
 
 test_that("the mode generics leave a pooled result in the reading it records", {
@@ -771,8 +943,8 @@ test_that("the mode generics and their methods are registered", {
 test_that("the mode generics are exported and ipw_effects() is not", {
   # The generics are the supported way to move a result between the two
   # readings, so a caller and a fitting package both need them. `ipw_effects()`
-  # is how the methods here read a field that an older result may not carry, and
-  # it stays internal.
+  # and `ipw_readings()` are how the methods here read two fields that an older
+  # result may not carry, and they stay internal.
   #
   # A namespace's parent chain runs out to the search path, where
   # `pkgload::load_all()` has attached every object in the package, so
@@ -791,4 +963,13 @@ test_that("the mode generics are exported and ipw_effects() is not", {
     )
   )
   expect_false("ipw_effects" %in% exports)
+
+  expect_true(
+    exists(
+      "ipw_readings",
+      envir = asNamespace("causalgenerics"),
+      inherits = FALSE
+    )
+  )
+  expect_false("ipw_readings" %in% exports)
 })

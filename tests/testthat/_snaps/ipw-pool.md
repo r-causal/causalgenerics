@@ -158,3 +158,27 @@
       Error in `pool_ipw()`:
       ! The effects reported must be the same in every result, but they report ("rd sex = 0", "log(rr) sex = 0", "log(or) sex = 0", "rd sex = 1", "log(rr) sex = 1", "log(or) sex = 1") and ("rd sex = 0", "log(rr) sex = 0", "log(or) sex = 0", "rd sex = 2", "log(rr) sex = 2", "log(or) sex = 2").
 
+# pool_ipw() refuses a reading the results do not support
+
+    Code
+      pool_ipw(fits, effects = "marginal", dfcom = 18)
+    Condition
+      Error in `pool_ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+# pool_ipw() refuses a reading one result of the set lacks
+
+    Code
+      pool_ipw(fits, effects = "marginal", dfcom = 18)
+    Condition
+      Error in `pool_ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+# pool_ipw() refuses the conditional reading of a marginal-only set
+
+    Code
+      pool_ipw(fits, effects = "conditional", dfcom = 17)
+    Condition
+      Error in `pool_ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.
+

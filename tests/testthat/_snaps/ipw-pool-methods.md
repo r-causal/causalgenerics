@@ -135,3 +135,11 @@
       ---
       Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
+# as_marginal() refuses a reading the pooled results never had
+
+    Code
+      as_marginal(res)
+    Condition
+      Error in `as_marginal.ipw_pooled()`:
+      ! This pooled result carries no marginal reading, since pooling that reading over the same results was refused. This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+

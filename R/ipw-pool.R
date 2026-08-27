@@ -49,6 +49,22 @@
 #' used. The commonest case is a set of results whose outcome models carry no
 #' corrected covariance, which is what the conditional reading is pooled from.
 #'
+#' The readings the results declare are read before either surface is, so a set
+#' whose results support one reading pools that one and no other. Naming the
+#' reading they do not support refuses the call with an error of class
+#' `causalgenerics_unsupported_reading_marginal` or
+#' `causalgenerics_unsupported_reading_conditional`, in the words a result raises
+#' when the same reading is asked of it directly, since what the caller asked for
+#' is a reading of the analysis rather than a way of pooling it. Leaving
+#' `effects` at `NULL` pools the reading the results record and puts that same
+#' refusal on `alternate` as the reason the other reading has no frames, so
+#' [as_marginal()] or [as_conditional()] on the pooled result afterwards raises
+#' an error of class `causalgenerics_pool_missing_surface_marginal` or
+#' `causalgenerics_pool_missing_surface_conditional` carrying it. Every result
+#' has to support the reading being pooled, since the pooled estimate of an
+#' effect is an average over all of them, so a set where one result alone lacks
+#' it is refused for that result.
+#'
 #' The components describing the analyses rather than a reading of them are
 #' shared by both readings. The estimand, the standard error method, the number
 #' of results, the complete-data degrees of freedom, the observation count, and
@@ -742,6 +758,16 @@ pool_common <- function(x, get, field, call = sys.call(-1)) {
 #' contrasts and its subgroups onto the pooled frames under the canonical
 #' headings, whichever vintage of the contract each result was written against.
 #'
+#' The set of readings the result declares is read first, before either surface
+#' is. A result that does not support the reading being pooled has no such
+#' surface whatever its frames and its outcome model happen to hold, so the
+#' refusal a caller gets says the analysis has no such reading rather than
+#' reporting whichever fault reading the surface would have run into. Asking
+#' here is what asks once per reading rather than once per surface: this is the
+#' only place a reading meets a result, so both `pool_mode_surfaces()` and the
+#' guarded pass `pool_alternate()` makes over the other reading are answered by
+#' the one check.
+#'
 #' @param fit One result.
 #' @param effects The reading being pooled.
 #' @param call The call to report the error against, which is [pool_ipw()]'s
@@ -754,6 +780,8 @@ pool_common <- function(x, get, field, call = sys.call(-1)) {
 #' @noRd
 #' @importFrom stats coef
 pool_surface <- function(fit, effects, call = sys.call(-1)) {
+  check_ipw_reading(fit, effects, call = call)
+
   if (effects == "conditional") {
     covariance <- conditional_vcov(fit$outcome_mod, call = call)
     estimate <- stats::coef(fit$outcome_mod)

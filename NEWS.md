@@ -20,7 +20,14 @@
   covariance implies, under the headings the pooled table uses for the same
   reading. A result stored before the field existed records no set and is read
   as supporting both, so an older result and a result built today behave the
-  same way.
+  same way. `pool_ipw()` honors the field too: it reads the readings the
+  results declare before either surface, so a set whose results support one
+  reading pools that one alone. Naming the other refuses the call with the same
+  error a result raises directly, and leaving `effects` at `NULL` pools the
+  reading the results record and puts that refusal on `alternate` as the reason
+  the other has no frames, so `as_marginal()` or `as_conditional()` on the
+  pooled result raises `causalgenerics_pool_missing_surface_marginal` or
+  `causalgenerics_pool_missing_surface_conditional` carrying it.
 
 * New exposure-type machinery gives the ecosystem one reading of whether an
   exposure is binary, categorical, or continuous. `detect_exposure_type()`

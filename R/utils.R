@@ -227,6 +227,43 @@ stop_no_conditional_vcov <- function(call = sys.call(-1)) {
   ))
 }
 
+# Signal that a result was asked for a reading it does not support. A result
+# records the readings it can present, and a fitting package records one of them
+# when the other has no meaning for the analysis it ran: an exposure entering the
+# outcome model through several columns has no single coefficient to read as the
+# conditional effect. The classes follow `stop_no_method()`: one keyed to the
+# reading that was asked for, since a caller who wants only that one has nothing
+# to match on otherwise, and one general class for callers that care that a
+# reading is absent rather than which one it was.
+#
+# The message says the result supports one reading only, which is what the set
+# always holds here: a result supporting both refuses neither, so the reading
+# asked for is absent only when the other one is the whole set. Both facts are
+# fields as well as parts of the sentence, so a handler reports them without
+# parsing the message for them. There is nothing for the caller to do to the
+# result, since the set is written where the result is built, so the sentence
+# says where it comes from rather than offering a route.
+stop_unsupported_reading <- function(effects, readings, call = sys.call(-1)) {
+  message <- paste0(
+    "This result supports the ",
+    readings,
+    " reading only, so there is no ",
+    effects,
+    " reading of it to report; the package that produced it records the ",
+    "readings it supports when it builds the result."
+  )
+  stop(errorCondition(
+    message,
+    effects = effects,
+    readings = readings,
+    class = c(
+      paste0("causalgenerics_unsupported_reading_", effects),
+      "causalgenerics_unsupported_reading"
+    ),
+    call = call
+  ))
+}
+
 # Signal that a pooled result was asked to present a reading it does not carry.
 # The classes follow `stop_no_method()`: one keyed to the reading that was asked
 # for, since a caller who wants only the conditional reading has nothing to match

@@ -1,5 +1,27 @@
 # causalgenerics (development version)
 
+* `new_ipw()` gains a `readings` field, the eighth and last of the result
+  contract, recording which of the two readings a result supports. Both
+  surfaces exist on most results and not on all of them: an exposure that
+  enters the outcome model through several columns has no single coefficient to
+  read as the conditional effect, so a package that builds such a result records
+  the reading it can answer for, and the mode the result records has to be one
+  of them. Asking a result for a reading it does not support is refused with an
+  error of class `causalgenerics_unsupported_reading_marginal` or
+  `causalgenerics_unsupported_reading_conditional`, and of the general class
+  `causalgenerics_unsupported_reading`, which carries the reading asked for and
+  the set the result records as fields. The refusal is raised wherever a reading
+  is named: by `as_marginal()` and `as_conditional()`, which are no longer total
+  on the class, and by the `effects` argument of `coef()`, `vcov()`,
+  `confint()`, and `as.data.frame()`. `as.data.frame()` itself gains that
+  `effects` argument and now presents the reading the result records rather than
+  the effects table in either reading: the conditional reading reports the
+  outcome model's coefficients, with the standard errors the corrected
+  covariance implies, under the headings the pooled table uses for the same
+  reading. A result stored before the field existed records no set and is read
+  as supporting both, so an older result and a result built today behave the
+  same way.
+
 * New exposure-type machinery gives the ecosystem one reading of whether an
   exposure is binary, categorical, or continuous. `detect_exposure_type()`
   classifies a vector, `match_exposure_type()` resolves the type a caller

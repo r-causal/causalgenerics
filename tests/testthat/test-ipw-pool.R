@@ -533,13 +533,17 @@ pool_dfless_fits <- function() {
 }
 
 # The three binary results as a fitting package stored them before the mode
-# existed: six fields and no `effects`. The absent field reads as marginal,
-# which is the reading every method produced then, and the outcome models carry
-# no corrected block either, which is the pair of properties such a set has.
+# existed: six fields, with neither `effects` nor `readings` after them. The
+# absent mode reads as marginal, which is the reading every method produced
+# then, and the outcome models carry no corrected block either, which is the
+# pair of properties such a set has.
 pool_legacy_fits <- function() {
   lapply(pool_binary_fits(), function(fit) {
     fields <- unclass(fit)
-    structure(fields[names(fields) != "effects"], class = "ipw")
+    structure(
+      fields[!names(fields) %in% c("effects", "readings")],
+      class = "ipw"
+    )
   })
 }
 
@@ -1947,9 +1951,9 @@ test_that("pool_ipw() records a reason when only some results carry a block", {
 })
 
 test_that("pool_ipw() pools results stored before the mode existed", {
-  # A result from an earlier version of a fitting package carries six fields
-  # and no `effects`, which reads as marginal, and its outcome model carries no
-  # corrected block either. Both halves of that are answered here: the marginal
+  # A result from an earlier version of a fitting package carries six fields,
+  # with no `effects` among them, which reads as marginal, and its outcome
+  # model carries no corrected block either. Both halves of that are answered here: the marginal
   # reading is pooled and the conditional one is recorded as unavailable.
   fits <- pool_legacy_fits()
 

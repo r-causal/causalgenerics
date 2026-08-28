@@ -576,6 +576,20 @@ pool_mislabeled_fits <- function(readings = c("marginal", "conditional")) {
   fits
 }
 
+# Three results holding nothing the marginal reading can be read from. A package
+# that records the conditional reading alone has no marginal surface to store,
+# and the empty list left in the field is not a frame `ipw_effect_labels()` can
+# take labels off: it raises a subscript error on the first column it asks for.
+# That is what separates the two orders the pooling could ask its questions in.
+# A readings check made after the estimates are read would report the subscript
+# error, and one made before them reports the reading the analysis has none of.
+pool_unreadable_fits <- function(readings = "conditional") {
+  lapply(pool_conditional_fits(readings = readings), function(fit) {
+    fit$estimates <- list()
+    fit
+  })
+}
+
 # Rubin's rules and the Barnard-Rubin small-sample adjustment for one effect,
 # transcribed from the formulas `mice::pool()` implements. The tests recompute
 # with this from the fixture inputs rather than reading the pooled frame back
@@ -2431,7 +2445,10 @@ test_that("pool_ipw() refuses a reading the results do not support", {
   # surface the results happen to carry beside it. The refusal is the one a
   # result raises when the same reading is asked of it directly, so a caller
   # handles one class whether the request went to a result or to the pooling of
-  # a set of them.
+  # a set of them. What the pooled refusal says beyond the direct one is which
+  # result it is about, which a caller holding a set of them cannot otherwise
+  # tell, and it says it in a sentence after the one the direct refusal ends
+  # with.
   fits <- pool_conditional_fits(readings = "conditional")
   cnd <- tryCatch(
     pool_ipw(fits, effects = "marginal", dfcom = 18),
@@ -2454,7 +2471,11 @@ test_that("pool_ipw() refuses a reading the results do not support", {
   # sentence for them.
   expect_identical(cnd$effects, "marginal")
   expect_identical(cnd$readings, "conditional")
-  expect_identical(conditionMessage(cnd), conditionMessage(direct))
+  expect_identical(cnd$position, 1L)
+  expect_true(startsWith(conditionMessage(cnd), conditionMessage(direct)))
+  # A result asked directly is the only result there is, so it names no position
+  # and its message is what it always was.
+  expect_null(direct$position)
   # The reading they do support is unaffected, named or not.
   expect_no_error(pool_ipw(fits, effects = "conditional", dfcom = 18))
   expect_no_error(pool_ipw(fits, dfcom = 18))
@@ -2470,7 +2491,9 @@ test_that("pool_ipw() refuses a reading one result of the set lacks", {
   # reading has to be there in every one of them. A set where a single result
   # has no reading of the one asked for is refused for that result, since it is
   # the whole of why the reading cannot be pooled, and the ones that do support
-  # it are not enough on their own.
+  # it are not enough on their own. The caller has to go back to that one
+  # result, so the refusal names its position in the set and carries it as a
+  # field.
   fits <- pool_mixed_reading_fits()
   cnd <- tryCatch(
     pool_ipw(fits, effects = "marginal", dfcom = 18),
@@ -2485,7 +2508,10 @@ test_that("pool_ipw() refuses a reading one result of the set lacks", {
     pool_ipw(fits, effects = "marginal", dfcom = 18),
     class = "causalgenerics_unsupported_reading"
   )
+  expect_identical(cnd$effects, "marginal")
   expect_identical(cnd$readings, "conditional")
+  expect_identical(cnd$position, 2L)
+  expect_match(conditionMessage(cnd), "position 2", fixed = TRUE)
   # The fixture is discriminating: two of the three results answer the request
   # the pooling refuses.
   expect_no_error(as.data.frame(fits[[1]], effects = "marginal"))
@@ -2531,13 +2557,25 @@ test_that("pool_ipw() refuses the conditional reading of a marginal-only set", {
 test_that("pool_ipw() reads the declared readings before the surfaces", {
   # Two things stand between each of these sets and the reading asked for: the
   # results declare no such reading, and the surface it would be pooled from
-  # cannot be read either, because the estimates frames disagree about their
-  # labels on one side and the outcome models carry no corrected block on the
-  # other. What a caller is told is that the analysis has no such reading, since
-  # that question is settled before a frame or an outcome model is read at all.
+  # cannot be read either. What a caller is told is that the analysis has no
+  # such reading, since that question is settled before a frame or an outcome
+  # model is read at all.
+  #
+  # The three sets fail at three different points of the read, which is what
+  # makes them say where the question is settled rather than only that it is
+  # settled early. The unreadable set has nothing in the field the marginal
+  # surface comes off, so it fails in the first line that touches it; the
+  # mislabeled set is read row by row and fails afterwards, where the surfaces
+  # are compared; and the unwrapped set fails where the conditional surface
+  # reaches for a corrected block.
+  unreadable <- pool_unreadable_fits()
   mislabeled <- pool_mislabeled_fits(readings = "conditional")
   unwrapped <- pool_binary_fits(readings = "marginal")
 
+  unread <- tryCatch(
+    pool_ipw(unreadable, effects = "marginal", dfcom = 18),
+    error = identity
+  )
   marginal <- tryCatch(
     pool_ipw(mislabeled, effects = "marginal", dfcom = 18),
     error = identity
@@ -2547,14 +2585,28 @@ test_that("pool_ipw() reads the declared readings before the surfaces", {
     error = identity
   )
 
+  expect_s3_class(unread, "causalgenerics_unsupported_reading_marginal")
   expect_s3_class(marginal, "causalgenerics_unsupported_reading_marginal")
   expect_false(inherits(marginal, "causalgenerics_pool_mismatch"))
   expect_s3_class(conditional, "causalgenerics_unsupported_reading_conditional")
   expect_false(inherits(conditional, "causalgenerics_no_vcov"))
 
-  # The fixtures are discriminating: the same two sets declaring both readings
+  # The fixtures are discriminating: the same three sets declaring both readings
   # are refused for the other reason instead, so the assertions above are about
   # which question was asked first rather than about sets with one fault each.
+  # The unreadable set's own fault is not a condition this package raises at
+  # all, so what it is asserted against is that it is not the refusal above.
+  both <- tryCatch(
+    pool_ipw(
+      pool_unreadable_fits(readings = c("marginal", "conditional")),
+      effects = "marginal",
+      dfcom = 18
+    ),
+    error = identity
+  )
+
+  expect_s3_class(both, "error")
+  expect_false(inherits(both, "causalgenerics_unsupported_reading"))
   expect_error(
     pool_ipw(pool_mislabeled_fits(), effects = "marginal", dfcom = 18),
     class = "causalgenerics_pool_mismatch"

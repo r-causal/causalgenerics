@@ -182,6 +182,15 @@ coefficient is named by itself. It is the table
 same reading, without the \code{df} column a pooled result has and an unpooled one
 does not.
 
+A result whose outcome model carries no corrected block has no such standard
+error to report, and the reading is refused with an error of class
+\code{causalgenerics_no_conditional_vcov} rather than reported from the standard
+errors the model computed for itself. That is where the table parts company
+with \code{print()}, which writes those coefficients under a note saying that no
+covariance from the joint estimation is recorded: a printed table is read by
+someone who reads the note with it, and a data frame is read by code that
+would take the column for the corrected one.
+
 \code{conf.int = TRUE} appends \code{conf.low} and \code{conf.high} after the other columns,
 and \code{conf.level} names the level they report. The level is an argument rather
 than a column, since a column would repeat one number down every row and be

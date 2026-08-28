@@ -34,10 +34,11 @@
 #' under `effects` and the set the result records under `readings`. The reading
 #' such a result does support is the no-op it is on a result carrying both.
 #'
-#' A result built before the fields existed carries six fields rather than
-#' eight. It reads as marginal, which is the mode every method produced then,
-#' and as supporting both readings, which is what every result was assumed to
-#' support when none of them recorded otherwise.
+#' A result built before the fields existed carries six or seven fields rather
+#' than eight, since the two were added one at a time. It reads as marginal
+#' where it records no mode, which is the mode every method produced then, and
+#' as supporting both readings where it records no set, which is what every
+#' result was assumed to support when none of them recorded otherwise.
 #'
 #' The generics live here for the reason `print()` does. Two packages each
 #' registering `as_conditional.ipw()` would collide in the shared S3 method
@@ -273,6 +274,22 @@ flip_ipw_pooled <- function(x, effects, call = sys.call(-1)) {
 #' rather than passed on, so that a caller reading the mode gets one of the two
 #' readings or an error and never a third thing to branch on.
 #'
+#' The mode is checked against the readings the result records for the same
+#' reason. The constructor refuses a set that leaves the mode out and the mode
+#' generics refuse a reading outside the set, so a result whose two fields
+#' disagree was assigned to directly as well, and the mode read off it names a
+#' surface the result itself says it has no reading of. Reading it back would
+#' report that surface, which is the state both of those refusals exist to keep
+#' out, so it is refused here in the words and with the classes the mode
+#' generics use.
+#'
+#' Neither field has to be there. A result recording no mode reads as marginal
+#' and one recording no set reads as supporting both, and the check is made
+#' between what the two are read as rather than between what they store: a
+#' result that records the conditional reading alone and no mode reads as
+#' presenting a reading it does not support, which is the disagreement, whether
+#' or not the mode was written out.
+#'
 #' @param object An `ipw` object.
 #' @param call The call to report an invalid stored mode against, which is the
 #'   accessor's rather than this helper's.
@@ -283,9 +300,11 @@ flip_ipw_pooled <- function(x, effects, call = sys.call(-1)) {
 ipw_effects <- function(object, call = sys.call(-1)) {
   effects <- object$effects
   if (is.null(effects)) {
-    return("marginal")
+    effects <- "marginal"
+  } else {
+    check_ipw_effects(effects, call = call)
   }
-  check_ipw_effects(effects, call = call)
+  check_ipw_reading(object, effects, call = call)
   effects
 }
 
@@ -303,10 +322,9 @@ ipw_effects <- function(object, call = sys.call(-1)) {
 #'
 #' A named mode is checked against the readings the result supports, and one
 #' outside them is refused rather than reported from a surface the result has no
-#' reading of. A mode read off the result needs no such check: the constructor
-#' refuses a result whose mode is not one of its readings, so the stored mode is
-#' one of them for every result a constructor built, and a result whose fields
-#' were assigned to directly is outside the contract either way.
+#' reading of. A mode read off the result is checked against them too, in
+#' `ipw_effects()` where it is read rather than here, so that the two routes to
+#' a mode answer the same way.
 #'
 #' That last part is about resolving the mode, which is all this helper does. It
 #' holds for a caller that goes on to report the resolved mode directly, as the
@@ -346,8 +364,8 @@ resolve_ipw_effects <- function(object, effects, call = sys.call(-1)) {
 #' A field holding anything else was assigned to directly, which is outside the
 #' contract the constructor keeps, and it is refused here rather than passed on.
 #' The mode the field has to include is not checked here, since the field being
-#' read says nothing about which reading the result presents and the constructor
-#' has already refused a result whose mode is outside its readings.
+#' read says nothing about which reading the result presents. A stored mode the
+#' set leaves out is refused in `ipw_effects()`, where the mode is read.
 #'
 #' @param object An `ipw` object.
 #' @param call The call to report an invalid stored set against, which is the
@@ -368,24 +386,38 @@ ipw_readings <- function(object, call = sys.call(-1)) {
 
 #' Refuse a reading the result does not support
 #'
-#' Three surfaces ask the same question of a result: the mode generics, which
-#' would otherwise record a reading the result cannot present, and the
-#' accessors and `as.data.frame()`, which would otherwise report one. The
-#' question is asked here once so that all of them refuse in the same words and
-#' with the same classes.
+#' Several surfaces ask the same question of a result: the mode generics, which
+#' would otherwise record a reading the result cannot present; the accessors,
+#' `as.data.frame()`, and the pooling, which would otherwise report one; and
+#' `ipw_effects()`, whose answer would otherwise be a mode the result records no
+#' reading of. The question is asked here once so that all of them refuse in the
+#' same words and with the same classes.
 #'
 #' @param object An `ipw` object.
 #' @param effects The reading that was asked for.
+#' @param position The result's position in the set being pooled, or `NULL`
+#'   where a single result was asked directly and there is no set to place it
+#'   in.
 #' @param call The call to report the refusal against, which is the generic's or
 #'   the method's rather than this helper's.
 #'
 #' @return `effects`, invisibly, when the result supports it.
 #'
 #' @noRd
-check_ipw_reading <- function(object, effects, call = sys.call(-1)) {
+check_ipw_reading <- function(
+  object,
+  effects,
+  position = NULL,
+  call = sys.call(-1)
+) {
   readings <- ipw_readings(object, call = call)
   if (!effects %in% readings) {
-    stop_unsupported_reading(effects, readings, call = call)
+    stop_unsupported_reading(
+      effects,
+      readings,
+      position = position,
+      call = call
+    )
   }
 
   invisible(effects)

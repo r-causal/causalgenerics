@@ -151,6 +151,26 @@ null_readings_result <- function() {
   structure(fields, class = "ipw")
 }
 
+# A list whose stored mode falls outside the set of readings stored beside it.
+# The constructor cannot build one, since it refuses a `readings` argument that
+# leaves the mode out, so the shape comes from assigning to the fields directly.
+# It is the one pair of values that says two things at once: the result presents
+# a surface it also says it has no reading of.
+mismatched_result <- function() {
+  fields <- unclass(conditional_result())
+  fields$readings <- "marginal"
+  structure(fields, class = "ipw")
+}
+
+# The same mismatch reached without a mode being written at all. A result that
+# records none reads as marginal, so a set naming the conditional reading alone
+# leaves the reading such a result is read as outside the set it records.
+readings_only_result <- function() {
+  fields <- unclass(legacy_result())
+  fields$readings <- "conditional"
+  structure(fields, class = "ipw")
+}
+
 # A result with the covariance attached, which is where the `new_ipw()` contract
 # puts it.
 result_with_vcov <- function() {
@@ -642,6 +662,79 @@ test_that("the readings a result records survive the round trip", {
     ipw_readings(as_conditional(legacy)),
     c("marginal", "conditional")
   )
+})
+
+# ---- a stored mode outside the stored readings -------------------------------
+
+test_that("ipw_effects() refuses a stored mode outside the stored readings", {
+  # The two fields are written together by the constructor, which refuses a set
+  # that leaves the mode out, so a result carrying that pair was assigned to
+  # directly. Reading the mode off it would report a surface the result records
+  # no reading of, and every caller downstream would then have to have an answer
+  # for a result presenting one, so it is refused where the mode is read, in the
+  # words and with the classes any other unsupported reading is refused in.
+  res <- mismatched_result()
+
+  expect_error(
+    ipw_effects(res),
+    class = "causalgenerics_unsupported_reading_conditional"
+  )
+  expect_error(ipw_effects(res), class = "causalgenerics_unsupported_reading")
+
+  # The reading that was read and the ones the result records travel on the
+  # condition, so a handler reports them without parsing the sentence for them.
+  cnd <- tryCatch(ipw_effects(res), error = identity)
+  expect_identical(cnd$effects, "conditional")
+  expect_identical(cnd$readings, "marginal")
+
+  # The refusal names the surface that read the mode rather than the helper it
+  # was read through.
+  expect_snapshot(error = TRUE, print(res))
+})
+
+test_that("a result with no mode is refused a set that leaves marginal out", {
+  # An absent mode reads as marginal, which is the reading every method produced
+  # when none of them recorded one, so a set naming the conditional reading
+  # alone is one the reading such a result is read as falls outside. What is
+  # wrong with the pair is what is wrong with a written-out mode outside its
+  # set, so the refusal is the same one.
+  res <- readings_only_result()
+
+  expect_length(res, 7L)
+  expect_false("effects" %in% names(res))
+  expect_identical(ipw_readings(res), "conditional")
+
+  expect_error(
+    ipw_effects(res),
+    class = "causalgenerics_unsupported_reading_marginal"
+  )
+  expect_error(ipw_effects(res), class = "causalgenerics_unsupported_reading")
+
+  cnd <- tryCatch(ipw_effects(res), error = identity)
+  expect_identical(cnd$effects, "marginal")
+  expect_identical(cnd$readings, "conditional")
+
+  # The reading the set does name is answered as it is on any other result, so
+  # what the cross-check refuses is reading a mode off this pair rather than the
+  # result itself.
+  expect_identical(as_conditional(res)$effects, "conditional")
+  expect_identical(ipw_effects(as_conditional(res)), "conditional")
+
+  expect_snapshot(error = TRUE, print(res))
+})
+
+test_that("the cross-check refuses nothing a constructor can build", {
+  # A result recording no set supports both readings, so no mode of one falls
+  # outside its set, and the constructor refuses a result whose mode falls
+  # outside the set it was handed. Every shape but the two above therefore
+  # reads its mode the way it always did.
+  expect_identical(ipw_effects(legacy_result()), "marginal")
+  expect_identical(ipw_effects(null_effects_result()), "marginal")
+  expect_identical(ipw_effects(null_readings_result()), "marginal")
+  expect_identical(ipw_effects(marginal_result()), "marginal")
+  expect_identical(ipw_effects(conditional_result()), "conditional")
+  expect_identical(ipw_effects(narrow_result("marginal")), "marginal")
+  expect_identical(ipw_effects(narrow_result("conditional")), "conditional")
 })
 
 # ---- pooled results ----------------------------------------------------------

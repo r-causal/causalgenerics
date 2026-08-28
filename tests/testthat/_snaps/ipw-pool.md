@@ -164,7 +164,7 @@
       pool_ipw(fits, effects = "marginal", dfcom = 18)
     Condition
       Error in `pool_ipw()`:
-      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result. It is the result at position 1 of `fits`.
 
 # pool_ipw() refuses a reading one result of the set lacks
 
@@ -172,7 +172,7 @@
       pool_ipw(fits, effects = "marginal", dfcom = 18)
     Condition
       Error in `pool_ipw()`:
-      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result. It is the result at position 2 of `fits`.
 
 # pool_ipw() refuses the conditional reading of a marginal-only set
 
@@ -180,5 +180,5 @@
       pool_ipw(fits, effects = "conditional", dfcom = 17)
     Condition
       Error in `pool_ipw()`:
-      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result. It is the result at position 1 of `fits`.
 

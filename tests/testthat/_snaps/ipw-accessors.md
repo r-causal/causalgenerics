@@ -134,3 +134,19 @@
       Error in `coef.ipw()`:
       ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
 
+---
+
+    Code
+      vcov(res, effects = "marginal")
+    Condition
+      Error in `vcov.ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+---
+
+    Code
+      confint(res, effects = "marginal")
+    Condition
+      Error in `confint.ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+

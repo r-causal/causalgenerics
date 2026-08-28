@@ -1897,6 +1897,11 @@ test_that("the pooled accessors refuse a reading the results never had", {
       class = "causalgenerics_pool_missing_surface",
       info = name
     )
+    # The recorded reason travels on the condition each accessor raises, so a
+    # handler reads why the reading is missing without parsing the sentence for
+    # it, and reads the same reason whichever accessor asked.
+    cnd <- tryCatch(accessor(res, effects = "marginal"), error = identity)
+    expect_identical(cnd$reason, res$alternate$reason, info = name)
     # The reading it does present is unaffected, named or not.
     expect_identical(
       accessor(res, effects = "conditional"),

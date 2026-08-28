@@ -63,10 +63,11 @@ ran. Asking for a reading outside that set raises an error of class
 under \code{effects} and the set the result records under \code{readings}. The reading
 such a result does support is the no-op it is on a result carrying both.
 
-A result built before the fields existed carries six fields rather than
-eight. It reads as marginal, which is the mode every method produced then,
-and as supporting both readings, which is what every result was assumed to
-support when none of them recorded otherwise.
+A result built before the fields existed carries six or seven fields rather
+than eight, since the two were added one at a time. It reads as marginal
+where it records no mode, which is the mode every method produced then, and
+as supporting both readings where it records no set, which is what every
+result was assumed to support when none of them recorded otherwise.
 
 The generics live here for the reason \code{print()} does. Two packages each
 registering \code{as_conditional.ipw()} would collide in the shared S3 method

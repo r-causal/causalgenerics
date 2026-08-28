@@ -2023,8 +2023,16 @@ test_that("the accessors refuse the marginal reading the same way", {
     class = "causalgenerics_unsupported_reading_marginal"
   )
   expect_error(
+    vcov(res, effects = "marginal"),
+    class = "causalgenerics_unsupported_reading"
+  )
+  expect_error(
     confint(res, effects = "marginal"),
     class = "causalgenerics_unsupported_reading_marginal"
+  )
+  expect_error(
+    confint(res, effects = "marginal"),
+    class = "causalgenerics_unsupported_reading"
   )
 
   cnd <- tryCatch(vcov(res, effects = "marginal"), error = identity)
@@ -2032,6 +2040,8 @@ test_that("the accessors refuse the marginal reading the same way", {
   expect_identical(cnd$readings, "conditional")
 
   expect_snapshot(error = TRUE, coef(res, effects = "marginal"))
+  expect_snapshot(error = TRUE, vcov(res, effects = "marginal"))
+  expect_snapshot(error = TRUE, confint(res, effects = "marginal"))
 })
 
 test_that("the accessors answer for the reading a narrow result supports", {

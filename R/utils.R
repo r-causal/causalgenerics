@@ -243,7 +243,20 @@ stop_no_conditional_vcov <- function(call = sys.call(-1)) {
 # parsing the message for them. There is nothing for the caller to do to the
 # result, since the set is written where the result is built, so the sentence
 # says where it comes from rather than offering a route.
-stop_unsupported_reading <- function(effects, readings, call = sys.call(-1)) {
+#
+# `position` is how the pooling says which result of the set the refusal is
+# about, and it is `NULL` everywhere a single result was asked directly, where
+# "this result" is the only result there is. The position is a sentence of its
+# own after the one the direct refusal ends with, so the two refusals read the
+# same as far as the direct one goes, and it is a field as well, so a caller
+# handling the condition goes back to the result without counting through the
+# sentence.
+stop_unsupported_reading <- function(
+  effects,
+  readings,
+  position = NULL,
+  call = sys.call(-1)
+) {
   message <- paste0(
     "This result supports the ",
     readings,
@@ -252,10 +265,19 @@ stop_unsupported_reading <- function(effects, readings, call = sys.call(-1)) {
     " reading of it to report; the package that produced it records the ",
     "readings it supports when it builds the result."
   )
+  if (!is.null(position)) {
+    message <- paste0(
+      message,
+      " It is the result at position ",
+      position,
+      " of `fits`."
+    )
+  }
   stop(errorCondition(
     message,
     effects = effects,
     readings = readings,
+    position = position,
     class = c(
       paste0("causalgenerics_unsupported_reading_", effects),
       "causalgenerics_unsupported_reading"

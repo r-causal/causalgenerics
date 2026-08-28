@@ -124,16 +124,19 @@ whose results support one reading pools that one and no other. Naming the
 reading they do not support refuses the call with an error of class
 \code{causalgenerics_unsupported_reading_marginal} or
 \code{causalgenerics_unsupported_reading_conditional}, in the words a result raises
-when the same reading is asked of it directly, since what the caller asked for
-is a reading of the analysis rather than a way of pooling it. Leaving
-\code{effects} at \code{NULL} pools the reading the results record and puts that same
-refusal on \code{alternate} as the reason the other reading has no frames, so
+when the same reading is asked of it directly and a sentence saying which
+result of the set that was, since what the caller asked for is a reading of
+the analysis rather than a way of pooling it. Leaving \code{effects} at \code{NULL}
+pools the reading the results record and puts that same refusal on
+\code{alternate} as the reason the other reading has no frames, so
 \code{\link[=as_marginal]{as_marginal()}} or \code{\link[=as_conditional]{as_conditional()}} on the pooled result afterwards raises
 an error of class \code{causalgenerics_pool_missing_surface_marginal} or
 \code{causalgenerics_pool_missing_surface_conditional} carrying it. Every result
 has to support the reading being pooled, since the pooled estimate of an
 effect is an average over all of them, so a set where one result alone lacks
-it is refused for that result.
+it is refused for that result. The caller has to go back to that one result,
+so the refusal names its position in \code{fits} in a sentence of its own and
+carries the position under \code{position}.
 
 The components describing the analyses rather than a reading of them are
 shared by both readings. The estimand, the standard error method, the number

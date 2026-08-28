@@ -1819,6 +1819,31 @@ test_that("as.data.frame() returns the same table for a result with no mode", {
   )
 })
 
+test_that("as.data.frame() reports either reading of a result with no mode", {
+  # The older result records no set of readings either, and it reads as
+  # supporting both, so naming the conditional reading reports the outcome
+  # model's coefficients rather than being refused. The table is the one the
+  # same models give from a result that records the mode, so what the argument
+  # reports does not depend on the vintage of the result it was asked of.
+  fields <- unclass(conditional_result())
+  fields$effects <- NULL
+  fields$readings <- NULL
+  legacy <- structure(fields, class = "ipw")
+
+  expect_length(legacy, 6L)
+  expect_null(legacy$effects)
+  expect_null(legacy$readings)
+
+  expect_identical(
+    as.data.frame(legacy, effects = "conditional"),
+    as.data.frame(conditional_result())
+  )
+  expect_identical(
+    as.data.frame(legacy, effects = "marginal"),
+    as.data.frame(legacy)
+  )
+})
+
 test_that("as.data.frame() sets the row names from row.names", {
   res <- ipw_result(binary_estimates())
 
@@ -2242,8 +2267,8 @@ test_that("the marginal table is the one that was there before the reading", {
       do.call(
         as.data.frame,
         c(list(conditional, effects = "marginal"), arguments)
-      )$term,
-      do.call(as.data.frame, c(list(res), arguments))$term
+      ),
+      do.call(as.data.frame, c(list(res), arguments))
     )
   }
 })

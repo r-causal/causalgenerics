@@ -102,3 +102,51 @@
       Error in `coef.ipw()`:
       ! `effects` must be a single string, either "marginal" or "conditional".
 
+# the accessors refuse a reading the result does not support
+
+    Code
+      coef(res, effects = "conditional")
+    Condition
+      Error in `coef.ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+---
+
+    Code
+      vcov(res, effects = "conditional")
+    Condition
+      Error in `vcov.ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+---
+
+    Code
+      confint(res, effects = "conditional")
+    Condition
+      Error in `confint.ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+# the accessors refuse the marginal reading the same way
+
+    Code
+      coef(res, effects = "marginal")
+    Condition
+      Error in `coef.ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+---
+
+    Code
+      vcov(res, effects = "marginal")
+    Condition
+      Error in `vcov.ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+---
+
+    Code
+      confint(res, effects = "marginal")
+    Condition
+      Error in `confint.ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+

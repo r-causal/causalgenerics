@@ -21,8 +21,10 @@
 # the printed form and the accessors are asserted against one set of estimates.
 #
 # `coef()`, `vcov()`, and `confint()` also read the presentation mode the
-# `effects` field records, and take an `effects` argument that names a reading
-# for one call. The marginal reading is the one every assertion in the sections
+# `effects` field records, the readings the `readings` field says the result
+# supports, and take an `effects` argument that names a reading for one call.
+# Naming a reading the result does not support is refused rather than answered
+# with a surface the result has no reading of. The marginal reading is the one every assertion in the sections
 # above is written against. The conditional reading reports the outcome model's
 # coefficient surface, and its covariance is the corrected block a fitting
 # package attached with `new_ipw_model()`, never the one the outcome model
@@ -475,6 +477,35 @@ ipw_result <- function(
   )
 }
 
+# A result that supports one reading only, with everything the other reading
+# would need still on it: the effects covariance on the estimates frame and the
+# corrected block on the outcome model. That is what makes the refusal below
+# about the set of readings rather than about a missing surface.
+#
+# It calls the constructor itself rather than going through `ipw_result()`. The
+# readings are the one field the fixture above has no business naming: every
+# assertion in the sections before this one is about a result supporting both,
+# which is what a call that names none builds.
+narrow_result <- function(reading) {
+  new_ipw(
+    estimand = "ate",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = new_ipw_model(outcome_model(), corrected_outcome_vcov()),
+    estimates = with_effects_vcov(binary_estimates()),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = reading,
+    readings = reading
+  )
+}
+
+# An estimates frame carrying the covariance of the effects it reports, which is
+# where the `new_ipw()` contract puts it.
+with_effects_vcov <- function(estimates, covariance = binary_vcov()) {
+  attr(estimates, "ipw_vcov") <- covariance
+  estimates
+}
+
 # A conditional result whose outcome model carries the wrapper class with no
 # covariance behind it. `new_ipw_model()` cannot produce one: it validates the
 # matrix before it prepends the class, so the two go on together. An object of
@@ -494,13 +525,15 @@ stripped_wrapper_result <- function(estimates = binary_estimates()) {
 }
 
 # A result of the shape the constructor built before the mode existed: six
-# fields and no `effects`. Results stored from an earlier version of a fitting
-# package have this shape, as does one built by hand against the earlier
-# contract. It is derived from the seven-field result rather than written out
-# again so that the two differ in the field and in nothing else.
+# fields, with neither `effects` nor `readings` after them. Results stored from
+# an earlier version of a fitting package have this shape, as does one built by
+# hand against the earlier contract. It is derived from the current result
+# rather than written out again so that the two differ in the two fields and in
+# nothing else.
 legacy_result <- function(estimates = binary_estimates(), vcov = NULL) {
   fields <- unclass(ipw_result(estimates, vcov = vcov))
   fields$effects <- NULL
+  fields$readings <- NULL
   structure(fields, class = "ipw")
 }
 
@@ -1920,6 +1953,148 @@ test_that("the accessors refuse a stored mode that is not a reading", {
   expect_identical(vcov(res, effects = "marginal"), binary_vcov())
 
   expect_snapshot(error = TRUE, coef(res))
+})
+
+# ---- a reading the result does not support -----------------------------------
+
+test_that("the accessors refuse a reading the result does not support", {
+  # Both surfaces exist on most results and not on all of them, and a result
+  # that supports one records that. Reporting the other would answer with a
+  # surface whose numbers are not the quantities the reading names, so the three
+  # accessors refuse it. The specific class names the reading that was asked
+  # for, since a caller who wants only that one has nothing to match on
+  # otherwise, and the general class is for a caller who cares that a reading is
+  # absent rather than which.
+  res <- narrow_result("marginal")
+
+  expect_error(
+    coef(res, effects = "conditional"),
+    class = "causalgenerics_unsupported_reading_conditional"
+  )
+  expect_error(
+    coef(res, effects = "conditional"),
+    class = "causalgenerics_unsupported_reading"
+  )
+  expect_error(
+    vcov(res, effects = "conditional"),
+    class = "causalgenerics_unsupported_reading_conditional"
+  )
+  expect_error(
+    vcov(res, effects = "conditional"),
+    class = "causalgenerics_unsupported_reading"
+  )
+  expect_error(
+    confint(res, effects = "conditional"),
+    class = "causalgenerics_unsupported_reading_conditional"
+  )
+  expect_error(
+    confint(res, effects = "conditional"),
+    class = "causalgenerics_unsupported_reading"
+  )
+
+  # The reading asked for and the ones the result supports travel on the
+  # condition, so a handler reports them without parsing the sentence for them.
+  cnd <- tryCatch(coef(res, effects = "conditional"), error = identity)
+  expect_identical(cnd$effects, "conditional")
+  expect_identical(cnd$readings, "marginal")
+
+  expect_snapshot(error = TRUE, coef(res, effects = "conditional"))
+  expect_snapshot(error = TRUE, vcov(res, effects = "conditional"))
+  expect_snapshot(error = TRUE, confint(res, effects = "conditional"))
+})
+
+test_that("the accessors refuse the marginal reading the same way", {
+  # The refusal the other way round, from the result an exposure entering the
+  # outcome model through several columns produces: there is no single contrast
+  # among those columns to report as the effect, so the marginal reading is the
+  # one the result cannot answer for.
+  res <- narrow_result("conditional")
+
+  expect_error(
+    coef(res, effects = "marginal"),
+    class = "causalgenerics_unsupported_reading_marginal"
+  )
+  expect_error(
+    coef(res, effects = "marginal"),
+    class = "causalgenerics_unsupported_reading"
+  )
+  expect_error(
+    vcov(res, effects = "marginal"),
+    class = "causalgenerics_unsupported_reading_marginal"
+  )
+  expect_error(
+    vcov(res, effects = "marginal"),
+    class = "causalgenerics_unsupported_reading"
+  )
+  expect_error(
+    confint(res, effects = "marginal"),
+    class = "causalgenerics_unsupported_reading_marginal"
+  )
+  expect_error(
+    confint(res, effects = "marginal"),
+    class = "causalgenerics_unsupported_reading"
+  )
+
+  cnd <- tryCatch(vcov(res, effects = "marginal"), error = identity)
+  expect_identical(cnd$effects, "marginal")
+  expect_identical(cnd$readings, "conditional")
+
+  expect_snapshot(error = TRUE, coef(res, effects = "marginal"))
+  expect_snapshot(error = TRUE, vcov(res, effects = "marginal"))
+  expect_snapshot(error = TRUE, confint(res, effects = "marginal"))
+})
+
+test_that("the accessors answer for the reading a narrow result supports", {
+  # The absent reading says nothing about the one the result does support, so
+  # asking for that one reports exactly what a result supporting both reports.
+  # Naming it and declining to name one are the same request, since the stored
+  # mode is that reading.
+  wide <- ipw_result(
+    binary_estimates(),
+    vcov = binary_vcov(),
+    outcome_vcov = corrected_outcome_vcov()
+  )
+  marginal <- narrow_result("marginal")
+  conditional <- narrow_result("conditional")
+
+  expect_identical(coef(marginal), coef(wide))
+  expect_identical(vcov(marginal), vcov(wide))
+  expect_identical(confint(marginal), confint(wide))
+  expect_identical(coef(marginal, effects = "marginal"), coef(marginal))
+  expect_identical(vcov(marginal, effects = NULL), vcov(marginal))
+
+  expect_identical(coef(conditional), coef(wide, effects = "conditional"))
+  expect_identical(vcov(conditional), vcov(wide, effects = "conditional"))
+  expect_identical(confint(conditional), confint(wide, effects = "conditional"))
+  expect_identical(
+    coef(conditional, effects = "conditional"),
+    coef(conditional)
+  )
+  expect_identical(confint(conditional, effects = NULL), confint(conditional))
+})
+
+test_that("a result recording no readings supports both", {
+  # A result stored before the field existed says nothing about which readings
+  # it supports, and both were assumed to exist on every result when none of
+  # them said otherwise. Neither reading is refused for such a result, so an
+  # older result and a result built today behave the same way.
+  legacy <- legacy_result(binary_estimates(), vcov = binary_vcov())
+  legacy$outcome_mod <- new_ipw_model(
+    legacy$outcome_mod,
+    corrected_outcome_vcov()
+  )
+
+  expect_length(legacy, 6L)
+  expect_false("readings" %in% names(legacy))
+
+  expect_no_error(coef(legacy, effects = "conditional"))
+  expect_no_error(vcov(legacy, effects = "conditional"))
+  expect_no_error(confint(legacy, effects = "conditional"))
+  expect_identical(
+    coef(legacy, effects = "conditional"),
+    coef(legacy$outcome_mod)
+  )
+  expect_identical(coef(legacy, effects = "marginal"), coef(legacy))
 })
 
 # ---- what the mode does not reach --------------------------------------------

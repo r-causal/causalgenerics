@@ -150,6 +150,7 @@ pool_fit <- function(
   estimates,
   vcov = NULL,
   effects = "marginal",
+  readings = c("marginal", "conditional"),
   outcome_mod = pool_outcome_model()
 ) {
   if (!is.null(vcov)) {
@@ -162,7 +163,8 @@ pool_fit <- function(
     estimates = estimates,
     se_method = "linearization",
     fit = NULL,
-    effects = effects
+    effects = effects,
+    readings = readings
   )
 }
 
@@ -325,7 +327,10 @@ pool_identity_models <- function() {
   })
 }
 
-pool_conditional_fits <- function(models = pool_conditional_models()) {
+pool_conditional_fits <- function(
+  models = pool_conditional_models(),
+  readings = c("marginal", "conditional")
+) {
   estimate <- pool_binary_estimate()
   std_err <- pool_binary_std_err()
   Map(
@@ -333,7 +338,8 @@ pool_conditional_fits <- function(models = pool_conditional_models()) {
       pool_fit(
         pool_binary_estimates(estimate[i, ], std_err[i, ]),
         outcome_mod = mod,
-        effects = "conditional"
+        effects = "conditional",
+        readings = readings
       )
     },
     1:3,
@@ -362,6 +368,15 @@ pooled_contrast_group <- function() {
 
 pooled_conditional <- function(models = pool_conditional_models()) {
   pool_ipw(pool_conditional_fits(models), dfcom = 18)
+}
+
+# The same three results declaring the conditional reading as the only one they
+# support, which is what a fitting package records for an analysis the marginal
+# reading has no meaning for. Pooling such a set gives a result presenting the
+# conditional reading and recording, rather than holding, the other one: the
+# reason it records is the refusal the results themselves raise.
+pooled_conditional_only <- function(models = pool_conditional_models()) {
+  pool_ipw(pool_conditional_fits(models, readings = "conditional"), dfcom = 18)
 }
 
 # The same three results recording the marginal reading, with the covariance of
@@ -1818,6 +1833,104 @@ test_that("the pooled methods key an ungrouped result as they always did", {
 
   out <- capture.output(print(categorical))
   expect_false(any(grepl("sex", out, fixed = TRUE)))
+})
+
+# ---- a reading the results never had -----------------------------------------
+
+# A set of results whose analysis supports one reading pools to a result
+# presenting that reading and recording why it has no other. That is the same
+# shape a pooled result has when the other reading was tried and could not be
+# pooled, so the methods answer it the same way: the flip raises the recorded
+# reason, and the accessors that take an `effects` argument read the reading
+# they were asked for through the flip.
+
+test_that("as_marginal() refuses a reading the pooled results never had", {
+  # The recorded reason is the refusal the results raised when the same reading
+  # was asked of them, and it is repeated rather than paraphrased, so the
+  # sentence a caller reads names the analysis the reading is missing from.
+  res <- pooled_conditional_only()
+  cnd <- tryCatch(as_marginal(res), error = identity)
+
+  expect_identical(res$effects, "conditional")
+  expect_identical(names(res$alternate), c("effects", "reason"))
+  expect_identical(res$alternate$effects, "marginal")
+
+  expect_error(
+    as_marginal(res),
+    class = "causalgenerics_pool_missing_surface_marginal"
+  )
+  expect_error(
+    as_marginal(res),
+    class = "causalgenerics_pool_missing_surface"
+  )
+  expect_identical(cnd$reason, res$alternate$reason)
+  expect_true(endsWith(conditionMessage(cnd), res$alternate$reason))
+  # The reading the result does present is answered with the result itself, so
+  # the generics stay idempotent on a result carrying one reading.
+  expect_identical(as_conditional(res), res)
+
+  expect_snapshot(error = TRUE, as_marginal(res))
+})
+
+test_that("the pooled accessors refuse a reading the results never had", {
+  # Each accessor reads the reading it was asked for through the flip, so all
+  # four are refused where the flip is, and a caller handles one pair of classes
+  # whichever of them asked.
+  res <- pooled_conditional_only()
+
+  accessors <- list(
+    coef = coef,
+    vcov = vcov,
+    confint = confint,
+    as.data.frame = as.data.frame
+  )
+
+  for (name in names(accessors)) {
+    accessor <- accessors[[name]]
+    expect_error(
+      accessor(res, effects = "marginal"),
+      class = "causalgenerics_pool_missing_surface_marginal",
+      info = name
+    )
+    expect_error(
+      accessor(res, effects = "marginal"),
+      class = "causalgenerics_pool_missing_surface",
+      info = name
+    )
+    # The recorded reason travels on the condition each accessor raises, so a
+    # handler reads why the reading is missing without parsing the sentence for
+    # it, and reads the same reason whichever accessor asked.
+    cnd <- tryCatch(accessor(res, effects = "marginal"), error = identity)
+    expect_identical(cnd$reason, res$alternate$reason, info = name)
+    # The reading it does present is unaffected, named or not.
+    expect_identical(
+      accessor(res, effects = "conditional"),
+      accessor(res),
+      info = name
+    )
+    expect_identical(accessor(res, effects = NULL), accessor(res), info = name)
+  }
+
+  expect_identical(names(coef(res)), c("(Intercept)", "z"))
+})
+
+test_that("print() writes the conditional table of a one-reading result", {
+  # What a pooled result prints is the reading it presents, and which readings
+  # the results declared is not part of what it reports. The printed form is
+  # therefore the one the same three results give when both readings are
+  # available, down to the line.
+  res <- pooled_conditional_only()
+  out <- capture.output(print(res))
+
+  expect_identical(out, capture.output(print(pooled_conditional())))
+  expect_match(out, "^Effects: conditional", all = FALSE)
+  expect_match(out, "^Pooled conditional estimates", all = FALSE)
+
+  for (label in c("(Intercept)", "z")) {
+    expect_true(labels_a_printed_row(out, label))
+  }
+  # Not the marginal surface, which is the one these results have no reading of.
+  expect_false(labels_a_printed_row(out, "log(or)"))
 })
 
 # ---- registration ------------------------------------------------------------

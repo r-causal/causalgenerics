@@ -70,6 +70,14 @@
 #' a block by position instead would report the covariance of other parameters
 #' under this model's coefficient names.
 #'
+#' A result records which of the two readings it supports, and naming the other
+#' one is refused rather than answered with a surface whose numbers are not the
+#' quantities the reading names. The refusal is the one [as_marginal()] and
+#' [as_conditional()] raise, of class `causalgenerics_unsupported_reading`, since
+#' a caller cares that the reading is not there rather than which surface asked
+#' for it. A result that supports one reading answers for that one exactly as a
+#' result supporting both does.
+#'
 #' `nobs()`, `df.residual()`, `weights()`, `model.frame()`, and `estimand()`
 #' describe the fit rather than a surface of it, so they answer the same way in
 #' either reading and take no `effects` argument.
@@ -87,7 +95,9 @@
 #' @param effects The reading to report, either `"marginal"` or
 #'   `"conditional"`. `NULL`, the default, reports the reading the result
 #'   records; any other value overrides it for the one call and leaves the
-#'   result as it is.
+#'   result as it is. A reading the result does not support is refused with an
+#'   error of class `causalgenerics_unsupported_reading`, which is where
+#'   [as_marginal()] and [as_conditional()] refuse it too.
 #' @param ... Further arguments. These methods ignore them.
 #'
 #' @return
@@ -122,7 +132,11 @@
 #'
 #' `coef()`, `vcov()`, and `confint()` raise an error of class
 #' `causalgenerics_invalid_argument_effects` when `effects` names neither
-#' reading, and when the result's own field does.
+#' reading, and when the result's own field does. They raise an error of class
+#' `causalgenerics_unsupported_reading_marginal` or
+#' `causalgenerics_unsupported_reading_conditional`, and of the general class
+#' `causalgenerics_unsupported_reading`, when `effects` names a reading the
+#' result records that it does not support.
 #'
 #' `nobs()` returns a single integer, the number of observations the outcome
 #' model was fitted on, which is the number the estimates were computed from and

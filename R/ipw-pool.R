@@ -49,6 +49,25 @@
 #' used. The commonest case is a set of results whose outcome models carry no
 #' corrected covariance, which is what the conditional reading is pooled from.
 #'
+#' The readings the results declare are read before either surface is, so a set
+#' whose results support one reading pools that one and no other. Naming the
+#' reading they do not support refuses the call with an error of class
+#' `causalgenerics_unsupported_reading_marginal` or
+#' `causalgenerics_unsupported_reading_conditional`, in the words a result raises
+#' when the same reading is asked of it directly and a sentence saying which
+#' result of the set that was, since what the caller asked for is a reading of
+#' the analysis rather than a way of pooling it. Leaving `effects` at `NULL`
+#' pools the reading the results record and puts that same refusal on
+#' `alternate` as the reason the other reading has no frames, so
+#' [as_marginal()] or [as_conditional()] on the pooled result afterwards raises
+#' an error of class `causalgenerics_pool_missing_surface_marginal` or
+#' `causalgenerics_pool_missing_surface_conditional` carrying it. Every result
+#' has to support the reading being pooled, since the pooled estimate of an
+#' effect is an average over all of them, so a set where one result alone lacks
+#' it is refused for that result. The caller has to go back to that one result,
+#' so the refusal names its position in `fits` in a sentence of its own and
+#' carries the position under `position`.
+#'
 #' The components describing the analyses rather than a reading of them are
 #' shared by both readings. The estimand, the standard error method, the number
 #' of results, the complete-data degrees of freedom, the observation count, and
@@ -309,7 +328,7 @@ pool_ipw <- function(
   # all in that case and a set that disagrees about it is poolable by naming
   # one. This is how `resolve_ipw_effects()` reads an accessor's argument.
   mode <- if (is.null(effects)) {
-    pool_common(fits, ipw_effects, "effects", call)
+    pool_mode(fits, call = call)
   } else {
     effects
   }
@@ -350,6 +369,40 @@ pool_ipw <- function(
   )
 }
 
+#' The mode the results agree on
+#'
+#' The stored mode of each result, read with the result's position in the set,
+#' and refused where the results do not agree about it. It is a helper rather
+#' than a `pool_common()` call that reads the field with `ipw_effects()`,
+#' because that reader refuses two things of its own: a field holding neither
+#' reading, and a mode the result records no reading of. Invoked from inside
+#' `pool_common()` it would resolve its call to the `lapply()` that invoked it,
+#' and both refusals would name that rather than [pool_ipw()].
+#'
+#' Pairing each result with its position is what names the result a cross-check
+#' refusal is about, the way `pool_mode_surfaces()` names the one a surface
+#' refusal is about. A caller holding several results cannot tell them apart
+#' from the refusal otherwise.
+#'
+#' @param fits The results being pooled.
+#' @param call The call to report the error against, which is [pool_ipw()]'s
+#'   rather than this helper's.
+#'
+#' @return A single string, either `"marginal"` or `"conditional"`.
+#'
+#' @noRd
+pool_mode <- function(fits, call = sys.call(-1)) {
+  modes <- Map(
+    function(fit, position) {
+      ipw_effects(fit, position = position, call = call)
+    },
+    fits,
+    seq_along(fits)
+  )
+
+  pool_common(modes, identity, "effects", call)
+}
+
 #' The surfaces of one reading, and what keys their rows
 #'
 #' The first half of pooling a reading: every result's surface is read, what
@@ -376,7 +429,16 @@ pool_ipw <- function(
 #'
 #' @noRd
 pool_mode_surfaces <- function(fits, effects, call = sys.call(-1)) {
-  surfaces <- lapply(fits, pool_surface, effects = effects, call = call)
+  # Paired with its position rather than read on its own, so that a result which
+  # does not support the reading is named by where it sits in the set. A caller
+  # holding several results cannot tell them apart from the refusal otherwise.
+  surfaces <- Map(
+    function(fit, position) {
+      pool_surface(fit, effects = effects, position = position, call = call)
+    },
+    fits,
+    seq_along(fits)
+  )
   labels <- pool_common(surfaces, function(x) x$labels, "labels", call)
 
   list(surfaces = surfaces, labels = labels, key = surfaces[[1L]]$key)
@@ -742,8 +804,20 @@ pool_common <- function(x, get, field, call = sys.call(-1)) {
 #' contrasts and its subgroups onto the pooled frames under the canonical
 #' headings, whichever vintage of the contract each result was written against.
 #'
+#' The set of readings the result declares is read first, before either surface
+#' is. A result that does not support the reading being pooled has no such
+#' surface whatever its frames and its outcome model happen to hold, so the
+#' refusal a caller gets says the analysis has no such reading rather than
+#' reporting whichever fault reading the surface would have run into. Asking
+#' here is what asks once per reading rather than once per surface: this is the
+#' only place a reading meets a result, so both `pool_mode_surfaces()` and the
+#' guarded pass `pool_alternate()` makes over the other reading are answered by
+#' the one check.
+#'
 #' @param fit One result.
 #' @param effects The reading being pooled.
+#' @param position The result's position in the set, which the refusal names so
+#'   that a caller holding several of them knows which one to go back to.
 #' @param call The call to report the error against, which is [pool_ipw()]'s
 #'   rather than this helper's.
 #'
@@ -753,7 +827,9 @@ pool_common <- function(x, get, field, call = sys.call(-1)) {
 #'
 #' @noRd
 #' @importFrom stats coef
-pool_surface <- function(fit, effects, call = sys.call(-1)) {
+pool_surface <- function(fit, effects, position = NULL, call = sys.call(-1)) {
+  check_ipw_reading(fit, effects, position = position, call = call)
+
   if (effects == "conditional") {
     covariance <- conditional_vcov(fit$outcome_mod, call = call)
     estimate <- stats::coef(fit$outcome_mod)

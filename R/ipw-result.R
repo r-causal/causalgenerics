@@ -16,20 +16,38 @@
 #' The field names and their order are part of the contract, since callers read
 #' fields by name and print the object positionally. `fit` is present on every
 #' path, including the ones that have no fitted variance object to report, and
-#' `effects` is present whether or not the method that built the result named a
-#' mode.
+#' `effects` and `readings` are present whether or not the method that built the
+#' result named a mode or a set of readings.
 #'
 #' `print()` writes the estimand and the call of each component model, then the
 #' table of the surface the result's presentation mode names. The section below
 #' describes the two modes and what each one tabulates.
 #'
-#' `as.data.frame()` reports the effect estimates as a tidier-shaped table
-#' rather than as a copy of the `estimates` component. Its columns are `term`,
-#' then `contrast` when the result names contrasts, then `group` when it names
-#' subgroups, then `estimate`, `std.error`, `statistic`, and `p.value`. Those
-#' are the names the tidier convention uses, so a fitting package's `tidy()`
-#' method is this table read as a tibble and nothing more. The `estimates`
-#' component itself is unchanged by any of what follows.
+#' `as.data.frame()` reports the result as a tidier-shaped table rather than as
+#' a copy of the `estimates` component. In the marginal reading its columns are
+#' `term`, then `contrast` when the result names contrasts, then `group` when it
+#' names subgroups, then `estimate`, `std.error`, `statistic`, and `p.value`.
+#' Those are the names the tidier convention uses, so a fitting package's
+#' `tidy()` method is this table read as a tibble and nothing more. The
+#' `estimates` component itself is unchanged by any of what follows.
+#'
+#' The conditional reading reports the outcome model's coefficients under those
+#' same headings, one row per coefficient, with `term` naming the coefficient
+#' and `std.error` the standard error the corrected covariance implies. It names
+#' no contrasts and no subgroups: those key the rows of the effects table, and a
+#' coefficient is named by itself. It is the table
+#' [`as.data.frame()`][ipw-pooled-methods] reports for a pooled result in the
+#' same reading, without the `df` column a pooled result has and an unpooled one
+#' does not.
+#'
+#' A result whose outcome model carries no corrected block has no such standard
+#' error to report, and the reading is refused with an error of class
+#' `causalgenerics_no_conditional_vcov` rather than reported from the standard
+#' errors the model computed for itself. That is where the table parts company
+#' with `print()`, which writes those coefficients under a note saying that no
+#' covariance from the joint estimation is recorded: a printed table is read by
+#' someone who reads the note with it, and a data frame is read by code that
+#' would take the column for the corrected one.
 #'
 #' `conf.int = TRUE` appends `conf.low` and `conf.high` after the other columns,
 #' and `conf.level` names the level they report. The level is an argument rather
@@ -41,18 +59,34 @@
 #' normal one rounded on its way into the frame is not the number recomputing
 #' gives. At any other level, and for a frame whose rows disagree about the
 #' level or record none, the bounds are the normal approximation built from the
-#' estimate and its standard error.
+#' estimate and its standard error. The conditional reading has no stored pair
+#' to prefer, since the bounds the frame holds belong to the effects the other
+#' reading reports, so its bounds are the normal approximation at every level.
 #'
-#' With `exponentiate = TRUE` the `log(rr)` and `log(or)` rows move to their
-#' natural scale, exponentiating the point estimate and the confidence bounds and
-#' relabeling the two terms `"rr"` and `"or"`. Standard errors, statistics, and
-#' p-values stay on the log scale, where the inference is done, and the interval
-#' is settled before the scale is: bounds recomputed at another level are built
-#' on the log scale and exponentiated afterwards. The covariance described below
-#' travels on the returned table under the same `ipw_vcov` attribute while the
-#' rows are on the scale they were estimated on, and is dropped when
-#' `exponentiate = TRUE`, since a matrix left attached there would describe
-#' neither the table it sits on nor anything else.
+#' With `exponentiate = TRUE` the `log(rr)` and `log(or)` rows of the marginal
+#' table move to their natural scale, exponentiating the point estimate and the
+#' confidence bounds and relabeling the two terms `"rr"` and `"or"`. Standard
+#' errors, statistics, and p-values stay on the log scale, where the inference is
+#' done, and the interval is settled before the scale is: bounds recomputed at
+#' another level are built on the log scale and exponentiated afterwards. The
+#' covariance described below travels on the returned table under the same
+#' `ipw_vcov` attribute while the rows are on the scale they were estimated on,
+#' and is dropped when `exponentiate = TRUE`, since a matrix left attached there
+#' would describe neither the table it sits on nor anything else.
+#'
+#' A conditional table has no rows labeled as ratios to pick out, so the link the
+#' outcome model was fitted with settles the question for the whole table: a
+#' `logit` link puts every coefficient on the log odds scale and a `log` link
+#' puts every coefficient on the log risk scale, and both are scales an
+#' exponential undoes. Every estimate moves and no term is relabeled, since a
+#' coefficient name names the term rather than the scale its estimate is
+#' reported on. Every other link raises an error of class
+#' `causalgenerics_exponentiate_link`, and of the classes
+#' `causalgenerics_invalid_argument_exponentiate` and
+#' `causalgenerics_invalid_argument`, rather than exponentiating coefficients
+#' that describe nothing once exponentiated. That is the rule
+#' [`as.data.frame()`][ipw-pooled-methods] keeps for a pooled result, in the same
+#' words.
 #'
 #' # The effect labels
 #'
@@ -74,10 +108,23 @@
 #' A result reports its effects in one of two readings, recorded in the
 #' `effects` field. The `"marginal"` reading shows the causal contrast
 #' estimates the method targeted; the `"conditional"` reading presents the
-#' outcome model's coefficient surface. Both surfaces always exist on the
-#' object, so the field says which one the result presents rather than which
-#' one it holds. [as_marginal()] and [as_conditional()] are how a caller moves a
+#' outcome model's coefficient surface. The field says which one the result
+#' presents, and [as_marginal()] and [as_conditional()] are how a caller moves a
 #' result between them.
+#'
+#' Which readings a result can present at all is the separate fact the
+#' `readings` field records. Both surfaces exist on most results and not on all
+#' of them: an exposure entering the outcome model through several columns has
+#' no single coefficient to read as the conditional effect, and a package that
+#' builds such a result records the reading it can answer for. A result records
+#' both unless the method that built it said otherwise, and the mode it records
+#' has to be one of them, so a result never presents a reading it does not
+#' support. Asking one for the reading it does not support raises an error of
+#' class `causalgenerics_unsupported_reading`, whether it is asked through the
+#' mode generics, through [`coef()`][ipw-accessors],
+#' [`vcov()`][ipw-accessors], or [`confint()`][ipw-accessors], or through the
+#' `effects` argument of `as.data.frame()`. A result stored before the field
+#' existed records no set and is read as supporting both.
 #'
 #' A printed result names its mode twice, since the two readings are different
 #' tables of different numbers: once on an `Effects:` line beside the estimand,
@@ -123,42 +170,57 @@
 #'   weights.
 #' @param outcome_mod The fitted weighted outcome model.
 #' @param estimates A data frame of effect estimates, in the shape the return
-#'   value describes.
+#'   value describes. It has to be a data frame, and it has to name each row's
+#'   effect measure in an `effect` column of strings or of factor levels, with a
+#'   measure named in every row, since every label the result reports is read
+#'   off that column. Anything else is refused with an error of class
+#'   `causalgenerics_invalid_argument_estimates`, and of the general class
+#'   `causalgenerics_invalid_argument`.
 #' @param se_method The standard error method that ran, such as `"mestimation"`
 #'   or `"linearization"`.
 #' @param fit The fitted variance object, or `NULL` when the method has none.
-#' @param effects The presentation mode the result reports its effects in,
-#'   either `"marginal"` or `"conditional"`. A method that names no mode reports
-#'   marginal effects.
+#' @param effects For `new_ipw()`, the presentation mode the result reports its
+#'   effects in, either `"marginal"` or `"conditional"`; a method that names no
+#'   mode reports marginal effects. For `as.data.frame()`, the reading to
+#'   report: `NULL`, the default, reports the reading the result records, and
+#'   any other value overrides it for the one call and leaves the result as it
+#'   is. A reading the result does not support is refused with an error of class
+#'   `causalgenerics_unsupported_reading`.
+#' @param readings The readings the result supports, one or both of
+#'   `"marginal"` and `"conditional"`. The default is both, which is what every
+#'   result supported before the field existed. A method whose analysis has no
+#'   meaning under one of them names the other, and the mode the result records
+#'   has to be one of the readings named.
 #'
 #' @return `new_ipw()` returns an S3 object of class `ipw`: a list of the
-#'   following seven components, in this order.
+#'   following eight components, in this order.
 #' \describe{
 #'   \item{`estimand`}{The causal estimand, such as `"ate"` or `"att"`.}
 #'   \item{`wt_mod`}{The weighting object: the fitted model that produced the
 #'     weights.}
 #'   \item{`outcome_mod`}{The fitted outcome model.}
 #'   \item{`estimates`}{A data frame with one row per effect measure and the
-#'     following columns: `effect` (the measure name), `estimate` (point
-#'     estimate), `std.err` (standard error), `z` (z-statistic), `ci.lower` and
-#'     `ci.upper` (confidence interval bounds), `conf.level`, and `p.value`. For
-#'     a categorical exposure the data frame also has a `contrast` column,
-#'     placed after `effect`, naming the non-reference level and reference level
-#'     of each contrast. A frame stored against an earlier version of this
-#'     contract names that column `comparison`. The older name is read as an
-#'     alias for the canonical one wherever the column is read, so a result
-#'     holding such a frame labels its rows and reports its table exactly as one
-#'     holding a `contrast` column does. A method written now writes
-#'     `contrast`. A result reported once per level of a grouping variable also
-#'     has a `group` column, placed after the contrast column when one is
-#'     present and after `effect` when the result names no contrasts, naming the
-#'     subgroup each row was estimated in as a `"var = value"` string such as
-#'     `"sex = 0"`. That column has one spelling and no alias. Both optional
-#'     columns are absent rather than constant when the result reports one
-#'     contrast or one group, since a column repeating a single value down the
-#'     table would read as a contrast or a subgroup that was named. `group` must
-#'     be character and must name a subgroup in every row; the constructor
-#'     refuses anything else with an error of class
+#'     following columns: `effect` (the measure name, as a character or factor
+#'     column naming a measure in every row, which the constructor requires),
+#'     `estimate` (point estimate), `std.err` (standard error), `z`
+#'     (z-statistic), `ci.lower` and `ci.upper` (confidence interval bounds),
+#'     `conf.level`, and `p.value`. For a categorical exposure the data frame
+#'     also has a `contrast` column, placed after `effect`, naming the
+#'     non-reference level and reference level of each contrast. A frame stored
+#'     against an earlier version of this contract names that column
+#'     `comparison`. The older name is read as an alias for the canonical one
+#'     wherever the column is read, so a result holding such a frame labels its
+#'     rows and reports its table exactly as one holding a `contrast` column
+#'     does. A method written now writes `contrast`. A result reported once per
+#'     level of a grouping variable also has a `group` column, placed after the
+#'     contrast column when one is present and after `effect` when the result
+#'     names no contrasts, naming the subgroup each row was estimated in as a
+#'     `"var = value"` string such as `"sex = 0"`. That column has one spelling
+#'     and no alias. Both optional columns are absent rather than constant when
+#'     the result reports one contrast or one group, since a column repeating a
+#'     single value down the table would read as a contrast or a subgroup that
+#'     was named. `group` must be character and must name a subgroup in every
+#'     row; the constructor refuses anything else with an error of class
 #'     `causalgenerics_invalid_argument_estimates`, and of the general class
 #'     `causalgenerics_invalid_argument`, since a label pasted from such a column
 #'     would relabel every row it keys without failing anywhere.}
@@ -170,13 +232,18 @@
 #'   \item{`effects`}{The presentation mode, either `"marginal"` or
 #'     `"conditional"`. The marginal reading shows the causal contrast
 #'     estimates and the conditional reading presents the outcome model's
-#'     coefficient surface; both surfaces exist on every result. See
-#'     [as_marginal()] and [as_conditional()].}
+#'     coefficient surface. See [as_marginal()] and [as_conditional()].}
+#'   \item{`readings`}{The readings the result supports, one or both of
+#'     `"marginal"` and `"conditional"`, and always including the mode above. A
+#'     result stored before the field existed carries fewer components and is
+#'     read as supporting both readings.}
 #' }
 #'
 #'   `print()` returns its input invisibly. `as.data.frame()` returns a plain
-#'   data frame of the effect estimates under the tidier column names described
-#'   above, with the confidence bounds appended when they are asked for.
+#'   data frame under the tidier column names described above, with the
+#'   confidence bounds appended when they are asked for: the effect estimates in
+#'   the marginal reading, and the outcome model's coefficients, one row each,
+#'   in the conditional one.
 #'
 #' @seealso [ipw()], the generic these results come from, and [as_marginal()]
 #'   and [as_conditional()] for the presentation mode.
@@ -219,6 +286,20 @@
 #'
 #' # With an interval, and the ratios on their natural scale.
 #' as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
+#'
+#' # A result whose analysis has no conditional reading records the one it
+#' # supports, and the other is refused rather than reported.
+#' marginal_only <- new_ipw(
+#'   estimand = "ate",
+#'   wt_mod = glm(z ~ x, family = binomial(), data = dat),
+#'   outcome_mod = glm(y ~ z, family = quasibinomial(), data = dat),
+#'   estimates = estimates,
+#'   se_method = "linearization",
+#'   fit = NULL,
+#'   readings = "marginal"
+#' )
+#'
+#' try(as.data.frame(marginal_only, effects = "conditional"))
 new_ipw <- function(
   estimand,
   wt_mod,
@@ -226,17 +307,28 @@ new_ipw <- function(
   estimates,
   se_method,
   fit,
-  effects = "marginal"
+  effects = "marginal",
+  readings = c("marginal", "conditional")
 ) {
   # The mode is the one field with a fixed set of values, and a misspelling
   # stored unchecked would sit in the result until something downstream branched
   # on it and took the branch neither reading names.
   check_ipw_effects(effects)
 
-  # The optional `group` column is the one part of the estimates frame that is
-  # checked here. It completes a row's label, so a column of the wrong kind
-  # relabels every row it keys without failing anywhere, which is the shape of
-  # mistake a constructor is worth having.
+  # The readings are checked against the mode as well as on their own, since a
+  # result recording a reading it does not support is a result every method
+  # downstream would have to have an answer for.
+  check_ipw_readings(readings, effects)
+
+  # The estimates frame is what every surface of a result reports from, and each
+  # of them begins by reading the `effect` column, so a component of another
+  # shape fails at whichever surface a caller reaches first rather than where it
+  # was handed over.
+  check_estimates_effect(estimates)
+
+  # The optional `group` column completes a row's label, so a column of the
+  # wrong kind relabels every row it keys without failing anywhere, which is the
+  # shape of mistake a constructor is worth having.
   check_estimates_group(estimates)
 
   structure(
@@ -247,7 +339,8 @@ new_ipw <- function(
       estimates = estimates,
       se_method = se_method,
       fit = fit,
-      effects = effects
+      effects = effects,
+      readings = readings
     ),
     class = "ipw"
   )
@@ -454,14 +547,15 @@ print_conditional_estimates <- function(model) {
     return(invisible(NULL))
   }
 
-  standard_error <- sqrt(diag(covariance))
-  z <- estimate / standard_error
+  # The same four numbers the tidier-shaped table reports for this reading,
+  # written here as a matrix keyed by coefficient name.
+  coefficients <- conditional_coefficients(estimate, covariance)
   stats::printCoefmat(
     cbind(
-      Estimate = estimate,
-      `Std. Error` = standard_error,
-      `z value` = z,
-      `Pr(>|z|)` = 2 * stats::pnorm(-abs(z))
+      Estimate = coefficients$estimate,
+      `Std. Error` = coefficients$std.error,
+      `z value` = coefficients$statistic,
+      `Pr(>|z|)` = coefficients$p.value
     ),
     has.Pvalue = TRUE,
     cs.ind = 1:2,
@@ -662,12 +756,15 @@ format_model_call <- function(mod) {
 #'   row of `estimates` records, the stored bounds are returned; at any other
 #'   level they are the normal approximation built from the estimate and its
 #'   standard error. Default is `0.95`.
-#' @param exponentiate If `TRUE`, exponentiate the log risk ratio and log odds
-#'   ratio to produce risk ratios and odds ratios on their natural scale,
-#'   relabeling the two terms `"rr"` and `"or"`. The confidence bounds move with
-#'   them. Standard errors, statistics, and p-values remain on the log scale, and
-#'   the `ipw_vcov` attribute is dropped rather than carried, since it describes
-#'   the estimates on the scale they were estimated on. Default is `FALSE`.
+#' @param exponentiate If `TRUE`, move the estimates that are on a log scale to
+#'   their natural scale. In the marginal reading those are the log risk ratio
+#'   and the log odds ratio, and the two terms are relabeled `"rr"` and `"or"`;
+#'   in the conditional reading the outcome model's link settles it for the whole
+#'   table, as the section above describes. The confidence bounds move with the
+#'   estimates. Standard errors, statistics, and p-values remain on the log
+#'   scale, and the `ipw_vcov` attribute is dropped rather than carried, since it
+#'   describes the estimates on the scale they were estimated on. Default is
+#'   `FALSE`.
 #' @rdname new_ipw
 #' @export
 as.data.frame.ipw <- function(
@@ -677,7 +774,8 @@ as.data.frame.ipw <- function(
   ...,
   conf.int = FALSE,
   conf.level = 0.95,
-  exponentiate = FALSE
+  exponentiate = FALSE,
+  effects = NULL
 ) {
   # All three are checked on every call rather than on the branch that reads
   # them. `conf.level` means the same thing whether or not the bounds are
@@ -689,26 +787,27 @@ as.data.frame.ipw <- function(
   check_conf_level(conf.level)
   check_flag(exponentiate, "exponentiate")
 
+  # The table is a presentation of the result rather than a copy of one
+  # component of it, so the reading is settled before anything is read off the
+  # result and everything built after this belongs to the reading asked for.
+  if (resolve_ipw_effects(x, effects) == "conditional") {
+    return(conditional_data_frame(
+      x,
+      row.names = row.names,
+      conf.int = conf.int,
+      conf.level = conf.level,
+      exponentiate = exponentiate,
+      call = sys.call()
+    ))
+  }
+
   estimates <- x$estimates
 
   # `term` first, then the column naming the contrast it qualifies when the
   # result reports one, then the column naming the subgroup it was estimated in
   # when the result reports those. That is the order the labels paste them in,
-  # so the table names a row the way the printed form and the accessors do. A
-  # binary or continuous exposure has a single contrast and an ungrouped result
-  # has a single group, so a column of either kind there would repeat one value
-  # down the table and read as a contrast or a subgroup that was named. The
-  # headings are the canonical ones whichever names the stored frame used, since
-  # the heading is what a caller reads the table by.
-  contrast <- ipw_contrast_column(estimates)
-  group <- ipw_group_column(estimates)
-  columns <- list(term = as.character(estimates$effect))
-  if (!is.null(contrast)) {
-    columns$contrast <- estimates[[contrast]]
-  }
-  if (!is.null(group)) {
-    columns$group <- estimates[[group]]
-  }
+  # so the table names a row the way the printed form and the accessors do.
+  columns <- ipw_term_columns(estimates)
   columns$estimate <- estimates$estimate
   columns$std.error <- estimates$std.err
   columns$statistic <- estimates$z
@@ -740,23 +839,209 @@ as.data.frame.ipw <- function(
     columns$term[is_log_or] <- "or"
   }
 
-  # Last, after the columns the table always carries, so that asking for an
-  # interval adds to the table rather than rearranging it.
+  ipw_tidy_frame(
+    columns,
+    bounds,
+    # The covariance describes the estimates on the scale they were estimated
+    # on, so an exponentiated table carries none.
+    covariance = if (!exponentiate) {
+      attr(estimates, "ipw_vcov", exact = TRUE)
+    } else {
+      NULL
+    },
+    row.names = row.names
+  )
+}
+
+#' The table the conditional reading reports
+#'
+#' The outcome model's coefficients, one row each, under the headings the
+#' marginal table uses for the effects. The standard errors are the ones the
+#' corrected covariance implies, which is the block a fitting package attached
+#' with [new_ipw_model()], and the statistic and the p-value are built from
+#' them. There is no stored pair of bounds to prefer at any level: the ones the
+#' estimates frame holds belong to the effects the other reading reports.
+#'
+#' A model that was never wrapped carries no such block, and the table is
+#' refused rather than built from the standard errors the model computed for
+#' itself, which treat the estimated weights as fixed. That is where this table
+#' parts company with `print()`, which reports such a model with a note in place
+#' of the errors: the printed form is the view of whatever a caller is holding,
+#' and a table has no place to put a note.
+#'
+#' The rows are keyed by the `term` column alone. A conditional table names no
+#' contrasts and no subgroups, since those key the rows of the effects table and
+#' a coefficient is named by itself, and every other column is unnamed so that
+#' the rows are not keyed twice over.
+#'
+#' @param x An `ipw` object.
+#' @param row.names The row names for the returned table, or `NULL`.
+#' @param conf.int Whether to append the confidence bounds.
+#' @param conf.level The level those bounds report.
+#' @param exponentiate Whether to move the estimates to their natural scale.
+#' @param call The call to report a refusal against, which is the method's
+#'   rather than this helper's.
+#'
+#' @return A plain data frame.
+#'
+#' @noRd
+#' @importFrom stats coef qnorm
+conditional_data_frame <- function(
+  x,
+  row.names,
+  conf.int,
+  conf.level,
+  exponentiate,
+  call = sys.call(-1)
+) {
+  # Before anything is built, so a table that cannot be reported on the scale
+  # asked for is refused rather than half built. The reading has no rows labeled
+  # as ratios to pick out, so the link settles it for the whole table at once.
+  if (exponentiate) {
+    check_exponentiate_link(ipw_outcome_link(x$outcome_mod), call = call)
+  }
+
+  covariance <- conditional_vcov(x$outcome_mod, call = call)
+  estimate <- stats::coef(x$outcome_mod)
+  coefficients <- conditional_coefficients(estimate, covariance)
+
+  # The term is the coefficient's name, and the numbers are unnamed: the names
+  # they carry are the same coefficient names, and a column keyed by them beside
+  # a column holding them would key the rows twice over.
+  columns <- list(term = names(estimate))
+  columns$estimate <- unname(coefficients$estimate)
+  columns$std.error <- unname(coefficients$std.error)
+  columns$statistic <- unname(coefficients$statistic)
+  columns$p.value <- unname(coefficients$p.value)
+
+  # Built before the scale is changed, so that a bound is a half width on the
+  # log scale added to an estimate on the log scale.
+  bounds <- if (conf.int) {
+    half_width <- stats::qnorm(1 - (1 - conf.level) / 2) * columns$std.error
+    list(
+      lower = columns$estimate - half_width,
+      upper = columns$estimate + half_width
+    )
+  } else {
+    NULL
+  }
+
+  if (exponentiate) {
+    # Every row moves, since the link says every coefficient is on a scale an
+    # exponential undoes. No term is relabeled: a coefficient name names the
+    # term rather than the scale its estimate is reported on.
+    columns$estimate <- exp(columns$estimate)
+    if (!is.null(bounds)) {
+      bounds$lower <- exp(bounds$lower)
+      bounds$upper <- exp(bounds$upper)
+    }
+  }
+
+  ipw_tidy_frame(
+    columns,
+    bounds,
+    covariance = if (!exponentiate) covariance else NULL,
+    row.names = row.names
+  )
+}
+
+#' The coefficient surface the conditional reading reports
+#'
+#' The outcome model's coefficients and the three numbers the corrected
+#' covariance implies for them: the standard error, the statistic each estimate
+#' gives, and the p-value that statistic is referred to the normal at. The
+#' printed table and the tidier-shaped one report the same surface in different
+#' shapes, so the arithmetic is here rather than in each of them.
+#'
+#' The names the model gives its coefficients are kept, since the printed table
+#' is keyed by them.
+#'
+#' @param estimate The outcome model's coefficients.
+#' @param covariance Their corrected covariance, in coefficient order.
+#'
+#' @return A list of four numeric vectors, `estimate`, `std.error`,
+#'   `statistic`, and `p.value`.
+#'
+#' @noRd
+#' @importFrom stats pnorm
+conditional_coefficients <- function(estimate, covariance) {
+  standard_error <- sqrt(diag(covariance))
+  statistic <- estimate / standard_error
+
+  list(
+    estimate = estimate,
+    std.error = standard_error,
+    statistic = statistic,
+    p.value = 2 * stats::pnorm(-abs(statistic))
+  )
+}
+
+#' The columns of a tidier-shaped table that name its rows
+#'
+#' `term` first, then the column naming the contrast it qualifies when the
+#' result reports one, then the column naming the subgroup it was estimated in
+#' when the result reports those. That is the order the effect labels paste them
+#' in, so a table names a row the way the printed form and the accessors do.
+#'
+#' A binary or continuous exposure has a single contrast and an ungrouped result
+#' has a single group, so a column of either kind there would repeat one value
+#' down the table and read as a contrast or a subgroup that was named. The
+#' headings are the canonical ones whichever names the stored frame used, since
+#' the heading is what a caller reads the table by.
+#'
+#' The pooled table is keyed the same way, from a frame the pooling carried the
+#' same key onto, so both methods build these columns here.
+#'
+#' @param estimates The `estimates` component of an `ipw` or an `ipw_pooled`
+#'   object.
+#'
+#' @return A named list of one to three character columns.
+#'
+#' @noRd
+ipw_term_columns <- function(estimates) {
+  contrast <- ipw_contrast_column(estimates)
+  group <- ipw_group_column(estimates)
+
+  columns <- list(term = as.character(estimates$effect))
+  if (!is.null(contrast)) {
+    columns$contrast <- estimates[[contrast]]
+  }
+  if (!is.null(group)) {
+    columns$group <- estimates[[group]]
+  }
+  columns
+}
+
+#' Assemble a tidier-shaped table from its columns
+#'
+#' The last few steps every table this package reports has in common: the
+#' confidence bounds go on after the columns the table always carries, so that
+#' asking for an interval adds to the table rather than rearranging it, and the
+#' covariance travels on the finished frame rather than in a column of it, under
+#' the attribute the [new_ipw()] contract names it under.
+#'
+#' A `NULL` covariance sets no attribute, which is what a result that carries
+#' none and a table reported on another scale both want. It is the right answer
+#' rather than an accident of assignment, so the callers pass `NULL` deliberately
+#' rather than skipping the assignment.
+#'
+#' @param columns The named list of columns, in order.
+#' @param bounds The confidence bounds, or `NULL` when none were asked for.
+#' @param covariance The covariance to attach, or `NULL`.
+#' @param row.names The row names for the returned table, or `NULL` for the
+#'   automatic ones.
+#'
+#' @return A plain data frame.
+#'
+#' @noRd
+ipw_tidy_frame <- function(columns, bounds, covariance, row.names = NULL) {
   if (!is.null(bounds)) {
     columns$conf.low <- bounds$lower
     columns$conf.high <- bounds$upper
   }
 
   df <- data.frame(columns, row.names = row.names, stringsAsFactors = FALSE)
-
-  # The covariance belongs to the estimates rather than to a column of them, so
-  # it travels on the table under the attribute the `new_ipw()` contract names
-  # it under. A result whose method attached none carries none: assigning `NULL`
-  # sets no attribute, which is the right answer rather than an accident.
-  if (!exponentiate) {
-    attr(df, "ipw_vcov") <- attr(estimates, "ipw_vcov", exact = TRUE)
-  }
-
+  attr(df, "ipw_vcov") <- covariance
   df
 }
 
@@ -822,6 +1107,95 @@ check_flag <- function(value, arg, call = sys.call(-1)) {
   }
 
   invisible(value)
+}
+
+#' Refuse an estimates component that is not a frame of effects
+#'
+#' The `estimates` component is what every surface of a result reports from, and
+#' each of them begins at the same place: `ipw_effect_labels()` reads the
+#' `effect` column and pastes the identity columns into the label a row is keyed
+#' by, and `print()`, `as.data.frame()`, the accessors, and the pooling all
+#' report under those labels. A component of another shape reaches none of them
+#' as anything but a subscript error, in words about the column that failed
+#' rather than about the argument that was wrong, and which of them a caller
+#' meets first depends on what they asked the result for.
+#'
+#' The column holds the names of the effect measures, so it is character. A
+#' factor is accepted beside it: the labels are read off the column as strings
+#' either way, and a frame written when `data.frame()` coded its strings as
+#' factors is a frame a caller still has in hand. Anything else is refused. A
+#' number pastes into a label that reads as a row index rather than as the
+#' measure the row reports, which fails silently in the way a `group` column of
+#' the wrong kind does and is refused for the same reason.
+#'
+#' Every row has to name a measure. A missing one pastes into a label reading
+#' `"NA"`, which names no effect, and two of them paste into the same label,
+#' which leaves `coef()` naming two elements the same thing and `vcov()`
+#' repeating a name down both of its dimnames. It is the fault
+#' `check_estimates_group()` refuses in the column it reads, in the column every
+#' result has.
+#'
+#' @param estimates The `estimates` argument as the caller supplied it.
+#' @param call The call to report the error against, which is the
+#'   constructor's rather than this helper's.
+#'
+#' @return `estimates`, invisibly, when it is a frame of effects.
+#'
+#' @noRd
+check_estimates_effect <- function(estimates, call = sys.call(-1)) {
+  if (!is.data.frame(estimates)) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "be a data frame of effect estimates, since every surface of a result ",
+        "reports from its rows and its columns, but it is <",
+        class(estimates)[[1L]],
+        ">"
+      ),
+      call = call
+    )
+  }
+
+  if (!"effect" %in% names(estimates)) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "name each row's effect measure in an `effect` column, since every ",
+        "label a result reports begins with it, but this frame carries none"
+      ),
+      call = call
+    )
+  }
+
+  effect <- estimates$effect
+  if (!is.character(effect) && !is.factor(effect)) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "name its effects in a character or factor `effect` column, since the ",
+        "labels a row is keyed by are read off it as strings, but the column ",
+        "this frame carries is <",
+        class(effect)[[1L]],
+        ">"
+      ),
+      call = call
+    )
+  }
+
+  unnamed <- sum(is.na(effect))
+  if (unnamed > 0L) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "name a measure in every row of its `effect` column, but ",
+        unnamed,
+        if (unnamed == 1L) " row records none" else " rows record none"
+      ),
+      call = call
+    )
+  }
+
+  invisible(estimates)
 }
 
 #' Refuse an estimates frame whose subgroups are not named

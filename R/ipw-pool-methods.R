@@ -419,20 +419,12 @@ as.data.frame.ipw_pooled <- function(
     level <- 0.95
   }
 
-  # `term` first, then the column naming the contrast it qualifies when the
-  # result reports one, then the column naming the subgroup it was estimated in
-  # when the result reports those, which is the order the labels paste them in.
-  # `df` sits after the statistic, since that is what the statistic beside it is
-  # referred to and a table without it leaves a reader nothing to refer it to.
-  contrast <- ipw_contrast_column(estimates)
-  group <- ipw_group_column(estimates)
-  columns <- list(term = as.character(estimates$effect))
-  if (!is.null(contrast)) {
-    columns$contrast <- estimates[[contrast]]
-  }
-  if (!is.null(group)) {
-    columns$group <- estimates[[group]]
-  }
+  # The columns that name a row come from the helper the unpooled table is keyed
+  # by, so a caller who pools a set of results reads the same table under the
+  # same headings. `df` sits after the statistic, since that is what the
+  # statistic beside it is referred to and a table without it leaves a reader
+  # nothing to refer it to.
+  columns <- ipw_term_columns(estimates)
   columns$estimate <- estimates$estimate
   columns$std.error <- estimates$std.err
   columns$statistic <- estimates$t
@@ -474,24 +466,18 @@ as.data.frame.ipw_pooled <- function(
     }
   }
 
-  # Last, after the columns the table always carries, so that asking for an
-  # interval adds to the table rather than rearranging it.
-  if (!is.null(bounds)) {
-    columns$conf.low <- bounds$lower
-    columns$conf.high <- bounds$upper
-  }
-
-  df <- data.frame(columns, row.names = row.names, stringsAsFactors = FALSE)
-
-  # The covariance belongs to the estimates rather than to a column of them, so
-  # it travels on the table under the attribute the contract names it under. A
-  # result that carries none carries none here: assigning `NULL` sets no
-  # attribute, which is the right answer rather than an accident.
-  if (!exponentiate) {
-    attr(df, "ipw_vcov") <- attr(estimates, "ipw_vcov", exact = TRUE)
-  }
-
-  df
+  ipw_tidy_frame(
+    columns,
+    bounds,
+    # The covariance describes the estimates on the scale they were estimated
+    # on, so an exponentiated table carries none.
+    covariance = if (!exponentiate) {
+      attr(estimates, "ipw_vcov", exact = TRUE)
+    } else {
+      NULL
+    },
+    row.names = row.names
+  )
 }
 
 #' @rdname ipw-pooled-methods

@@ -36,7 +36,9 @@
 \item{effects}{The reading to report, either \code{"marginal"} or
 \code{"conditional"}. \code{NULL}, the default, reports the reading the result
 records; any other value overrides it for the one call and leaves the
-result as it is.}
+result as it is. A reading the result does not support is refused with an
+error of class \code{causalgenerics_unsupported_reading}, which is where
+\code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} refuse it too.}
 
 \item{parm}{The rows to report an interval for, given either as the labels
 of the reported surface or as their positions in it. Missing means all of
@@ -83,7 +85,11 @@ result stores belong to the effects the marginal reading reports.
 
 \code{coef()}, \code{vcov()}, and \code{confint()} raise an error of class
 \code{causalgenerics_invalid_argument_effects} when \code{effects} names neither
-reading, and when the result's own field does.
+reading, and when the result's own field does. They raise an error of class
+\code{causalgenerics_unsupported_reading_marginal} or
+\code{causalgenerics_unsupported_reading_conditional}, and of the general class
+\code{causalgenerics_unsupported_reading}, when \code{effects} names a reading the
+result records that it does not support.
 
 \code{nobs()} returns a single integer, the number of observations the outcome
 model was fitted on, which is the number the estimates were computed from and
@@ -184,6 +190,14 @@ labeled with the parameter names of a stacked system, and a model whose
 coefficients carry no names are the three ways the pairing fails. Reading such
 a block by position instead would report the covariance of other parameters
 under this model's coefficient names.
+
+A result records which of the two readings it supports, and naming the other
+one is refused rather than answered with a surface whose numbers are not the
+quantities the reading names. The refusal is the one \code{\link[=as_marginal]{as_marginal()}} and
+\code{\link[=as_conditional]{as_conditional()}} raise, of class \code{causalgenerics_unsupported_reading}, since
+a caller cares that the reading is not there rather than which surface asked
+for it. A result that supports one reading answers for that one exactly as a
+result supporting both does.
 
 \code{nobs()}, \code{df.residual()}, \code{weights()}, \code{model.frame()}, and \code{estimand()}
 describe the fit rather than a surface of it, so they answer the same way in

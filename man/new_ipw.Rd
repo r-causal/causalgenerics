@@ -13,7 +13,8 @@ new_ipw(
   estimates,
   se_method,
   fit,
-  effects = "marginal"
+  effects = "marginal",
+  readings = c("marginal", "conditional")
 )
 
 \method{print}{ipw}(x, ...)
@@ -25,7 +26,8 @@ new_ipw(
   ...,
   conf.int = FALSE,
   conf.level = 0.95,
-  exponentiate = FALSE
+  exponentiate = FALSE,
+  effects = NULL
 )
 }
 \arguments{
@@ -38,16 +40,31 @@ weights.}
 \item{outcome_mod}{The fitted weighted outcome model.}
 
 \item{estimates}{A data frame of effect estimates, in the shape the return
-value describes.}
+value describes. It has to be a data frame, and it has to name each row's
+effect measure in an \code{effect} column of strings or of factor levels, with a
+measure named in every row, since every label the result reports is read
+off that column. Anything else is refused with an error of class
+\code{causalgenerics_invalid_argument_estimates}, and of the general class
+\code{causalgenerics_invalid_argument}.}
 
 \item{se_method}{The standard error method that ran, such as \code{"mestimation"}
 or \code{"linearization"}.}
 
 \item{fit}{The fitted variance object, or \code{NULL} when the method has none.}
 
-\item{effects}{The presentation mode the result reports its effects in,
-either \code{"marginal"} or \code{"conditional"}. A method that names no mode reports
-marginal effects.}
+\item{effects}{For \code{new_ipw()}, the presentation mode the result reports its
+effects in, either \code{"marginal"} or \code{"conditional"}; a method that names no
+mode reports marginal effects. For \code{as.data.frame()}, the reading to
+report: \code{NULL}, the default, reports the reading the result records, and
+any other value overrides it for the one call and leaves the result as it
+is. A reading the result does not support is refused with an error of class
+\code{causalgenerics_unsupported_reading}.}
+
+\item{readings}{The readings the result supports, one or both of
+\code{"marginal"} and \code{"conditional"}. The default is both, which is what every
+result supported before the field existed. A method whose analysis has no
+meaning under one of them names the other, and the mode the result records
+has to be one of the readings named.}
 
 \item{x}{An \code{ipw} object.}
 
@@ -67,42 +84,46 @@ row of \code{estimates} records, the stored bounds are returned; at any other
 level they are the normal approximation built from the estimate and its
 standard error. Default is \code{0.95}.}
 
-\item{exponentiate}{If \code{TRUE}, exponentiate the log risk ratio and log odds
-ratio to produce risk ratios and odds ratios on their natural scale,
-relabeling the two terms \code{"rr"} and \code{"or"}. The confidence bounds move with
-them. Standard errors, statistics, and p-values remain on the log scale, and
-the \code{ipw_vcov} attribute is dropped rather than carried, since it describes
-the estimates on the scale they were estimated on. Default is \code{FALSE}.}
+\item{exponentiate}{If \code{TRUE}, move the estimates that are on a log scale to
+their natural scale. In the marginal reading those are the log risk ratio
+and the log odds ratio, and the two terms are relabeled \code{"rr"} and \code{"or"};
+in the conditional reading the outcome model's link settles it for the whole
+table, as the section above describes. The confidence bounds move with the
+estimates. Standard errors, statistics, and p-values remain on the log
+scale, and the \code{ipw_vcov} attribute is dropped rather than carried, since it
+describes the estimates on the scale they were estimated on. Default is
+\code{FALSE}.}
 }
 \value{
 \code{new_ipw()} returns an S3 object of class \code{ipw}: a list of the
-following seven components, in this order.
+following eight components, in this order.
 \describe{
 \item{\code{estimand}}{The causal estimand, such as \code{"ate"} or \code{"att"}.}
 \item{\code{wt_mod}}{The weighting object: the fitted model that produced the
 weights.}
 \item{\code{outcome_mod}}{The fitted outcome model.}
 \item{\code{estimates}}{A data frame with one row per effect measure and the
-following columns: \code{effect} (the measure name), \code{estimate} (point
-estimate), \code{std.err} (standard error), \code{z} (z-statistic), \code{ci.lower} and
-\code{ci.upper} (confidence interval bounds), \code{conf.level}, and \code{p.value}. For
-a categorical exposure the data frame also has a \code{contrast} column,
-placed after \code{effect}, naming the non-reference level and reference level
-of each contrast. A frame stored against an earlier version of this
-contract names that column \code{comparison}. The older name is read as an
-alias for the canonical one wherever the column is read, so a result
-holding such a frame labels its rows and reports its table exactly as one
-holding a \code{contrast} column does. A method written now writes
-\code{contrast}. A result reported once per level of a grouping variable also
-has a \code{group} column, placed after the contrast column when one is
-present and after \code{effect} when the result names no contrasts, naming the
-subgroup each row was estimated in as a \code{"var = value"} string such as
-\code{"sex = 0"}. That column has one spelling and no alias. Both optional
-columns are absent rather than constant when the result reports one
-contrast or one group, since a column repeating a single value down the
-table would read as a contrast or a subgroup that was named. \code{group} must
-be character and must name a subgroup in every row; the constructor
-refuses anything else with an error of class
+following columns: \code{effect} (the measure name, as a character or factor
+column naming a measure in every row, which the constructor requires),
+\code{estimate} (point estimate), \code{std.err} (standard error), \code{z}
+(z-statistic), \code{ci.lower} and \code{ci.upper} (confidence interval bounds),
+\code{conf.level}, and \code{p.value}. For a categorical exposure the data frame
+also has a \code{contrast} column, placed after \code{effect}, naming the
+non-reference level and reference level of each contrast. A frame stored
+against an earlier version of this contract names that column
+\code{comparison}. The older name is read as an alias for the canonical one
+wherever the column is read, so a result holding such a frame labels its
+rows and reports its table exactly as one holding a \code{contrast} column
+does. A method written now writes \code{contrast}. A result reported once per
+level of a grouping variable also has a \code{group} column, placed after the
+contrast column when one is present and after \code{effect} when the result
+names no contrasts, naming the subgroup each row was estimated in as a
+\code{"var = value"} string such as \code{"sex = 0"}. That column has one spelling
+and no alias. Both optional columns are absent rather than constant when
+the result reports one contrast or one group, since a column repeating a
+single value down the table would read as a contrast or a subgroup that
+was named. \code{group} must be character and must name a subgroup in every
+row; the constructor refuses anything else with an error of class
 \code{causalgenerics_invalid_argument_estimates}, and of the general class
 \code{causalgenerics_invalid_argument}, since a label pasted from such a column
 would relabel every row it keys without failing anywhere.}
@@ -114,13 +135,18 @@ the linearization path has no such object and records \code{NULL}.}
 \item{\code{effects}}{The presentation mode, either \code{"marginal"} or
 \code{"conditional"}. The marginal reading shows the causal contrast
 estimates and the conditional reading presents the outcome model's
-coefficient surface; both surfaces exist on every result. See
-\code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}}.}
+coefficient surface. See \code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}}.}
+\item{\code{readings}}{The readings the result supports, one or both of
+\code{"marginal"} and \code{"conditional"}, and always including the mode above. A
+result stored before the field existed carries fewer components and is
+read as supporting both readings.}
 }
 
 \code{print()} returns its input invisibly. \code{as.data.frame()} returns a plain
-data frame of the effect estimates under the tidier column names described
-above, with the confidence bounds appended when they are asked for.
+data frame under the tidier column names described above, with the
+confidence bounds appended when they are asked for: the effect estimates in
+the marginal reading, and the outcome model's coefficients, one row each,
+in the conditional one.
 }
 \description{
 \code{new_ipw()} is the low-level constructor for the object that every \code{\link[=ipw]{ipw()}}
@@ -138,20 +164,38 @@ the situation this package exists to prevent.
 The field names and their order are part of the contract, since callers read
 fields by name and print the object positionally. \code{fit} is present on every
 path, including the ones that have no fitted variance object to report, and
-\code{effects} is present whether or not the method that built the result named a
-mode.
+\code{effects} and \code{readings} are present whether or not the method that built the
+result named a mode or a set of readings.
 
 \code{print()} writes the estimand and the call of each component model, then the
 table of the surface the result's presentation mode names. The section below
 describes the two modes and what each one tabulates.
 
-\code{as.data.frame()} reports the effect estimates as a tidier-shaped table
-rather than as a copy of the \code{estimates} component. Its columns are \code{term},
-then \code{contrast} when the result names contrasts, then \code{group} when it names
-subgroups, then \code{estimate}, \code{std.error}, \code{statistic}, and \code{p.value}. Those
-are the names the tidier convention uses, so a fitting package's \code{tidy()}
-method is this table read as a tibble and nothing more. The \code{estimates}
-component itself is unchanged by any of what follows.
+\code{as.data.frame()} reports the result as a tidier-shaped table rather than as
+a copy of the \code{estimates} component. In the marginal reading its columns are
+\code{term}, then \code{contrast} when the result names contrasts, then \code{group} when it
+names subgroups, then \code{estimate}, \code{std.error}, \code{statistic}, and \code{p.value}.
+Those are the names the tidier convention uses, so a fitting package's
+\code{tidy()} method is this table read as a tibble and nothing more. The
+\code{estimates} component itself is unchanged by any of what follows.
+
+The conditional reading reports the outcome model's coefficients under those
+same headings, one row per coefficient, with \code{term} naming the coefficient
+and \code{std.error} the standard error the corrected covariance implies. It names
+no contrasts and no subgroups: those key the rows of the effects table, and a
+coefficient is named by itself. It is the table
+\code{\link[=ipw-pooled-methods]{as.data.frame()}} reports for a pooled result in the
+same reading, without the \code{df} column a pooled result has and an unpooled one
+does not.
+
+A result whose outcome model carries no corrected block has no such standard
+error to report, and the reading is refused with an error of class
+\code{causalgenerics_no_conditional_vcov} rather than reported from the standard
+errors the model computed for itself. That is where the table parts company
+with \code{print()}, which writes those coefficients under a note saying that no
+covariance from the joint estimation is recorded: a printed table is read by
+someone who reads the note with it, and a data frame is read by code that
+would take the column for the corrected one.
 
 \code{conf.int = TRUE} appends \code{conf.low} and \code{conf.high} after the other columns,
 and \code{conf.level} names the level they report. The level is an argument rather
@@ -163,18 +207,34 @@ bootstrap or profile interval is asymmetric about the estimate, and even a
 normal one rounded on its way into the frame is not the number recomputing
 gives. At any other level, and for a frame whose rows disagree about the
 level or record none, the bounds are the normal approximation built from the
-estimate and its standard error.
+estimate and its standard error. The conditional reading has no stored pair
+to prefer, since the bounds the frame holds belong to the effects the other
+reading reports, so its bounds are the normal approximation at every level.
 
-With \code{exponentiate = TRUE} the \code{log(rr)} and \code{log(or)} rows move to their
-natural scale, exponentiating the point estimate and the confidence bounds and
-relabeling the two terms \code{"rr"} and \code{"or"}. Standard errors, statistics, and
-p-values stay on the log scale, where the inference is done, and the interval
-is settled before the scale is: bounds recomputed at another level are built
-on the log scale and exponentiated afterwards. The covariance described below
-travels on the returned table under the same \code{ipw_vcov} attribute while the
-rows are on the scale they were estimated on, and is dropped when
-\code{exponentiate = TRUE}, since a matrix left attached there would describe
-neither the table it sits on nor anything else.
+With \code{exponentiate = TRUE} the \code{log(rr)} and \code{log(or)} rows of the marginal
+table move to their natural scale, exponentiating the point estimate and the
+confidence bounds and relabeling the two terms \code{"rr"} and \code{"or"}. Standard
+errors, statistics, and p-values stay on the log scale, where the inference is
+done, and the interval is settled before the scale is: bounds recomputed at
+another level are built on the log scale and exponentiated afterwards. The
+covariance described below travels on the returned table under the same
+\code{ipw_vcov} attribute while the rows are on the scale they were estimated on,
+and is dropped when \code{exponentiate = TRUE}, since a matrix left attached there
+would describe neither the table it sits on nor anything else.
+
+A conditional table has no rows labeled as ratios to pick out, so the link the
+outcome model was fitted with settles the question for the whole table: a
+\code{logit} link puts every coefficient on the log odds scale and a \code{log} link
+puts every coefficient on the log risk scale, and both are scales an
+exponential undoes. Every estimate moves and no term is relabeled, since a
+coefficient name names the term rather than the scale its estimate is
+reported on. Every other link raises an error of class
+\code{causalgenerics_exponentiate_link}, and of the classes
+\code{causalgenerics_invalid_argument_exponentiate} and
+\code{causalgenerics_invalid_argument}, rather than exponentiating coefficients
+that describe nothing once exponentiated. That is the rule
+\code{\link[=ipw-pooled-methods]{as.data.frame()}} keeps for a pooled result, in the same
+words.
 }
 \section{The effect labels}{
 Every row of \code{estimates} has a label, and it is the label rather than the
@@ -195,10 +255,23 @@ thing.
 A result reports its effects in one of two readings, recorded in the
 \code{effects} field. The \code{"marginal"} reading shows the causal contrast
 estimates the method targeted; the \code{"conditional"} reading presents the
-outcome model's coefficient surface. Both surfaces always exist on the
-object, so the field says which one the result presents rather than which
-one it holds. \code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} are how a caller moves a
+outcome model's coefficient surface. The field says which one the result
+presents, and \code{\link[=as_marginal]{as_marginal()}} and \code{\link[=as_conditional]{as_conditional()}} are how a caller moves a
 result between them.
+
+Which readings a result can present at all is the separate fact the
+\code{readings} field records. Both surfaces exist on most results and not on all
+of them: an exposure entering the outcome model through several columns has
+no single coefficient to read as the conditional effect, and a package that
+builds such a result records the reading it can answer for. A result records
+both unless the method that built it said otherwise, and the mode it records
+has to be one of them, so a result never presents a reading it does not
+support. Asking one for the reading it does not support raises an error of
+class \code{causalgenerics_unsupported_reading}, whether it is asked through the
+mode generics, through \code{\link[=ipw-accessors]{coef()}},
+\code{\link[=ipw-accessors]{vcov()}}, or \code{\link[=ipw-accessors]{confint()}}, or through the
+\code{effects} argument of \code{as.data.frame()}. A result stored before the field
+existed records no set and is read as supporting both.
 
 A printed result names its mode twice, since the two readings are different
 tables of different numbers: once on an \verb{Effects:} line beside the estimand,
@@ -275,6 +348,20 @@ as.data.frame(res)
 
 # With an interval, and the ratios on their natural scale.
 as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
+
+# A result whose analysis has no conditional reading records the one it
+# supports, and the other is refused rather than reported.
+marginal_only <- new_ipw(
+  estimand = "ate",
+  wt_mod = glm(z ~ x, family = binomial(), data = dat),
+  outcome_mod = glm(y ~ z, family = quasibinomial(), data = dat),
+  estimates = estimates,
+  se_method = "linearization",
+  fit = NULL,
+  readings = "marginal"
+)
+
+try(as.data.frame(marginal_only, effects = "conditional"))
 }
 \seealso{
 \code{\link[=ipw]{ipw()}}, the generic these results come from, and \code{\link[=as_marginal]{as_marginal()}}

@@ -10,6 +10,14 @@
 # return contract documents, rather than produced by fitting a model. Nothing
 # here needs a real estimator, and this package holds no model-fitting
 # dependency to build one with.
+#
+# A result also records which of the two readings it supports, in the
+# `readings` field. Both surfaces exist on most results, but not on all of
+# them: an exposure that enters the outcome model through several columns has
+# no single coefficient to read as the conditional effect, so the package that
+# builds such a result records the readings it can answer for. The field is the
+# eighth and last of the contract, and the reading the result records has to be
+# one of them.
 
 # A binary-exposure estimates frame: one row per effect measure, no `contrast`
 # column. The risk difference is on the raw scale and the two ratios are on the
@@ -229,14 +237,33 @@ ipw_with_effects <- function(effects) {
   )
 }
 
+# A result built with a given set of supported readings, so that a test naming
+# them does not restate the other seven fields. The mode is an argument too,
+# because the readings a result supports have to include the one it records and
+# a fixture naming a narrower set has to name that one as well.
+ipw_with_readings <- function(readings, effects = "marginal") {
+  new_ipw(
+    estimand = "ate",
+    wt_mod = "a propensity score model",
+    outcome_mod = "an outcome model",
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = effects,
+    readings = readings
+  )
+}
+
 # A result of the shape the constructor built before the mode existed: six
-# fields and no `effects`. Results stored from an earlier version of a fitting
-# package have this shape, as does one built by hand against the earlier
-# contract. It is derived from the seven-field result rather than written out
-# again, so that the two differ in the field and in nothing else.
+# fields, with neither `effects` nor `readings` after them. Results stored from
+# an earlier version of a fitting package have this shape, as does one built by
+# hand against the earlier contract. It is derived from the current result
+# rather than written out again, so that the two differ in the two fields and in
+# nothing else.
 legacy_result <- function(estimates = binary_estimates()) {
   fields <- unclass(ipw_result(estimates))
   fields$effects <- NULL
+  fields$readings <- NULL
   structure(fields, class = "ipw")
 }
 
@@ -332,7 +359,7 @@ conditional_result <- function(wrap = TRUE, vcov = NULL) {
 
 # ---- new_ipw() ---------------------------------------------------------------
 
-test_that("new_ipw() builds the documented seven-field list", {
+test_that("new_ipw() builds the documented eight-field list", {
   estimates <- binary_estimates()
   fit <- structure(list(theta = c(1, 2)), class = "cg_mestimator")
 
@@ -357,7 +384,8 @@ test_that("new_ipw() builds the documented seven-field list", {
       "estimates",
       "se_method",
       "fit",
-      "effects"
+      "effects",
+      "readings"
     )
   )
 
@@ -368,12 +396,13 @@ test_that("new_ipw() builds the documented seven-field list", {
   expect_identical(res$se_method, "mestimation")
   expect_identical(res$fit, fit)
   expect_identical(res$effects, "conditional")
+  expect_identical(res$readings, c("marginal", "conditional"))
 })
 
 test_that("new_ipw() keeps a NULL fit as a named field", {
   # The linearization path has no M-estimator object to report. `fit` still has
   # to be present and `NULL`, because callers read the field by name and a list
-  # that dropped it would have six elements rather than seven.
+  # that dropped it would have seven elements rather than eight.
   res <- new_ipw(
     estimand = "att",
     wt_mod = NULL,
@@ -383,7 +412,7 @@ test_that("new_ipw() keeps a NULL fit as a named field", {
     fit = NULL
   )
 
-  expect_length(res, 7L)
+  expect_length(res, 8L)
   expect_identical(
     names(res),
     c(
@@ -393,7 +422,8 @@ test_that("new_ipw() keeps a NULL fit as a named field", {
       "estimates",
       "se_method",
       "fit",
-      "effects"
+      "effects",
+      "readings"
     )
   )
   expect_null(res$fit)
@@ -412,6 +442,7 @@ test_that("new_ipw() takes its arguments in the documented order", {
     estimates,
     "mestimation",
     "fit",
+    "conditional",
     "conditional"
   )
   named <- new_ipw(
@@ -421,18 +452,46 @@ test_that("new_ipw() takes its arguments in the documented order", {
     estimates = estimates,
     se_method = "mestimation",
     fit = "fit",
-    effects = "conditional"
+    effects = "conditional",
+    readings = "conditional"
   )
 
   expect_identical(positional, named)
+  expect_identical(
+    names(formals(new_ipw)),
+    c(
+      "estimand",
+      "wt_mod",
+      "outcome_mod",
+      "estimates",
+      "se_method",
+      "fit",
+      "effects",
+      "readings"
+    )
+  )
 
-  # `effects` is the last argument as well as the last field, so a call written
-  # against the six-argument signature is still a call this one answers, and it
-  # still means the marginal reading.
+  # `readings` is the last argument as well as the last field and `effects` is
+  # the one before it, so a call written against either earlier signature is
+  # still a call this one answers. The seven-argument call means the readings
+  # every result supported when there was nothing to say otherwise, and the
+  # six-argument call means the marginal reading as well.
+  seven <- new_ipw(
+    "ate",
+    "wt",
+    "outcome",
+    estimates,
+    "mestimation",
+    "fit",
+    "conditional"
+  )
   earlier <- new_ipw("ate", "wt", "outcome", estimates, "mestimation", "fit")
 
+  expect_identical(names(seven), names(positional))
+  expect_identical(seven$readings, c("marginal", "conditional"))
   expect_identical(names(earlier), names(positional))
   expect_identical(earlier$effects, "marginal")
+  expect_identical(earlier$readings, c("marginal", "conditional"))
 })
 
 # ---- the effects mode --------------------------------------------------------
@@ -454,6 +513,11 @@ test_that("new_ipw() defaults the effects mode to marginal", {
   expect_identical(res$effects, "marginal")
   expect_identical(names(res)[[7]], "effects")
   expect_identical(res[[7]], "marginal")
+
+  # The readings sit after the mode, which is what puts the mode where it always
+  # was for a caller reading the result positionally.
+  expect_identical(names(res)[[8]], "readings")
+  expect_identical(res[[8]], c("marginal", "conditional"))
 })
 
 test_that("new_ipw() stores either mode as given", {
@@ -519,6 +583,312 @@ test_that("new_ipw() rejects an effects value that is not a single string", {
 test_that("the effects error states the contract", {
   expect_snapshot(error = TRUE, ipw_with_effects("everything"))
   expect_snapshot(error = TRUE, ipw_with_effects(c("marginal", "conditional")))
+})
+
+# ---- the readings a result supports ------------------------------------------
+
+# The mode says which reading a result presents; the readings say which ones it
+# can present at all. The two are separate facts because they answer separate
+# questions, and the second one is new: both surfaces were assumed to exist on
+# every result, and for a result whose exposure enters the outcome model through
+# several columns the conditional one does not, since no single coefficient of
+# it is the effect. A package that builds such a result records the reading it
+# can answer for, and the layer here refuses the other rather than reporting a
+# surface that means nothing.
+
+test_that("new_ipw() records both readings by default", {
+  # Both readings exist on the results every fitting package builds today, so a
+  # call that names none supports both. The default is stored rather than left
+  # absent, so that a caller reading `res$readings` gets the set whichever way
+  # the result was built.
+  res <- ipw_with_effects("marginal")
+
+  expect_identical(res$readings, c("marginal", "conditional"))
+  expect_identical(ipw_with_effects("conditional")$readings, res$readings)
+})
+
+test_that("new_ipw() stores a narrower set of readings as given", {
+  # One reading is the case the field exists for. The set is stored in the order
+  # it was given, since it is the value the caller supplied rather than a set
+  # this layer canonicalizes.
+  expect_identical(ipw_with_readings("marginal")$readings, "marginal")
+  expect_identical(
+    ipw_with_readings("conditional", effects = "conditional")$readings,
+    "conditional"
+  )
+  expect_identical(
+    ipw_with_readings(c("conditional", "marginal"))$readings,
+    c("conditional", "marginal")
+  )
+})
+
+test_that("new_ipw() refuses readings that are not a set of modes", {
+  # There are two readings and no third, so anything else names a surface this
+  # layer has no reading of. A misspelling stored unchecked would leave a result
+  # refusing the reading it meant to support, with nothing to say why.
+  expect_error(
+    ipw_with_readings("conditonal"),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+  expect_error(
+    ipw_with_readings("conditonal"),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_with_readings(c("marginal", "everything")),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+  # The value is the string, so case is part of it.
+  expect_error(
+    ipw_with_readings("Marginal"),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+
+  # A result supporting no reading at all reports nothing, so the empty set is
+  # refused rather than stored. `NULL` is how an older result records no set,
+  # and it is read as both wherever it is read; naming it here would ask the
+  # constructor to write that shape deliberately.
+  expect_error(
+    ipw_with_readings(character()),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+  expect_error(
+    ipw_with_readings(NULL),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+
+  # A set naming one reading twice says nothing a set naming it once does not,
+  # and it would leave the field with more entries than there are readings.
+  expect_error(
+    ipw_with_readings(c("marginal", "marginal")),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+
+  # A factor prints as its labels and a list holds the strings one level down,
+  # so both would pass a check that read whatever it was given as character.
+  expect_error(
+    ipw_with_readings(factor("marginal")),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+  expect_error(
+    ipw_with_readings(list("marginal")),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+  expect_error(
+    ipw_with_readings(NA_character_),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+})
+
+test_that("new_ipw() refuses readings that leave out the mode it records", {
+  # A result cannot record a reading it does not support: the mode says which
+  # surface the result presents, and presenting one it has no reading of is the
+  # state every method downstream would have to have an answer for. The two
+  # arguments are checked against each other rather than each on its own.
+  expect_error(
+    ipw_with_readings("conditional", effects = "marginal"),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+  expect_error(
+    ipw_with_readings("conditional", effects = "marginal"),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_with_readings("marginal", effects = "conditional"),
+    class = "causalgenerics_invalid_argument_readings"
+  )
+
+  # The pairings that agree are constructed rather than refused, which is what
+  # says the refusal is about the disagreement and not about a narrow set.
+  expect_no_error(ipw_with_readings("marginal", effects = "marginal"))
+  expect_no_error(ipw_with_readings("conditional", effects = "conditional"))
+})
+
+test_that("the readings error states the contract", {
+  expect_snapshot(error = TRUE, ipw_with_readings("everything"))
+  expect_snapshot(error = TRUE, ipw_with_readings(c("marginal", "marginal")))
+  expect_snapshot(
+    error = TRUE,
+    ipw_with_readings("marginal", effects = "conditional")
+  )
+})
+
+# ---- the estimates frame -----------------------------------------------------
+
+# The `estimates` component is what every surface of a result reports from, and
+# each of them starts by reading the `effect` column: the label a row is keyed
+# by begins with it, and `print()`, `as.data.frame()`, the accessors, and the
+# pooling all read those labels. A component of another shape fails at whichever
+# of those a caller reaches first, in whatever words the subscript that failed
+# used, so the shape is checked where the result is built and the refusal names
+# the argument that was wrong.
+
+# The binary fixture with its `effect` column removed, which is the frame a
+# fitting package writes when it names its rows in a column of its own choosing.
+effectless_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$effect <- NULL
+  estimates
+}
+
+# The same frame with the effects numbered rather than named. A number pastes
+# into a label that reads as a row index rather than as the measure the row
+# reports, and nothing downstream fails on it.
+numeric_effect_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$effect <- seq_len(nrow(estimates))
+  estimates
+}
+
+# The frame as it was written when `data.frame()` coded its strings as factors.
+# Results built that way are results a caller still has in hand, and the labels
+# read off the column are the strings either way.
+factor_effect_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$effect <- factor(estimates$effect, levels = estimates$effect)
+  estimates
+}
+
+# The binary fixture with the first `rows` rows recording no measure. The count
+# is an argument because the refusal reports it, and the sentence it reports it
+# in agrees with it.
+unnamed_effect_estimates <- function(rows) {
+  estimates <- binary_estimates()
+  estimates$effect[seq_len(rows)] <- NA_character_
+  estimates
+}
+
+# The same frame written as a factor, so that the missing measure is a missing
+# level rather than a missing string. A factor column is accepted where a
+# character one is, so the check has to read the values the column holds rather
+# than the type it has.
+factor_unnamed_effect_estimates <- function() {
+  estimates <- unnamed_effect_estimates(1L)
+  estimates$effect <- factor(
+    estimates$effect,
+    levels = binary_estimates()$effect
+  )
+  estimates
+}
+
+test_that("new_ipw() refuses estimates that are not a data frame", {
+  # The three shapes a caller reaches for instead. A list of the columns answers
+  # `$effect` and nothing that indexes rows; a matrix answers by column name and
+  # gives a vector back, having coerced every number to a string on the way in;
+  # `NULL` answers the first column asked for with `NULL`.
+  expect_error(
+    ipw_result(NULL),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(ipw_result(NULL), class = "causalgenerics_invalid_argument")
+  expect_error(
+    ipw_result(as.list(binary_estimates())),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(as.list(binary_estimates())),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_result(as.matrix(binary_estimates())),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(as.matrix(binary_estimates())),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  expect_snapshot(error = TRUE, ipw_result(as.list(binary_estimates())))
+})
+
+test_that("new_ipw() refuses an estimates frame that names no effects", {
+  # Every label a result reports starts with this column, so a frame without it
+  # has no row identity at all: `coef()` would name nothing, `vcov()` would have
+  # no dimnames, and the pooling would have no key to average rows by.
+  expect_error(
+    ipw_result(effectless_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(effectless_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  expect_snapshot(error = TRUE, ipw_result(effectless_estimates()))
+})
+
+test_that("new_ipw() refuses an effect column that names no measures", {
+  # The labels are read off the column as strings, so a column of numbers pastes
+  # into labels that read as row indices rather than as the measures the rows
+  # report. Nothing downstream fails on that, which is why it is refused here.
+  expect_error(
+    ipw_result(numeric_effect_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(numeric_effect_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  expect_snapshot(error = TRUE, ipw_result(numeric_effect_estimates()))
+})
+
+test_that("new_ipw() refuses an effect column that leaves a row unnamed", {
+  # A missing measure pastes into a label reading `"NA"`, which names no effect,
+  # and a second one pastes into the same label as the first, which leaves
+  # `coef()` naming two elements the same thing and `vcov()` repeating a name
+  # down both of its dimnames. It is the fault the `group` column is already
+  # refused for, in the column every result has.
+  expect_error(
+    ipw_result(unnamed_effect_estimates(1L)),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(unnamed_effect_estimates(1L)),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  # A factor records the missing measure as a missing level, which reads as the
+  # same label and is refused in the same words.
+  expect_error(
+    ipw_result(factor_unnamed_effect_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(factor_unnamed_effect_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  # Both counts are recorded, because the message counts the rows and the
+  # sentence reporting the count agrees with it.
+  expect_snapshot(error = TRUE, ipw_result(unnamed_effect_estimates(1L)))
+  expect_snapshot(error = TRUE, ipw_result(unnamed_effect_estimates(2L)))
+  expect_snapshot(error = TRUE, ipw_result(factor_unnamed_effect_estimates()))
+})
+
+test_that("new_ipw() constructs a result from the documented frame", {
+  # The lawful half of the check. Every frame the contract describes is stored
+  # as it was handed over, whichever optional identity columns it carries, and
+  # the labels come off it as they always did.
+  for (estimates in list(
+    binary_estimates(),
+    contrast_estimates(),
+    categorical_estimates(),
+    continuous_estimates()
+  )) {
+    expect_identical(ipw_result(estimates)$estimates, estimates)
+  }
+
+  # A factor column is stored too. The labels are the strings either way, and a
+  # frame written when `data.frame()` coded its strings as factors is a frame a
+  # caller still has in hand.
+  factored <- factor_effect_estimates()
+
+  expect_identical(ipw_result(factored)$estimates, factored)
+  expect_identical(
+    ipw_effect_labels(ipw_result(factored)$estimates),
+    c("rd", "log(rr)", "log(or)")
+  )
 })
 
 # ---- print.ipw() -------------------------------------------------------------
@@ -1604,35 +1974,15 @@ test_that("as.data.frame(exponentiate = TRUE) drops the covariance", {
   expect_identical(attr(res$estimates, "ipw_vcov", exact = TRUE), covariance)
 })
 
-test_that("as.data.frame() returns the same table in either mode", {
-  # The mode says which surface `print()` and the accessors report. The table is
-  # built from the estimates the result stores, which both readings hold, so
-  # flipping a result to read its coefficients does not change what
-  # `as.data.frame()` means. A caller who does not want the effects table asks
-  # the outcome model for its own.
-  marginal <- ipw_result(binary_estimates())
-  conditional <- as_conditional(marginal)
-
-  expect_identical(conditional$effects, "conditional")
-  expect_identical(as.data.frame(conditional), as.data.frame(marginal))
-  expect_identical(
-    as.data.frame(conditional, conf.int = TRUE, conf.level = 0.9),
-    as.data.frame(marginal, conf.int = TRUE, conf.level = 0.9)
-  )
-  expect_identical(
-    as.data.frame(conditional, exponentiate = TRUE),
-    as.data.frame(marginal, exponentiate = TRUE)
-  )
-})
-
 test_that("as.data.frame() returns the same table for a result with no mode", {
-  # A result stored before the field existed carries six fields. The table is
-  # the estimates it holds either way, so it is the seven-field result's table
-  # exactly rather than a third thing.
+  # A result stored before the field existed carries six fields. It reads as
+  # marginal, and the marginal table is the estimates it holds, so it is the
+  # eight-field result's table exactly rather than a third thing.
   legacy <- legacy_result()
 
   expect_length(legacy, 6L)
   expect_null(legacy$effects)
+  expect_null(legacy$readings)
 
   marginal <- ipw_result(binary_estimates())
 
@@ -1644,6 +1994,31 @@ test_that("as.data.frame() returns the same table for a result with no mode", {
   expect_identical(
     as.data.frame(legacy, conf.int = TRUE, exponentiate = TRUE),
     as.data.frame(marginal, conf.int = TRUE, exponentiate = TRUE)
+  )
+})
+
+test_that("as.data.frame() reports either reading of a result with no mode", {
+  # The older result records no set of readings either, and it reads as
+  # supporting both, so naming the conditional reading reports the outcome
+  # model's coefficients rather than being refused. The table is the one the
+  # same models give from a result that records the mode, so what the argument
+  # reports does not depend on the vintage of the result it was asked of.
+  fields <- unclass(conditional_result())
+  fields$effects <- NULL
+  fields$readings <- NULL
+  legacy <- structure(fields, class = "ipw")
+
+  expect_length(legacy, 6L)
+  expect_null(legacy$effects)
+  expect_null(legacy$readings)
+
+  expect_identical(
+    as.data.frame(legacy, effects = "conditional"),
+    as.data.frame(conditional_result())
+  )
+  expect_identical(
+    as.data.frame(legacy, effects = "marginal"),
+    as.data.frame(legacy)
   )
 })
 
@@ -1854,6 +2229,387 @@ test_that("the as.data.frame() argument errors state the contract", {
   expect_snapshot(error = TRUE, as.data.frame(res, conf.level = 95))
   expect_snapshot(error = TRUE, as.data.frame(res, conf.int = NA))
   expect_snapshot(error = TRUE, as.data.frame(res, exponentiate = 1))
+})
+
+# ---- as.data.frame.ipw() and the reading it presents -------------------------
+
+# The table is a reading of the result rather than a copy of one component of
+# it, so it presents the reading the result records and takes an `effects`
+# argument naming one for a single call, the way `coef()`, `vcov()`, and
+# `confint()` do. The marginal reading is the table every assertion in the
+# section above is written against, and it is unchanged: a result that records
+# it reports exactly what it reported before the argument existed.
+#
+# The conditional reading is the outcome model's coefficient surface, keyed by
+# coefficient name, with the standard errors implied by the corrected block a
+# fitting package attached with `new_ipw_model()`. It carries neither a
+# `contrast` column nor a `group` one: those name the rows of the effects table,
+# and a coefficient is named by itself. The shape is the one
+# `as.data.frame.ipw_pooled()` reports for the same reading, without the `df`
+# column that a pooled result has and an unpooled one does not, so a caller who
+# pools a set of results reads the same table under the same headings.
+
+# The corrected block the conditional fixtures carry, rebuilt here so that the
+# expected standard errors are written from the block rather than read back off
+# the object under test.
+conditional_block <- function() {
+  corrected_outcome_vcov(conditional_models()$outcome_mod)
+}
+
+# A conditional result whose outcome model was fitted with the identity link.
+# Nothing about such a coefficient is on a scale an exponential undoes, and the
+# conditional reading has no ratio rows to pick out instead, so the link is what
+# settles whether the table can be reported on the exponentiated scale at all.
+identity_link_result <- function() {
+  dat <- conditional_data()
+  mod <- glm(y ~ z, family = gaussian(), data = dat)
+
+  new_ipw(
+    estimand = "ate",
+    wt_mod = glm(z ~ x, family = binomial(), data = dat),
+    outcome_mod = new_ipw_model(mod, corrected_outcome_vcov(mod)),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "conditional"
+  )
+}
+
+# A result that supports one reading only, which is what a fitting package
+# records when the other one has no meaning for the analysis it ran. The outcome
+# model carries its corrected block, so the reading is refused for being
+# unsupported rather than for the block being absent.
+marginal_only_result <- function() {
+  mods <- conditional_models()
+  outcome_mod <- new_ipw_model(
+    mods$outcome_mod,
+    corrected_outcome_vcov(mods$outcome_mod)
+  )
+
+  new_ipw(
+    estimand = "ate",
+    wt_mod = mods$wt_mod,
+    outcome_mod = outcome_mod,
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "marginal",
+    readings = "marginal"
+  )
+}
+
+# A conditional result whose estimates carry the covariance of the effects the
+# other reading reports, so that the two blocks a table can travel with are
+# both present and a test can say which one it got.
+conditional_with_effects_vcov <- function() {
+  res <- conditional_result()
+  attr(res$estimates, "ipw_vcov") <- binary_vcov()
+  res
+}
+
+test_that("as.data.frame() takes an effects argument after its named ones", {
+  # The argument order is the contract a positional call is written against.
+  # `effects` sits after the three arguments this method already had, so every
+  # call written against the earlier signature means here what it meant there.
+  expect_identical(
+    names(formals(as.data.frame.ipw)),
+    c(
+      "x",
+      "row.names",
+      "optional",
+      "...",
+      "conf.int",
+      "conf.level",
+      "exponentiate",
+      "effects"
+    )
+  )
+})
+
+test_that("as.data.frame() presents the reading the result records", {
+  # The mode says which surface the result presents, and the table is a
+  # presentation of the result. A conditional result therefore reports its
+  # coefficients here rather than the effects the other reading holds.
+  marginal <- ipw_result(binary_estimates())
+  conditional <- conditional_result()
+
+  expect_identical(
+    names(as.data.frame(marginal)),
+    c("term", "estimate", "std.error", "statistic", "p.value")
+  )
+  expect_identical(as.data.frame(marginal)$term, c("rd", "log(rr)", "log(or)"))
+
+  expect_identical(as.data.frame(conditional)$term, c("(Intercept)", "z"))
+  expect_false(identical(
+    as.data.frame(conditional),
+    as.data.frame(marginal)
+  ))
+})
+
+test_that("as.data.frame() reports the coefficient surface conditionally", {
+  res <- conditional_result()
+  covariance <- conditional_block()
+  estimate <- coef(conditional_models()$outcome_mod)
+  std_error <- sqrt(diag(covariance))
+  statistic <- estimate / std_error
+
+  df <- as.data.frame(res)
+
+  expect_s3_class(df, "data.frame", exact = TRUE)
+  expect_identical(
+    names(df),
+    c("term", "estimate", "std.error", "statistic", "p.value")
+  )
+
+  # The term is the coefficient's name. A conditional table names no contrasts
+  # and no subgroups: those key the rows of the effects table, and a coefficient
+  # is named by itself.
+  expect_identical(df$term, c("(Intercept)", "z"))
+  expect_false(any(c("contrast", "comparison", "group") %in% names(df)))
+
+  # Every numeric column is unnamed and the row names are the automatic ones,
+  # which is what keeps this table the shape the pooled method reports rather
+  # than one whose rows are keyed twice over.
+  expect_identical(df$estimate, unname(estimate))
+  expect_identical(df$std.error, unname(std_error))
+  expect_identical(df$statistic, unname(statistic))
+  expect_identical(df$p.value, unname(2 * pnorm(-abs(statistic))))
+  expect_identical(rownames(df), c("1", "2"))
+
+  # The standard errors are the corrected ones rather than the ones the outcome
+  # model computed for itself, which treat the estimated weights as fixed.
+  expect_false(identical(
+    df$std.error,
+    unname(sqrt(diag(vcov(conditional_models()$outcome_mod))))
+  ))
+})
+
+test_that("as.data.frame() names a reading for one call", {
+  # The argument overrides the recorded mode in both directions, and `NULL`
+  # declines to override rather than naming a third reading.
+  marginal <- as_marginal(conditional_result())
+  conditional <- conditional_result()
+
+  expect_identical(
+    as.data.frame(marginal, effects = "conditional"),
+    as.data.frame(conditional)
+  )
+  expect_identical(
+    as.data.frame(conditional, effects = "marginal"),
+    as.data.frame(marginal)
+  )
+
+  # The two tables are keyed differently, so the identities above are about the
+  # argument rather than about a pair of readings that report the same rows.
+  expect_identical(
+    as.data.frame(marginal, effects = "conditional")$term,
+    c("(Intercept)", "z")
+  )
+  expect_identical(
+    as.data.frame(conditional, effects = "marginal")$term,
+    c("rd", "log(rr)", "log(or)")
+  )
+  expect_identical(
+    as.data.frame(conditional, effects = NULL),
+    as.data.frame(
+      conditional
+    )
+  )
+  expect_identical(
+    as.data.frame(marginal, effects = NULL),
+    as.data.frame(
+      marginal
+    )
+  )
+})
+
+test_that("the marginal table is the one that was there before the reading", {
+  # The reading adds a surface; it does not move the one that was already
+  # reported. A marginal result and a conditional one asked for the marginal
+  # reading both report the effects table, with every argument meaning what it
+  # meant before.
+  res <- ipw_result(binary_estimates())
+  conditional <- conditional_result()
+
+  for (arguments in list(
+    list(),
+    list(conf.int = TRUE),
+    list(conf.int = TRUE, conf.level = 0.9),
+    list(conf.int = TRUE, exponentiate = TRUE)
+  )) {
+    expect_identical(
+      do.call(as.data.frame, c(list(res), arguments)),
+      do.call(as.data.frame, c(list(res, effects = "marginal"), arguments))
+    )
+    expect_identical(
+      do.call(
+        as.data.frame,
+        c(list(conditional, effects = "marginal"), arguments)
+      ),
+      do.call(as.data.frame, c(list(res), arguments))
+    )
+  }
+})
+
+test_that("as.data.frame(conf.int = TRUE) bounds the conditional rows", {
+  # The frame's stored bounds belong to the effects the other reading reports,
+  # so there is no stored pair to prefer here and every level is the normal
+  # approximation built from the coefficient and its corrected standard error.
+  # The bounds are appended after the columns the table always carries.
+  res <- conditional_result()
+  estimate <- unname(coef(conditional_models()$outcome_mod))
+  std_error <- unname(sqrt(diag(conditional_block())))
+
+  df <- as.data.frame(res, conf.int = TRUE)
+
+  expect_identical(
+    names(df),
+    c(
+      "term",
+      "estimate",
+      "std.error",
+      "statistic",
+      "p.value",
+      "conf.low",
+      "conf.high"
+    )
+  )
+
+  half_width <- qnorm(1 - (1 - 0.95) / 2) * std_error
+  expect_identical(df$conf.low, estimate - half_width)
+  expect_identical(df$conf.high, estimate + half_width)
+
+  # Another level moves the bounds and nothing else.
+  wider <- as.data.frame(res, conf.int = TRUE, conf.level = 0.9)
+  narrow_width <- qnorm(1 - (1 - 0.9) / 2) * std_error
+
+  expect_identical(wider$conf.low, estimate - narrow_width)
+  expect_identical(wider$conf.high, estimate + narrow_width)
+  expect_identical(wider$estimate, df$estimate)
+})
+
+test_that("as.data.frame() carries the conditional block as the covariance", {
+  # The covariance belongs to the estimates the table reports, so the reading
+  # decides which block travels on it: the corrected block for the coefficients,
+  # and the effects covariance for the effects. The two are different matrices
+  # of different sizes, so a table carrying the wrong one is not a table that
+  # happens to agree.
+  res <- conditional_with_effects_vcov()
+
+  expect_identical(
+    attr(as.data.frame(res), "ipw_vcov", exact = TRUE),
+    conditional_block()
+  )
+  expect_identical(
+    attr(as.data.frame(res, effects = "marginal"), "ipw_vcov", exact = TRUE),
+    binary_vcov()
+  )
+})
+
+test_that("as.data.frame(exponentiate = TRUE) moves every conditional row", {
+  # A conditional table has no rows labeled as ratios to pick out, so the link
+  # settles it for the whole table at once, which is what the pooled method does
+  # for the same reading. The labels are coefficient names rather than scales,
+  # so they stay as they are, and the covariance is dropped because it describes
+  # the coefficients on the scale they were estimated on.
+  res <- conditional_result()
+  estimate <- unname(coef(conditional_models()$outcome_mod))
+  std_error <- unname(sqrt(diag(conditional_block())))
+
+  df <- as.data.frame(res, conf.int = TRUE, exponentiate = TRUE)
+
+  expect_identical(df$term, c("(Intercept)", "z"))
+  expect_identical(df$estimate, exp(estimate))
+  # The inference stays on the log scale, which is where it was done.
+  expect_identical(df$std.error, std_error)
+  expect_identical(df$statistic, as.data.frame(res)$statistic)
+  expect_identical(df$p.value, as.data.frame(res)$p.value)
+
+  half_width <- qnorm(1 - (1 - 0.95) / 2) * std_error
+  expect_identical(df$conf.low, exp(estimate - half_width))
+  expect_identical(df$conf.high, exp(estimate + half_width))
+
+  expect_null(attr(df, "ipw_vcov", exact = TRUE))
+})
+
+test_that("as.data.frame() refuses to exponentiate an unexponentiable link", {
+  # An identity link puts the coefficients on no scale an exponential undoes,
+  # and there is no subset of rows to move instead, so the call is refused
+  # rather than answered in part. It is the refusal the pooled method raises for
+  # the same reading, in the same words.
+  res <- identity_link_result()
+
+  expect_error(
+    as.data.frame(res, exponentiate = TRUE),
+    class = "causalgenerics_exponentiate_link"
+  )
+  expect_error(
+    as.data.frame(res, exponentiate = TRUE),
+    class = "causalgenerics_invalid_argument_exponentiate"
+  )
+  expect_error(
+    as.data.frame(res, exponentiate = TRUE),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_snapshot(error = TRUE, as.data.frame(res, exponentiate = TRUE))
+
+  # The marginal reading of the same result picks its rows out by label, so it
+  # is unaffected by the link.
+  expect_no_error(
+    as.data.frame(res, effects = "marginal", exponentiate = TRUE)
+  )
+})
+
+test_that("as.data.frame() refuses a conditional reading with no block", {
+  # The conditional standard errors are the ones the joint estimation implies,
+  # and a model a fitting package never wrapped carries none. `print()` reports
+  # such a result with a note in place of the errors, because the printed form
+  # is the view of whatever a caller is holding; a table has no place to put a
+  # note, and a column of the model's own standard errors would be read as the
+  # corrected ones.
+  res <- conditional_result(wrap = FALSE)
+
+  expect_error(
+    as.data.frame(res),
+    class = "causalgenerics_no_conditional_vcov"
+  )
+  expect_error(as.data.frame(res), class = "causalgenerics_no_vcov")
+  expect_snapshot(error = TRUE, as.data.frame(res))
+
+  # The marginal reading of the same result is unaffected, so the refusal is
+  # about the one request rather than about the result.
+  expect_no_error(as.data.frame(res, effects = "marginal"))
+})
+
+test_that("as.data.frame() refuses a reading the result does not support", {
+  # A result that supports one reading has no table to report for the other, so
+  # naming it is refused here the way it is at the accessors. The classes and
+  # the fields are the same ones, since a handler cares that the reading is not
+  # there rather than which surface asked for it.
+  res <- marginal_only_result()
+
+  expect_error(
+    as.data.frame(res, effects = "conditional"),
+    class = "causalgenerics_unsupported_reading_conditional"
+  )
+  expect_error(
+    as.data.frame(res, effects = "conditional"),
+    class = "causalgenerics_unsupported_reading"
+  )
+  expect_snapshot(error = TRUE, as.data.frame(res, effects = "conditional"))
+
+  cnd <- tryCatch(
+    as.data.frame(res, effects = "conditional"),
+    error = identity
+  )
+  expect_identical(cnd$effects, "conditional")
+  expect_identical(cnd$readings, "marginal")
+
+  # The reading it does support is reported as it always was.
+  expect_identical(
+    as.data.frame(res, effects = "marginal"),
+    as.data.frame(res)
+  )
 })
 
 # ---- the contrast column -----------------------------------------------------

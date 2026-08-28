@@ -9,18 +9,36 @@
 #'   coefficient surface.
 #'
 #' @details
-#' Both surfaces exist on every `ipw` result, so on one of those these generics
-#' record which one the result presents rather than computing anything. They set
-#' the `effects` field of the [new_ipw()] contract and read nothing else, which
-#' makes them the supported way to move a result between the two readings: a
-#' caller writes `as_conditional(res)` rather than assigning to the field.
+#' Both surfaces exist on an `ipw` result that supports both readings, so on one
+#' of those these generics record which one the result presents rather than
+#' computing anything. They set the `effects` field of the [new_ipw()] contract
+#' and read the `readings` field beside it, which makes them the supported way
+#' to move a result between the two readings: a caller writes
+#' `as_conditional(res)` rather than assigning to the field, and a result that
+#' does not support the reading asked for is refused rather than left recording
+#' one it has no surface for.
 #'
-#' The methods on `ipw` are total. Every such result has one of the two modes,
-#' so asking for either is always answerable: they never error, asking twice
-#' says what asking once said, and a result that goes out to the other reading
-#' and back is the result that went in. A result built before the field existed
-#' carries six fields rather than seven and reads as marginal, which is the mode
-#' every method produced then.
+#' The methods on `ipw` hold for a result that supports both readings, which is
+#' what a result records unless the package that built it said otherwise. Asking
+#' such a result for either reading is always answerable: the methods never
+#' error on one, asking twice says what asking once said, and a result that goes
+#' out to the other reading and back is the result that went in.
+#'
+#' A result that supports one reading is refused the other rather than moved to
+#' it. The `readings` field says which ones a result can present, and a fitting
+#' package records one of them when the other has no meaning for the analysis it
+#' ran. Asking for a reading outside that set raises an error of class
+#' `causalgenerics_unsupported_reading_marginal` or
+#' `causalgenerics_unsupported_reading_conditional`, and of the general class
+#' `causalgenerics_unsupported_reading`, which carries the reading asked for
+#' under `effects` and the set the result records under `readings`. The reading
+#' such a result does support is the no-op it is on a result carrying both.
+#'
+#' A result built before the fields existed carries six or seven fields rather
+#' than eight, since the two were added one at a time. It reads as marginal
+#' where it records no mode, which is the mode every method produced then, and
+#' as supporting both readings where it records no set, which is what every
+#' result was assumed to support when none of them recorded otherwise.
 #'
 #' The generics live here for the reason `print()` does. Two packages each
 #' registering `as_conditional.ipw()` would collide in the shared S3 method
@@ -62,7 +80,9 @@
 #'
 #' @return `x` presenting the reading asked for. The methods on `ipw` change the
 #'   `effects` field and nothing else, so every other field comes back as it
-#'   went in, the covariance attached to `estimates` included. The methods on
+#'   went in, the covariance attached to `estimates` and the set of readings the
+#'   result supports included. A result that does not support the reading asked
+#'   for raises an error rather than returning one. The methods on
 #'   `ipw_pooled` exchange `estimates`, `pooling`, and the recorded mode with the
 #'   reading stored under `alternate`, so the reading that was presented is what
 #'   the returned result stores there, and the components shared by both readings
@@ -111,6 +131,20 @@
 #' identical(as_marginal(res), res)
 #' identical(as_marginal(as_conditional(res)), res)
 #'
+#' # A result that supports one reading is refused the other rather than moved
+#' # to it.
+#' marginal_only <- new_ipw(
+#'   estimand = "ate",
+#'   wt_mod = glm(z ~ x, family = binomial(), data = dat),
+#'   outcome_mod = glm(y ~ z, family = quasibinomial(), data = dat),
+#'   estimates = estimates,
+#'   se_method = "linearization",
+#'   fit = NULL,
+#'   readings = "marginal"
+#' )
+#'
+#' try(as_conditional(marginal_only))
+#'
 #' # Neither reading exists for an object that is not an IPW result.
 #' try(as_marginal(1:3))
 #'
@@ -125,6 +159,10 @@ as_marginal <- function(x, ...) {
 
 #' @export
 as_marginal.ipw <- function(x, ...) {
+  # The set the result records is read before the field is written, so that a
+  # result which cannot present this reading is refused rather than left
+  # recording a mode it has no surface for.
+  check_ipw_reading(x, "marginal")
   x$effects <- "marginal"
   x
 }
@@ -147,6 +185,7 @@ as_conditional <- function(x, ...) {
 
 #' @export
 as_conditional.ipw <- function(x, ...) {
+  check_ipw_reading(x, "conditional")
   x$effects <- "conditional"
   x
 }
@@ -235,19 +274,45 @@ flip_ipw_pooled <- function(x, effects, call = sys.call(-1)) {
 #' rather than passed on, so that a caller reading the mode gets one of the two
 #' readings or an error and never a third thing to branch on.
 #'
+#' The mode is checked against the readings the result records for the same
+#' reason. The constructor refuses a set that leaves the mode out and the mode
+#' generics refuse a reading outside the set, so a result whose two fields
+#' disagree was assigned to directly as well, and the mode read off it names a
+#' surface the result itself says it has no reading of. Reading it back would
+#' report that surface, which is the state both of those refusals exist to keep
+#' out, so it is refused here in the words and with the classes the mode
+#' generics use.
+#'
+#' Neither field has to be there. A result recording no mode reads as marginal
+#' and one recording no set reads as supporting both, and the check is made
+#' between what the two are read as rather than between what they store: a
+#' result that records the conditional reading alone and no mode reads as
+#' presenting a reading it does not support, which is the disagreement, whether
+#' or not the mode was written out.
+#'
+#' The position is passed on to the cross-check for the reason
+#' `pool_surface()` passes one on. A caller reading the mode of one result has
+#' no set to place it in, and the pooling reads the mode of each result of a set
+#' in turn, so the refusal a set raises says which result of it was being read.
+#'
 #' @param object An `ipw` object.
+#' @param position The result's position in the set being pooled, or `NULL`
+#'   where a single result was asked directly and there is no set to place it
+#'   in.
 #' @param call The call to report an invalid stored mode against, which is the
 #'   accessor's rather than this helper's.
 #'
 #' @return A single string, either `"marginal"` or `"conditional"`.
 #'
 #' @noRd
-ipw_effects <- function(object, call = sys.call(-1)) {
+ipw_effects <- function(object, position = NULL, call = sys.call(-1)) {
   effects <- object$effects
   if (is.null(effects)) {
-    return("marginal")
+    effects <- "marginal"
+  } else {
+    check_ipw_effects(effects, call = call)
   }
-  check_ipw_effects(effects, call = call)
+  check_ipw_reading(object, effects, position = position, call = call)
   effects
 }
 
@@ -262,6 +327,12 @@ ipw_effects <- function(object, call = sys.call(-1)) {
 #' all in that case. A result whose field was assigned to directly is therefore
 #' still readable by naming a mode, and reading it without naming one is refused
 #' where the field is read.
+#'
+#' A named mode is checked against the readings the result supports, and one
+#' outside them is refused rather than reported from a surface the result has no
+#' reading of. A mode read off the result is checked against them too, in
+#' `ipw_effects()` where it is read rather than here, so that the two routes to
+#' a mode answer the same way.
 #'
 #' That last part is about resolving the mode, which is all this helper does. It
 #' holds for a caller that goes on to report the resolved mode directly, as the
@@ -283,7 +354,81 @@ resolve_ipw_effects <- function(object, effects, call = sys.call(-1)) {
     return(ipw_effects(object, call = call))
   }
   check_ipw_effects(effects, call = call)
+  check_ipw_reading(object, effects, call = call)
   effects
+}
+
+#' The readings a result supports
+#'
+#' The set is the `readings` field of the [new_ipw()] contract, read through one
+#' helper so that a result which does not carry it is read the same way
+#' everywhere. Three shapes do not carry it: a result stored before either field
+#' existed has six fields, one stored between them has seven, and a list built
+#' with `readings = NULL` has eight, one of them empty. None of them records a
+#' set, and both readings were assumed to exist on every result when none of
+#' them recorded otherwise, so all three are read as supporting both rather than
+#' refused.
+#'
+#' A field holding anything else was assigned to directly, which is outside the
+#' contract the constructor keeps, and it is refused here rather than passed on.
+#' The mode the field has to include is not checked here, since the field being
+#' read says nothing about which reading the result presents. A stored mode the
+#' set leaves out is refused in `ipw_effects()`, where the mode is read.
+#'
+#' @param object An `ipw` object.
+#' @param call The call to report an invalid stored set against, which is the
+#'   accessor's rather than this helper's.
+#'
+#' @return A character vector of one or both of `"marginal"` and
+#'   `"conditional"`.
+#'
+#' @noRd
+ipw_readings <- function(object, call = sys.call(-1)) {
+  readings <- object$readings
+  if (is.null(readings)) {
+    return(c("marginal", "conditional"))
+  }
+  check_ipw_readings(readings, call = call)
+  readings
+}
+
+#' Refuse a reading the result does not support
+#'
+#' Several surfaces ask the same question of a result: the mode generics, which
+#' would otherwise record a reading the result cannot present; the accessors,
+#' `as.data.frame()`, and the pooling, which would otherwise report one; and
+#' `ipw_effects()`, whose answer would otherwise be a mode the result records no
+#' reading of. The question is asked here once so that all of them refuse in the
+#' same words and with the same classes.
+#'
+#' @param object An `ipw` object.
+#' @param effects The reading that was asked for.
+#' @param position The result's position in the set being pooled, or `NULL`
+#'   where a single result was asked directly and there is no set to place it
+#'   in.
+#' @param call The call to report the refusal against, which is the generic's or
+#'   the method's rather than this helper's.
+#'
+#' @return `effects`, invisibly, when the result supports it.
+#'
+#' @noRd
+check_ipw_reading <- function(
+  object,
+  effects,
+  position = NULL,
+  call = sys.call(-1)
+) {
+  readings <- ipw_readings(object, call = call)
+  if (!effects %in% readings) {
+    stop_unsupported_reading(
+      effects,
+      readings,
+      position = position,
+      call = call
+    )
+  }
+
+  invisible(effects)
 }
 
 #' Refuse an `effects` value that is not a mode
@@ -317,4 +462,68 @@ check_ipw_effects <- function(effects, call = sys.call(-1)) {
   }
 
   invisible(effects)
+}
+
+#' Refuse a set of readings that is not one
+#'
+#' There are two readings and no third, so a set is one or both of them. The
+#' empty set is refused along with the rest, since a result supporting no
+#' reading reports nothing at all, and so is `NULL`: that is how a result stored
+#' before the field existed records no set, and it is read as both wherever it
+#' is read, so naming it here would ask the constructor to write that shape
+#' deliberately. A reading named twice says nothing a set naming it once does
+#' not, and it would leave the field with more entries than there are readings.
+#'
+#' The set is checked against the mode as well when there is a mode to check it
+#' against. A result cannot record a reading it does not support: the mode says
+#' which surface the result presents, and a result presenting one it has no
+#' reading of is a state every method downstream would have to have an answer
+#' for. `effects` is `NULL` where a stored set is read back rather than
+#' supplied, which is the one case with no mode in hand to compare it to.
+#'
+#' @param readings The `readings` argument as the caller supplied it, or the
+#'   field as a result stores it.
+#' @param effects The mode the result records, or `NULL` when there is none to
+#'   check the set against.
+#' @param call The call to report the error against, which is the constructor's
+#'   or the accessor's rather than this helper's.
+#'
+#' @return `readings`, invisibly, when it is a set of readings.
+#'
+#' @noRd
+check_ipw_readings <- function(readings, effects = NULL, call = sys.call(-1)) {
+  # `%in%` rather than `==` so that a missing string is refused along with the
+  # rest rather than making the test itself missing.
+  # Membership and distinctness bound the length between them, so a set of the
+  # right kind cannot be longer than there are readings.
+  is_set <- is.character(readings) &&
+    length(readings) >= 1L &&
+    all(readings %in% c("marginal", "conditional")) &&
+    anyDuplicated(readings) == 0L
+
+  if (!is_set) {
+    stop_invalid_argument(
+      "readings",
+      paste0(
+        'be a character vector of one or both of "marginal" and ',
+        '"conditional", each named at most once'
+      ),
+      call = call
+    )
+  }
+
+  if (!is.null(effects) && !effects %in% readings) {
+    stop_invalid_argument(
+      "readings",
+      paste0(
+        "include the reading the result records, since a result cannot record ",
+        "a reading it does not support, and this one records the ",
+        encodeString(effects, quote = '"'),
+        " reading"
+      ),
+      call = call
+    )
+  }
+
+  invisible(readings)
 }

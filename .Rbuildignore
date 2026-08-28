@@ -14,3 +14,5 @@
 ^\.beads$
 ^\.git$
 ^CRAN-SUBMISSION$
+^\.braid\.toml$
+^\.braid-project$

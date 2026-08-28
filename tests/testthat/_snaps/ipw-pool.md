@@ -70,6 +70,14 @@
       Error in `pool_ipw()`:
       ! The presentation mode must be the same in every result, but they report "marginal" and "conditional".
 
+# pool_ipw() reports an unreadable stored mode against itself
+
+    Code
+      pool_ipw(fits, dfcom = 18)
+    Condition
+      Error in `pool_ipw()`:
+      ! `effects` must be a single string, either "marginal" or "conditional".
+
 # pool_ipw() refuses results reporting different effects
 
     Code
@@ -157,4 +165,36 @@
     Condition
       Error in `pool_ipw()`:
       ! The effects reported must be the same in every result, but they report ("rd sex = 0", "log(rr) sex = 0", "log(or) sex = 0", "rd sex = 1", "log(rr) sex = 1", "log(or) sex = 1") and ("rd sex = 0", "log(rr) sex = 0", "log(or) sex = 0", "rd sex = 2", "log(rr) sex = 2", "log(or) sex = 2").
+
+# pool_ipw() refuses a reading the results do not support
+
+    Code
+      pool_ipw(fits, effects = "marginal", dfcom = 18)
+    Condition
+      Error in `pool_ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result. It is the result at position 1 of `fits`.
+
+# pool_ipw() refuses a reading one result of the set lacks
+
+    Code
+      pool_ipw(fits, effects = "marginal", dfcom = 18)
+    Condition
+      Error in `pool_ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result. It is the result at position 2 of `fits`.
+
+# pool_ipw() names the result whose stored mode it cannot read
+
+    Code
+      pool_ipw(fits, dfcom = 18)
+    Condition
+      Error in `pool_ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result. It is the result at position 2 of `fits`.
+
+# pool_ipw() refuses the conditional reading of a marginal-only set
+
+    Code
+      pool_ipw(fits, effects = "conditional", dfcom = 17)
+    Condition
+      Error in `pool_ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result. It is the result at position 1 of `fits`.
 

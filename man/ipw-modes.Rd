@@ -19,7 +19,9 @@ argument.}
 \value{
 \code{x} presenting the reading asked for. The methods on \code{ipw} change the
 \code{effects} field and nothing else, so every other field comes back as it
-went in, the covariance attached to \code{estimates} included. The methods on
+went in, the covariance attached to \code{estimates} and the set of readings the
+result supports included. A result that does not support the reading asked
+for raises an error rather than returning one. The methods on
 \code{ipw_pooled} exchange \code{estimates}, \code{pooling}, and the recorded mode with the
 reading stored under \code{alternate}, so the reading that was presented is what
 the returned result stores there, and the components shared by both readings
@@ -36,18 +38,36 @@ coefficient surface.
 }
 }
 \details{
-Both surfaces exist on every \code{ipw} result, so on one of those these generics
-record which one the result presents rather than computing anything. They set
-the \code{effects} field of the \code{\link[=new_ipw]{new_ipw()}} contract and read nothing else, which
-makes them the supported way to move a result between the two readings: a
-caller writes \code{as_conditional(res)} rather than assigning to the field.
+Both surfaces exist on an \code{ipw} result that supports both readings, so on one
+of those these generics record which one the result presents rather than
+computing anything. They set the \code{effects} field of the \code{\link[=new_ipw]{new_ipw()}} contract
+and read the \code{readings} field beside it, which makes them the supported way
+to move a result between the two readings: a caller writes
+\code{as_conditional(res)} rather than assigning to the field, and a result that
+does not support the reading asked for is refused rather than left recording
+one it has no surface for.
 
-The methods on \code{ipw} are total. Every such result has one of the two modes,
-so asking for either is always answerable: they never error, asking twice
-says what asking once said, and a result that goes out to the other reading
-and back is the result that went in. A result built before the field existed
-carries six fields rather than seven and reads as marginal, which is the mode
-every method produced then.
+The methods on \code{ipw} hold for a result that supports both readings, which is
+what a result records unless the package that built it said otherwise. Asking
+such a result for either reading is always answerable: the methods never
+error on one, asking twice says what asking once said, and a result that goes
+out to the other reading and back is the result that went in.
+
+A result that supports one reading is refused the other rather than moved to
+it. The \code{readings} field says which ones a result can present, and a fitting
+package records one of them when the other has no meaning for the analysis it
+ran. Asking for a reading outside that set raises an error of class
+\code{causalgenerics_unsupported_reading_marginal} or
+\code{causalgenerics_unsupported_reading_conditional}, and of the general class
+\code{causalgenerics_unsupported_reading}, which carries the reading asked for
+under \code{effects} and the set the result records under \code{readings}. The reading
+such a result does support is the no-op it is on a result carrying both.
+
+A result built before the fields existed carries six or seven fields rather
+than eight, since the two were added one at a time. It reads as marginal
+where it records no mode, which is the mode every method produced then, and
+as supporting both readings where it records no set, which is what every
+result was assumed to support when none of them recorded otherwise.
 
 The generics live here for the reason \code{print()} does. Two packages each
 registering \code{as_conditional.ipw()} would collide in the shared S3 method
@@ -120,6 +140,20 @@ as_conditional(res)$effects
 # the two readings round-trip.
 identical(as_marginal(res), res)
 identical(as_marginal(as_conditional(res)), res)
+
+# A result that supports one reading is refused the other rather than moved
+# to it.
+marginal_only <- new_ipw(
+  estimand = "ate",
+  wt_mod = glm(z ~ x, family = binomial(), data = dat),
+  outcome_mod = glm(y ~ z, family = quasibinomial(), data = dat),
+  estimates = estimates,
+  se_method = "linearization",
+  fit = NULL,
+  readings = "marginal"
+)
+
+try(as_conditional(marginal_only))
 
 # Neither reading exists for an object that is not an IPW result.
 try(as_marginal(1:3))

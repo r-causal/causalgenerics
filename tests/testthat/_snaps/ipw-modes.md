@@ -1,3 +1,35 @@
+# as_conditional() refuses a result that supports marginal only
+
+    Code
+      as_conditional(res)
+    Condition
+      Error in `as_conditional.ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+# as_marginal() refuses a result that supports conditional only
+
+    Code
+      as_marginal(res)
+    Condition
+      Error in `as_marginal.ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+# ipw_effects() refuses a stored mode outside the stored readings
+
+    Code
+      print(res)
+    Condition
+      Error in `print.ipw()`:
+      ! This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
+# a result with no mode is refused a set that leaves marginal out
+
+    Code
+      print(res)
+    Condition
+      Error in `print.ipw()`:
+      ! This result supports the conditional reading only, so there is no marginal reading of it to report; the package that produced it records the readings it supports when it builds the result.
+
 # a pooled result refuses the reading it could not pool
 
     Code

@@ -749,6 +749,28 @@ factor_effect_estimates <- function() {
   estimates
 }
 
+# The binary fixture with the first `rows` rows recording no measure. The count
+# is an argument because the refusal reports it, and the sentence it reports it
+# in agrees with it.
+unnamed_effect_estimates <- function(rows) {
+  estimates <- binary_estimates()
+  estimates$effect[seq_len(rows)] <- NA_character_
+  estimates
+}
+
+# The same frame written as a factor, so that the missing measure is a missing
+# level rather than a missing string. A factor column is accepted where a
+# character one is, so the check has to read the values the column holds rather
+# than the type it has.
+factor_unnamed_effect_estimates <- function() {
+  estimates <- unnamed_effect_estimates(1L)
+  estimates$effect <- factor(
+    estimates$effect,
+    levels = binary_estimates()$effect
+  )
+  estimates
+}
+
 test_that("new_ipw() refuses estimates that are not a data frame", {
   # The three shapes a caller reaches for instead. A list of the columns answers
   # `$effect` and nothing that indexes rows; a matrix answers by column name and
@@ -809,6 +831,39 @@ test_that("new_ipw() refuses an effect column that names no measures", {
   )
 
   expect_snapshot(error = TRUE, ipw_result(numeric_effect_estimates()))
+})
+
+test_that("new_ipw() refuses an effect column that leaves a row unnamed", {
+  # A missing measure pastes into a label reading `"NA"`, which names no effect,
+  # and a second one pastes into the same label as the first, which leaves
+  # `coef()` naming two elements the same thing and `vcov()` repeating a name
+  # down both of its dimnames. It is the fault the `group` column is already
+  # refused for, in the column every result has.
+  expect_error(
+    ipw_result(unnamed_effect_estimates(1L)),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(unnamed_effect_estimates(1L)),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  # A factor records the missing measure as a missing level, which reads as the
+  # same label and is refused in the same words.
+  expect_error(
+    ipw_result(factor_unnamed_effect_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(factor_unnamed_effect_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  # Both counts are recorded, because the message counts the rows and the
+  # sentence reporting the count agrees with it.
+  expect_snapshot(error = TRUE, ipw_result(unnamed_effect_estimates(1L)))
+  expect_snapshot(error = TRUE, ipw_result(unnamed_effect_estimates(2L)))
+  expect_snapshot(error = TRUE, ipw_result(factor_unnamed_effect_estimates()))
 })
 
 test_that("new_ipw() constructs a result from the documented frame", {

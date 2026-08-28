@@ -62,6 +62,30 @@
       Error in `new_ipw()`:
       ! `estimates` must name its effects in a character or factor `effect` column, since the labels a row is keyed by are read off it as strings, but the column this frame carries is <integer>.
 
+# new_ipw() refuses an effect column that leaves a row unnamed
+
+    Code
+      ipw_result(unnamed_effect_estimates(1L))
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name a measure in every row of its `effect` column, but 1 row records none.
+
+---
+
+    Code
+      ipw_result(unnamed_effect_estimates(2L))
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name a measure in every row of its `effect` column, but 2 rows record none.
+
+---
+
+    Code
+      ipw_result(factor_unnamed_effect_estimates())
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name a measure in every row of its `effect` column, but 1 row records none.
+
 # print() summarizes a binary-exposure result
 
     Code

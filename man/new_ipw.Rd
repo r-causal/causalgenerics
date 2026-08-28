@@ -41,9 +41,9 @@ weights.}
 
 \item{estimates}{A data frame of effect estimates, in the shape the return
 value describes. It has to be a data frame, and it has to name each row's
-effect measure in an \code{effect} column of strings or of factor levels, since
-every label the result reports is read off that column. Anything else is
-refused with an error of class
+effect measure in an \code{effect} column of strings or of factor levels, with a
+measure named in every row, since every label the result reports is read
+off that column. Anything else is refused with an error of class
 \code{causalgenerics_invalid_argument_estimates}, and of the general class
 \code{causalgenerics_invalid_argument}.}
 
@@ -104,26 +104,26 @@ weights.}
 \item{\code{outcome_mod}}{The fitted outcome model.}
 \item{\code{estimates}}{A data frame with one row per effect measure and the
 following columns: \code{effect} (the measure name, as a character or factor
-column, which the constructor requires), \code{estimate} (point
-estimate), \code{std.err} (standard error), \code{z} (z-statistic), \code{ci.lower} and
-\code{ci.upper} (confidence interval bounds), \code{conf.level}, and \code{p.value}. For
-a categorical exposure the data frame also has a \code{contrast} column,
-placed after \code{effect}, naming the non-reference level and reference level
-of each contrast. A frame stored against an earlier version of this
-contract names that column \code{comparison}. The older name is read as an
-alias for the canonical one wherever the column is read, so a result
-holding such a frame labels its rows and reports its table exactly as one
-holding a \code{contrast} column does. A method written now writes
-\code{contrast}. A result reported once per level of a grouping variable also
-has a \code{group} column, placed after the contrast column when one is
-present and after \code{effect} when the result names no contrasts, naming the
-subgroup each row was estimated in as a \code{"var = value"} string such as
-\code{"sex = 0"}. That column has one spelling and no alias. Both optional
-columns are absent rather than constant when the result reports one
-contrast or one group, since a column repeating a single value down the
-table would read as a contrast or a subgroup that was named. \code{group} must
-be character and must name a subgroup in every row; the constructor
-refuses anything else with an error of class
+column naming a measure in every row, which the constructor requires),
+\code{estimate} (point estimate), \code{std.err} (standard error), \code{z}
+(z-statistic), \code{ci.lower} and \code{ci.upper} (confidence interval bounds),
+\code{conf.level}, and \code{p.value}. For a categorical exposure the data frame
+also has a \code{contrast} column, placed after \code{effect}, naming the
+non-reference level and reference level of each contrast. A frame stored
+against an earlier version of this contract names that column
+\code{comparison}. The older name is read as an alias for the canonical one
+wherever the column is read, so a result holding such a frame labels its
+rows and reports its table exactly as one holding a \code{contrast} column
+does. A method written now writes \code{contrast}. A result reported once per
+level of a grouping variable also has a \code{group} column, placed after the
+contrast column when one is present and after \code{effect} when the result
+names no contrasts, naming the subgroup each row was estimated in as a
+\code{"var = value"} string such as \code{"sex = 0"}. That column has one spelling
+and no alias. Both optional columns are absent rather than constant when
+the result reports one contrast or one group, since a column repeating a
+single value down the table would read as a contrast or a subgroup that
+was named. \code{group} must be character and must name a subgroup in every
+row; the constructor refuses anything else with an error of class
 \code{causalgenerics_invalid_argument_estimates}, and of the general class
 \code{causalgenerics_invalid_argument}, since a label pasted from such a column
 would relabel every row it keys without failing anywhere.}

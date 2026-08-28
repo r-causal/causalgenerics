@@ -2,16 +2,20 @@
 
 * `new_ipw()` now checks the `estimates` component it is handed. It has to be a
   data frame, and it has to name each row's effect measure in an `effect` column
-  of strings or of factor levels; anything else is refused with an error of
-  class `causalgenerics_invalid_argument_estimates`, and of the general class
+  of strings or of factor levels, with a measure named in every row; anything
+  else is refused with an error of class
+  `causalgenerics_invalid_argument_estimates`, and of the general class
   `causalgenerics_invalid_argument`. Every surface of a result reports from that
   frame and each of them begins by reading that column, so a component of
   another shape reached them as a subscript error about the column that failed
   rather than about the argument that was wrong, and which surface a caller met
-  first depended on what they asked the result for. A factor is accepted beside
-  a character column, since the labels come off it as strings either way and a
-  frame written when `data.frame()` coded its strings as factors is a frame a
-  caller still has in hand.
+  first depended on what they asked the result for. A missing measure was
+  accepted where a missing subgroup was not: it pasted into a label reading
+  `"NA"`, and two of them pasted into the same label, which left `coef()` naming
+  two elements the same thing and `vcov()` repeating a name down both of its
+  dimnames. A factor is accepted beside a character column, since the labels
+  come off it as strings either way and a frame written when `data.frame()`
+  coded its strings as factors is a frame a caller still has in hand.
 
 * `new_ipw()` gains a `readings` field, the eighth and last of the result
   contract, recording which of the two readings a result supports. Both

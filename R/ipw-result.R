@@ -171,9 +171,9 @@
 #' @param outcome_mod The fitted weighted outcome model.
 #' @param estimates A data frame of effect estimates, in the shape the return
 #'   value describes. It has to be a data frame, and it has to name each row's
-#'   effect measure in an `effect` column of strings or of factor levels, since
-#'   every label the result reports is read off that column. Anything else is
-#'   refused with an error of class
+#'   effect measure in an `effect` column of strings or of factor levels, with a
+#'   measure named in every row, since every label the result reports is read
+#'   off that column. Anything else is refused with an error of class
 #'   `causalgenerics_invalid_argument_estimates`, and of the general class
 #'   `causalgenerics_invalid_argument`.
 #' @param se_method The standard error method that ran, such as `"mestimation"`
@@ -201,26 +201,26 @@
 #'   \item{`outcome_mod`}{The fitted outcome model.}
 #'   \item{`estimates`}{A data frame with one row per effect measure and the
 #'     following columns: `effect` (the measure name, as a character or factor
-#'     column, which the constructor requires), `estimate` (point
-#'     estimate), `std.err` (standard error), `z` (z-statistic), `ci.lower` and
-#'     `ci.upper` (confidence interval bounds), `conf.level`, and `p.value`. For
-#'     a categorical exposure the data frame also has a `contrast` column,
-#'     placed after `effect`, naming the non-reference level and reference level
-#'     of each contrast. A frame stored against an earlier version of this
-#'     contract names that column `comparison`. The older name is read as an
-#'     alias for the canonical one wherever the column is read, so a result
-#'     holding such a frame labels its rows and reports its table exactly as one
-#'     holding a `contrast` column does. A method written now writes
-#'     `contrast`. A result reported once per level of a grouping variable also
-#'     has a `group` column, placed after the contrast column when one is
-#'     present and after `effect` when the result names no contrasts, naming the
-#'     subgroup each row was estimated in as a `"var = value"` string such as
-#'     `"sex = 0"`. That column has one spelling and no alias. Both optional
-#'     columns are absent rather than constant when the result reports one
-#'     contrast or one group, since a column repeating a single value down the
-#'     table would read as a contrast or a subgroup that was named. `group` must
-#'     be character and must name a subgroup in every row; the constructor
-#'     refuses anything else with an error of class
+#'     column naming a measure in every row, which the constructor requires),
+#'     `estimate` (point estimate), `std.err` (standard error), `z`
+#'     (z-statistic), `ci.lower` and `ci.upper` (confidence interval bounds),
+#'     `conf.level`, and `p.value`. For a categorical exposure the data frame
+#'     also has a `contrast` column, placed after `effect`, naming the
+#'     non-reference level and reference level of each contrast. A frame stored
+#'     against an earlier version of this contract names that column
+#'     `comparison`. The older name is read as an alias for the canonical one
+#'     wherever the column is read, so a result holding such a frame labels its
+#'     rows and reports its table exactly as one holding a `contrast` column
+#'     does. A method written now writes `contrast`. A result reported once per
+#'     level of a grouping variable also has a `group` column, placed after the
+#'     contrast column when one is present and after `effect` when the result
+#'     names no contrasts, naming the subgroup each row was estimated in as a
+#'     `"var = value"` string such as `"sex = 0"`. That column has one spelling
+#'     and no alias. Both optional columns are absent rather than constant when
+#'     the result reports one contrast or one group, since a column repeating a
+#'     single value down the table would read as a contrast or a subgroup that
+#'     was named. `group` must be character and must name a subgroup in every
+#'     row; the constructor refuses anything else with an error of class
 #'     `causalgenerics_invalid_argument_estimates`, and of the general class
 #'     `causalgenerics_invalid_argument`, since a label pasted from such a column
 #'     would relabel every row it keys without failing anywhere.}
@@ -1128,6 +1128,13 @@ check_flag <- function(value, arg, call = sys.call(-1)) {
 #' measure the row reports, which fails silently in the way a `group` column of
 #' the wrong kind does and is refused for the same reason.
 #'
+#' Every row has to name a measure. A missing one pastes into a label reading
+#' `"NA"`, which names no effect, and two of them paste into the same label,
+#' which leaves `coef()` naming two elements the same thing and `vcov()`
+#' repeating a name down both of its dimnames. It is the fault
+#' `check_estimates_group()` refuses in the column it reads, in the column every
+#' result has.
+#'
 #' @param estimates The `estimates` argument as the caller supplied it.
 #' @param call The call to report the error against, which is the
 #'   constructor's rather than this helper's.
@@ -1170,6 +1177,19 @@ check_estimates_effect <- function(estimates, call = sys.call(-1)) {
         "this frame carries is <",
         class(effect)[[1L]],
         ">"
+      ),
+      call = call
+    )
+  }
+
+  unnamed <- sum(is.na(effect))
+  if (unnamed > 0L) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "name a measure in every row of its `effect` column, but ",
+        unnamed,
+        if (unnamed == 1L) " row records none" else " rows record none"
       ),
       call = call
     )

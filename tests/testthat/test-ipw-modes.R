@@ -151,6 +151,23 @@ null_readings_result <- function() {
   structure(fields, class = "ipw")
 }
 
+# A result recording the conditional mode and no set of readings, which is the
+# shape a fitting package stored between the two fields being added. An absent
+# set is read as both readings, so the mode falls inside what the result is read
+# as supporting.
+conditional_legacy_readings_result <- function() {
+  fields <- unclass(conditional_result())
+  structure(fields[names(fields) != "readings"], class = "ipw")
+}
+
+# The same pair with the field present and empty, which is what building the
+# list with `readings = NULL` gives.
+conditional_null_readings_result <- function() {
+  fields <- unclass(conditional_result())
+  fields["readings"] <- list(NULL)
+  structure(fields, class = "ipw")
+}
+
 # A list whose stored mode falls outside the set of readings stored beside it.
 # The constructor cannot build one, since it refuses a `readings` argument that
 # leaves the mode out, so the shape comes from assigning to the fields directly.
@@ -728,9 +745,22 @@ test_that("the cross-check refuses nothing a constructor can build", {
   # outside its set, and the constructor refuses a result whose mode falls
   # outside the set it was handed. Every shape but the two above therefore
   # reads its mode the way it always did.
+  #
+  # The two conditional shapes are what say the sweep is about the pair of
+  # fields rather than about the marginal default: an absent set is read as both
+  # readings, so a mode written out beside it is answered from what the result
+  # records rather than from the reading an absent mode is read as.
   expect_identical(ipw_effects(legacy_result()), "marginal")
   expect_identical(ipw_effects(null_effects_result()), "marginal")
   expect_identical(ipw_effects(null_readings_result()), "marginal")
+  expect_identical(
+    ipw_effects(conditional_legacy_readings_result()),
+    "conditional"
+  )
+  expect_identical(
+    ipw_effects(conditional_null_readings_result()),
+    "conditional"
+  )
   expect_identical(ipw_effects(marginal_result()), "marginal")
   expect_identical(ipw_effects(conditional_result()), "conditional")
   expect_identical(ipw_effects(narrow_result("marginal")), "marginal")

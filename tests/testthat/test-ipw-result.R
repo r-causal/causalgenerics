@@ -713,6 +713,129 @@ test_that("the readings error states the contract", {
   )
 })
 
+# ---- the estimates frame -----------------------------------------------------
+
+# The `estimates` component is what every surface of a result reports from, and
+# each of them starts by reading the `effect` column: the label a row is keyed
+# by begins with it, and `print()`, `as.data.frame()`, the accessors, and the
+# pooling all read those labels. A component of another shape fails at whichever
+# of those a caller reaches first, in whatever words the subscript that failed
+# used, so the shape is checked where the result is built and the refusal names
+# the argument that was wrong.
+
+# The binary fixture with its `effect` column removed, which is the frame a
+# fitting package writes when it names its rows in a column of its own choosing.
+effectless_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$effect <- NULL
+  estimates
+}
+
+# The same frame with the effects numbered rather than named. A number pastes
+# into a label that reads as a row index rather than as the measure the row
+# reports, and nothing downstream fails on it.
+numeric_effect_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$effect <- seq_len(nrow(estimates))
+  estimates
+}
+
+# The frame as it was written when `data.frame()` coded its strings as factors.
+# Results built that way are results a caller still has in hand, and the labels
+# read off the column are the strings either way.
+factor_effect_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$effect <- factor(estimates$effect, levels = estimates$effect)
+  estimates
+}
+
+test_that("new_ipw() refuses estimates that are not a data frame", {
+  # The three shapes a caller reaches for instead. A list of the columns answers
+  # `$effect` and nothing that indexes rows; a matrix answers by column name and
+  # gives a vector back, having coerced every number to a string on the way in;
+  # `NULL` answers the first column asked for with `NULL`.
+  expect_error(
+    ipw_result(NULL),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(ipw_result(NULL), class = "causalgenerics_invalid_argument")
+  expect_error(
+    ipw_result(as.list(binary_estimates())),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(as.list(binary_estimates())),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_error(
+    ipw_result(as.matrix(binary_estimates())),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(as.matrix(binary_estimates())),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  expect_snapshot(error = TRUE, ipw_result(as.list(binary_estimates())))
+})
+
+test_that("new_ipw() refuses an estimates frame that names no effects", {
+  # Every label a result reports starts with this column, so a frame without it
+  # has no row identity at all: `coef()` would name nothing, `vcov()` would have
+  # no dimnames, and the pooling would have no key to average rows by.
+  expect_error(
+    ipw_result(effectless_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(effectless_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  expect_snapshot(error = TRUE, ipw_result(effectless_estimates()))
+})
+
+test_that("new_ipw() refuses an effect column that names no measures", {
+  # The labels are read off the column as strings, so a column of numbers pastes
+  # into labels that read as row indices rather than as the measures the rows
+  # report. Nothing downstream fails on that, which is why it is refused here.
+  expect_error(
+    ipw_result(numeric_effect_estimates()),
+    class = "causalgenerics_invalid_argument_estimates"
+  )
+  expect_error(
+    ipw_result(numeric_effect_estimates()),
+    class = "causalgenerics_invalid_argument"
+  )
+
+  expect_snapshot(error = TRUE, ipw_result(numeric_effect_estimates()))
+})
+
+test_that("new_ipw() constructs a result from the documented frame", {
+  # The lawful half of the check. Every frame the contract describes is stored
+  # as it was handed over, whichever optional identity columns it carries, and
+  # the labels come off it as they always did.
+  for (estimates in list(
+    binary_estimates(),
+    contrast_estimates(),
+    categorical_estimates(),
+    continuous_estimates()
+  )) {
+    expect_identical(ipw_result(estimates)$estimates, estimates)
+  }
+
+  # A factor column is stored too. The labels are the strings either way, and a
+  # frame written when `data.frame()` coded its strings as factors is a frame a
+  # caller still has in hand.
+  factored <- factor_effect_estimates()
+
+  expect_identical(ipw_result(factored)$estimates, factored)
+  expect_identical(
+    ipw_effect_labels(ipw_result(factored)$estimates),
+    c("rd", "log(rr)", "log(or)")
+  )
+})
+
 # ---- print.ipw() -------------------------------------------------------------
 
 # Each print test snapshots the whole output and then asserts the few lines that

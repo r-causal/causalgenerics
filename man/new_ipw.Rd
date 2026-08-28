@@ -40,7 +40,12 @@ weights.}
 \item{outcome_mod}{The fitted weighted outcome model.}
 
 \item{estimates}{A data frame of effect estimates, in the shape the return
-value describes.}
+value describes. It has to be a data frame, and it has to name each row's
+effect measure in an \code{effect} column of strings or of factor levels, since
+every label the result reports is read off that column. Anything else is
+refused with an error of class
+\code{causalgenerics_invalid_argument_estimates}, and of the general class
+\code{causalgenerics_invalid_argument}.}
 
 \item{se_method}{The standard error method that ran, such as \code{"mestimation"}
 or \code{"linearization"}.}
@@ -98,7 +103,8 @@ following eight components, in this order.
 weights.}
 \item{\code{outcome_mod}}{The fitted outcome model.}
 \item{\code{estimates}}{A data frame with one row per effect measure and the
-following columns: \code{effect} (the measure name), \code{estimate} (point
+following columns: \code{effect} (the measure name, as a character or factor
+column, which the constructor requires), \code{estimate} (point
 estimate), \code{std.err} (standard error), \code{z} (z-statistic), \code{ci.lower} and
 \code{ci.upper} (confidence interval bounds), \code{conf.level}, and \code{p.value}. For
 a categorical exposure the data frame also has a \code{contrast} column,

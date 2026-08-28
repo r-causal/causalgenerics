@@ -290,21 +290,29 @@ flip_ipw_pooled <- function(x, effects, call = sys.call(-1)) {
 #' presenting a reading it does not support, which is the disagreement, whether
 #' or not the mode was written out.
 #'
+#' The position is passed on to the cross-check for the reason
+#' `pool_surface()` passes one on. A caller reading the mode of one result has
+#' no set to place it in, and the pooling reads the mode of each result of a set
+#' in turn, so the refusal a set raises says which result of it was being read.
+#'
 #' @param object An `ipw` object.
+#' @param position The result's position in the set being pooled, or `NULL`
+#'   where a single result was asked directly and there is no set to place it
+#'   in.
 #' @param call The call to report an invalid stored mode against, which is the
 #'   accessor's rather than this helper's.
 #'
 #' @return A single string, either `"marginal"` or `"conditional"`.
 #'
 #' @noRd
-ipw_effects <- function(object, call = sys.call(-1)) {
+ipw_effects <- function(object, position = NULL, call = sys.call(-1)) {
   effects <- object$effects
   if (is.null(effects)) {
     effects <- "marginal"
   } else {
     check_ipw_effects(effects, call = call)
   }
-  check_ipw_reading(object, effects, call = call)
+  check_ipw_reading(object, effects, position = position, call = call)
   effects
 }
 

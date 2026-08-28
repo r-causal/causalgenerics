@@ -38,6 +38,30 @@
       Error in `new_ipw()`:
       ! `readings` must include the reading the result records, since a result cannot record a reading it does not support, and this one records the "conditional" reading.
 
+# new_ipw() refuses estimates that are not a data frame
+
+    Code
+      ipw_result(as.list(binary_estimates()))
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must be a data frame of effect estimates, since every surface of a result reports from its rows and its columns, but it is <list>.
+
+# new_ipw() refuses an estimates frame that names no effects
+
+    Code
+      ipw_result(effectless_estimates())
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name each row's effect measure in an `effect` column, since every label a result reports begins with it, but this frame carries none.
+
+# new_ipw() refuses an effect column that names no measures
+
+    Code
+      ipw_result(numeric_effect_estimates())
+    Condition
+      Error in `new_ipw()`:
+      ! `estimates` must name its effects in a character or factor `effect` column, since the labels a row is keyed by are read off it as strings, but the column this frame carries is <integer>.
+
 # print() summarizes a binary-exposure result
 
     Code

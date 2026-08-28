@@ -170,7 +170,12 @@
 #'   weights.
 #' @param outcome_mod The fitted weighted outcome model.
 #' @param estimates A data frame of effect estimates, in the shape the return
-#'   value describes.
+#'   value describes. It has to be a data frame, and it has to name each row's
+#'   effect measure in an `effect` column of strings or of factor levels, since
+#'   every label the result reports is read off that column. Anything else is
+#'   refused with an error of class
+#'   `causalgenerics_invalid_argument_estimates`, and of the general class
+#'   `causalgenerics_invalid_argument`.
 #' @param se_method The standard error method that ran, such as `"mestimation"`
 #'   or `"linearization"`.
 #' @param fit The fitted variance object, or `NULL` when the method has none.
@@ -195,7 +200,8 @@
 #'     weights.}
 #'   \item{`outcome_mod`}{The fitted outcome model.}
 #'   \item{`estimates`}{A data frame with one row per effect measure and the
-#'     following columns: `effect` (the measure name), `estimate` (point
+#'     following columns: `effect` (the measure name, as a character or factor
+#'     column, which the constructor requires), `estimate` (point
 #'     estimate), `std.err` (standard error), `z` (z-statistic), `ci.lower` and
 #'     `ci.upper` (confidence interval bounds), `conf.level`, and `p.value`. For
 #'     a categorical exposure the data frame also has a `contrast` column,
@@ -314,10 +320,15 @@ new_ipw <- function(
   # downstream would have to have an answer for.
   check_ipw_readings(readings, effects)
 
-  # The optional `group` column is the one part of the estimates frame that is
-  # checked here. It completes a row's label, so a column of the wrong kind
-  # relabels every row it keys without failing anywhere, which is the shape of
-  # mistake a constructor is worth having.
+  # The estimates frame is what every surface of a result reports from, and each
+  # of them begins by reading the `effect` column, so a component of another
+  # shape fails at whichever surface a caller reaches first rather than where it
+  # was handed over.
+  check_estimates_effect(estimates)
+
+  # The optional `group` column completes a row's label, so a column of the
+  # wrong kind relabels every row it keys without failing anywhere, which is the
+  # shape of mistake a constructor is worth having.
   check_estimates_group(estimates)
 
   structure(
@@ -1096,6 +1107,75 @@ check_flag <- function(value, arg, call = sys.call(-1)) {
   }
 
   invisible(value)
+}
+
+#' Refuse an estimates component that is not a frame of effects
+#'
+#' The `estimates` component is what every surface of a result reports from, and
+#' each of them begins at the same place: `ipw_effect_labels()` reads the
+#' `effect` column and pastes the identity columns into the label a row is keyed
+#' by, and `print()`, `as.data.frame()`, the accessors, and the pooling all
+#' report under those labels. A component of another shape reaches none of them
+#' as anything but a subscript error, in words about the column that failed
+#' rather than about the argument that was wrong, and which of them a caller
+#' meets first depends on what they asked the result for.
+#'
+#' The column holds the names of the effect measures, so it is character. A
+#' factor is accepted beside it: the labels are read off the column as strings
+#' either way, and a frame written when `data.frame()` coded its strings as
+#' factors is a frame a caller still has in hand. Anything else is refused. A
+#' number pastes into a label that reads as a row index rather than as the
+#' measure the row reports, which fails silently in the way a `group` column of
+#' the wrong kind does and is refused for the same reason.
+#'
+#' @param estimates The `estimates` argument as the caller supplied it.
+#' @param call The call to report the error against, which is the
+#'   constructor's rather than this helper's.
+#'
+#' @return `estimates`, invisibly, when it is a frame of effects.
+#'
+#' @noRd
+check_estimates_effect <- function(estimates, call = sys.call(-1)) {
+  if (!is.data.frame(estimates)) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "be a data frame of effect estimates, since every surface of a result ",
+        "reports from its rows and its columns, but it is <",
+        class(estimates)[[1L]],
+        ">"
+      ),
+      call = call
+    )
+  }
+
+  if (!"effect" %in% names(estimates)) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "name each row's effect measure in an `effect` column, since every ",
+        "label a result reports begins with it, but this frame carries none"
+      ),
+      call = call
+    )
+  }
+
+  effect <- estimates$effect
+  if (!is.character(effect) && !is.factor(effect)) {
+    stop_invalid_argument(
+      "estimates",
+      paste0(
+        "name its effects in a character or factor `effect` column, since the ",
+        "labels a row is keyed by are read off it as strings, but the column ",
+        "this frame carries is <",
+        class(effect)[[1L]],
+        ">"
+      ),
+      call = call
+    )
+  }
+
+  invisible(estimates)
 }
 
 #' Refuse an estimates frame whose subgroups are not named

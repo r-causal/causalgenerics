@@ -328,7 +328,7 @@ pool_ipw <- function(
   # all in that case and a set that disagrees about it is poolable by naming
   # one. This is how `resolve_ipw_effects()` reads an accessor's argument.
   mode <- if (is.null(effects)) {
-    pool_common(fits, ipw_effects, "effects", call)
+    pool_mode(fits, call = call)
   } else {
     effects
   }
@@ -367,6 +367,40 @@ pool_ipw <- function(
     outcome_link = link,
     alternate = pool_alternate(fits, mode, conf_level, dfcom, call = call)
   )
+}
+
+#' The mode the results agree on
+#'
+#' The stored mode of each result, read with the result's position in the set,
+#' and refused where the results do not agree about it. It is a helper rather
+#' than a `pool_common()` call that reads the field with `ipw_effects()`,
+#' because that reader refuses two things of its own: a field holding neither
+#' reading, and a mode the result records no reading of. Invoked from inside
+#' `pool_common()` it would resolve its call to the `lapply()` that invoked it,
+#' and both refusals would name that rather than [pool_ipw()].
+#'
+#' Pairing each result with its position is what names the result a cross-check
+#' refusal is about, the way `pool_mode_surfaces()` names the one a surface
+#' refusal is about. A caller holding several results cannot tell them apart
+#' from the refusal otherwise.
+#'
+#' @param fits The results being pooled.
+#' @param call The call to report the error against, which is [pool_ipw()]'s
+#'   rather than this helper's.
+#'
+#' @return A single string, either `"marginal"` or `"conditional"`.
+#'
+#' @noRd
+pool_mode <- function(fits, call = sys.call(-1)) {
+  modes <- Map(
+    function(fit, position) {
+      ipw_effects(fit, position = position, call = call)
+    },
+    fits,
+    seq_along(fits)
+  )
+
+  pool_common(modes, identity, "effects", call)
 }
 
 #' The surfaces of one reading, and what keys their rows

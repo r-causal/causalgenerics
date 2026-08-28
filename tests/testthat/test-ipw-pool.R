@@ -565,6 +565,18 @@ pool_mixed_reading_fits <- function() {
   fits
 }
 
+# Two results, the second of which records a mode outside the set of readings it
+# names. The constructor refuses that pair, so the fields are assigned after
+# construction, and it is the state the pooling meets where it reads the mode
+# the results have to agree on: a result presenting a surface it also says it
+# has no reading of.
+pool_mismatched_reading_fits <- function() {
+  fits <- pool_binary_fits()[1:2]
+  fits[[2]]$effects <- "conditional"
+  fits[[2]]$readings <- "marginal"
+  fits
+}
+
 # Three results whose marginal surfaces disagree about the effects they report.
 # A set that disagrees that way cannot be pooled on the marginal reading, and a
 # set that also supports the conditional reading alone cannot be pooled on it
@@ -583,6 +595,11 @@ pool_mislabeled_fits <- function(readings = c("marginal", "conditional")) {
 # That is what separates the two orders the pooling could ask its questions in.
 # A readings check made after the estimates are read would report the subscript
 # error, and one made before them reports the reading the analysis has none of.
+#
+# The field is assigned after construction because the constructor refuses such
+# a component, which is what keeps a result of this shape out of a caller's
+# hands to begin with. The pooling still has to answer for one, since the field
+# can be assigned to as it is here.
 pool_unreadable_fits <- function(readings = "conditional") {
   lapply(pool_conditional_fits(readings = readings), function(fit) {
     fit$estimates <- list()
@@ -810,6 +827,34 @@ test_that("pool_ipw() names the mode a mismatched set does not", {
   # would never reach this, and one that let the stored field color the result
   # would answer with something else.
   expect_identical(res, pool_ipw(pool_binary_fits(), dfcom = 17))
+})
+
+test_that("pool_ipw() reports an unreadable stored mode against itself", {
+  # A field holding neither reading was assigned to directly, and the refusal a
+  # caller gets has to name the call they wrote. The modes are read one result
+  # at a time, from inside a loop over the set, so a refusal left to resolve its
+  # own call would report that loop and leave the caller with nothing to place
+  # the fault by.
+  fits <- pool_fits_varying("effects", list("marginal", "bogus", "marginal"))
+  cnd <- tryCatch(pool_ipw(fits, dfcom = 18), error = identity)
+
+  expect_error(
+    pool_ipw(fits, dfcom = 18),
+    class = "causalgenerics_invalid_argument_effects"
+  )
+  expect_error(
+    pool_ipw(fits, dfcom = 18),
+    class = "causalgenerics_invalid_argument"
+  )
+  expect_identical(conditionCall(cnd), quote(pool_ipw(fits, dfcom = 18)))
+  # Naming a mode says which surface to pool, so the stored field is not read at
+  # all and the set pools into what a set recording that mode pools into.
+  expect_identical(
+    pool_ipw(fits, effects = "marginal", dfcom = 17),
+    pool_ipw(pool_binary_fits(), dfcom = 17)
+  )
+
+  expect_snapshot(error = TRUE, pool_ipw(fits, dfcom = 18))
 })
 
 test_that("pool_ipw() refuses results reporting different effects", {
@@ -2523,6 +2568,44 @@ test_that("pool_ipw() refuses a reading one result of the set lacks", {
     error = TRUE,
     pool_ipw(fits, effects = "marginal", dfcom = 18)
   )
+})
+
+test_that("pool_ipw() names the result whose stored mode it cannot read", {
+  # The mode is read off each result before either surface is, and a result
+  # whose mode falls outside the readings it names is refused where it is read.
+  # The refusal is the one any other unsupported reading raises, so a caller
+  # handles one class whichever route asked for the reading, and it names the
+  # position of the result it is about for the reason the surface refusals do: a
+  # caller holding a set of results cannot otherwise tell which one to go back
+  # to.
+  fits <- pool_mismatched_reading_fits()
+  cnd <- tryCatch(pool_ipw(fits, dfcom = 18), error = identity)
+  direct <- tryCatch(ipw_effects(fits[[2]]), error = identity)
+
+  expect_error(
+    pool_ipw(fits, dfcom = 18),
+    class = "causalgenerics_unsupported_reading_conditional"
+  )
+  expect_error(
+    pool_ipw(fits, dfcom = 18),
+    class = "causalgenerics_unsupported_reading"
+  )
+  expect_identical(cnd$effects, "conditional")
+  expect_identical(cnd$readings, "marginal")
+  expect_identical(cnd$position, 2L)
+  # Reported against the call the caller wrote rather than against the loop the
+  # modes are read in.
+  expect_identical(conditionCall(cnd), quote(pool_ipw(fits, dfcom = 18)))
+  # The message is the one the result raises when its mode is read directly,
+  # with the sentence the surface refusals append after it.
+  expect_true(startsWith(conditionMessage(cnd), conditionMessage(direct)))
+  expect_match(conditionMessage(cnd), "position 2", fixed = TRUE)
+  expect_null(direct$position)
+  # Naming a mode says which surface to pool, so the stored field is not read
+  # and the reading every result supports pools as it always did.
+  expect_no_error(pool_ipw(fits, effects = "marginal", dfcom = 18))
+
+  expect_snapshot(error = TRUE, pool_ipw(fits, dfcom = 18))
 })
 
 test_that("pool_ipw() refuses the conditional reading of a marginal-only set", {

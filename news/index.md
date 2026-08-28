@@ -2,6 +2,72 @@
 
 ## causalgenerics (development version)
 
+- [`new_ipw()`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
+  now checks the `estimates` component it is handed. It has to be a data
+  frame, and it has to name each row’s effect measure in an `effect`
+  column of strings or of factor levels, with a measure named in every
+  row; anything else is refused with an error of class
+  `causalgenerics_invalid_argument_estimates`, and of the general class
+  `causalgenerics_invalid_argument`. Every surface of a result reports
+  from that frame and each of them begins by reading that column, so a
+  component of another shape reached them as a subscript error about the
+  column that failed rather than about the argument that was wrong, and
+  which surface a caller met first depended on what they asked the
+  result for. A missing measure was accepted where a missing subgroup
+  was not: it pasted into a label reading `"NA"`, and two of them pasted
+  into the same label, which left
+  [`coef()`](https://rdrr.io/r/stats/coef.html) naming two elements the
+  same thing and [`vcov()`](https://rdrr.io/r/stats/vcov.html) repeating
+  a name down both of its dimnames. A factor is accepted beside a
+  character column, since the labels come off it as strings either way
+  and a frame written when
+  [`data.frame()`](https://rdrr.io/r/base/data.frame.html) coded its
+  strings as factors is a frame a caller still has in hand.
+
+- [`new_ipw()`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
+  gains a `readings` field, the eighth and last of the result contract,
+  recording which of the two readings a result supports. Both surfaces
+  exist on most results and not on all of them: an exposure that enters
+  the outcome model through several columns has no single coefficient to
+  read as the conditional effect, so a package that builds such a result
+  records the reading it can answer for, and the mode the result records
+  has to be one of them. Asking a result for a reading it does not
+  support is refused with an error of class
+  `causalgenerics_unsupported_reading_marginal` or
+  `causalgenerics_unsupported_reading_conditional`, and of the general
+  class `causalgenerics_unsupported_reading`, which carries the reading
+  asked for and the set the result records as fields. The refusal is
+  raised wherever a reading is named: by
+  [`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  and
+  [`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md),
+  which are no longer total on the class, and by the `effects` argument
+  of [`coef()`](https://rdrr.io/r/stats/coef.html),
+  [`vcov()`](https://rdrr.io/r/stats/vcov.html),
+  [`confint()`](https://rdrr.io/r/stats/confint.html), and
+  [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html).
+  [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) itself
+  gains that `effects` argument and now presents the reading the result
+  records rather than the effects table in either reading: the
+  conditional reading reports the outcome model’s coefficients, with the
+  standard errors the corrected covariance implies, under the headings
+  the pooled table uses for the same reading. A result stored before the
+  field existed records no set and is read as supporting both, so an
+  older result and a result built today behave the same way.
+  [`pool_ipw()`](https://r-causal.github.io/causalgenerics/reference/pool_ipw.md)
+  honors the field too: it reads the readings the results declare before
+  either surface, so a set whose results support one reading pools that
+  one alone. Naming the other refuses the call with the same error a
+  result raises directly, and leaving `effects` at `NULL` pools the
+  reading the results record and puts that refusal on `alternate` as the
+  reason the other has no frames, so
+  [`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  or
+  [`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  on the pooled result raises
+  `causalgenerics_pool_missing_surface_marginal` or
+  `causalgenerics_pool_missing_surface_conditional` carrying it.
+
 - New exposure-type machinery gives the ecosystem one reading of whether
   an exposure is binary, categorical, or continuous.
   [`detect_exposure_type()`](https://r-causal.github.io/causalgenerics/reference/detect_exposure_type.md)

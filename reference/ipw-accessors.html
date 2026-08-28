@@ -122,7 +122,9 @@ object reports.</p></li>
 <dd><p>The reading to report, either <code>"marginal"</code> or
 <code>"conditional"</code>. <code>NULL</code>, the default, reports the reading the result
 records; any other value overrides it for the one call and leaves the
-result as it is.</p></dd>
+result as it is. A reading the result does not support is refused with an
+error of class <code>causalgenerics_unsupported_reading</code>, which is where
+<code><a href="ipw-modes.html">as_marginal()</a></code> and <code><a href="ipw-modes.html">as_conditional()</a></code> refuse it too.</p></dd>
 
 
 <dt id="arg-parm">parm<a class="anchor" aria-label="anchor" href="#arg-parm"></a></dt>
@@ -176,7 +178,11 @@ ones built from the corrected covariance at every level, since the limits the
 result stores belong to the effects the marginal reading reports.</p>
 <p><code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code>, <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code>, and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> raise an error of class
 <code>causalgenerics_invalid_argument_effects</code> when <code>effects</code> names neither
-reading, and when the result's own field does.</p>
+reading, and when the result's own field does. They raise an error of class
+<code>causalgenerics_unsupported_reading_marginal</code> or
+<code>causalgenerics_unsupported_reading_conditional</code>, and of the general class
+<code>causalgenerics_unsupported_reading</code>, when <code>effects</code> names a reading the
+result records that it does not support.</p>
 <p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code> returns a single integer, the number of observations the outcome
 model was fitted on, which is the number the estimates were computed from and
 not necessarily the number the weighting model saw.</p>
@@ -254,6 +260,13 @@ labeled with the parameter names of a stacked system, and a model whose
 coefficients carry no names are the three ways the pairing fails. Reading such
 a block by position instead would report the covariance of other parameters
 under this model's coefficient names.</p>
+<p>A result records which of the two readings it supports, and naming the other
+one is refused rather than answered with a surface whose numbers are not the
+quantities the reading names. The refusal is the one <code><a href="ipw-modes.html">as_marginal()</a></code> and
+<code><a href="ipw-modes.html">as_conditional()</a></code> raise, of class <code>causalgenerics_unsupported_reading</code>, since
+a caller cares that the reading is not there rather than which surface asked
+for it. A result that supports one reading answers for that one exactly as a
+result supporting both does.</p>
 <p><code><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs()</a></code>, <code><a href="https://rdrr.io/r/stats/df.residual.html" class="external-link">df.residual()</a></code>, <code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code>, <code><a href="https://rdrr.io/r/stats/model.frame.html" class="external-link">model.frame()</a></code>, and <code><a href="causal-weights.html">estimand()</a></code>
 describe the fit rather than a surface of it, so they answer the same way in
 either reading and take no <code>effects</code> argument.</p>
@@ -351,7 +364,7 @@ either reading and take no <code>effects</code> argument.</p>
 <span class="r-in"><span><span class="co"># rather than the effects.</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">res</span>, effects <span class="op">=</span> <span class="st">"conditional"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  (Intercept)            z </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3.919028e-01 1.012353e-15 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3.919028e-01 6.859992e-16 </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Its covariance is the corrected block a fitting package attaches to the</span></span></span>
 <span class="r-in"><span><span class="co"># outcome model. This one carries none, and the covariance the model computed</span></span></span>
@@ -379,7 +392,7 @@ either reading and take no <code>effects</code> argument.</p>
 <span class="r-in"><span><span class="co"># named at the call site.</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">conditional</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  (Intercept)            z </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3.919028e-01 1.012353e-15 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3.919028e-01 6.859992e-16 </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">conditional</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>             (Intercept)         z</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)    0.646421 -0.646421</span>

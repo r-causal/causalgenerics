@@ -169,6 +169,29 @@ raises that refusal in the words it used. The commonest case is a set of
 results whose outcome models carry no corrected covariance, which is
 what the conditional reading is pooled from.
 
+The readings the results declare are read before either surface is, so a
+set whose results support one reading pools that one and no other.
+Naming the reading they do not support refuses the call with an error of
+class `causalgenerics_unsupported_reading_marginal` or
+`causalgenerics_unsupported_reading_conditional`, in the words a result
+raises when the same reading is asked of it directly and a sentence
+saying which result of the set that was, since what the caller asked for
+is a reading of the analysis rather than a way of pooling it. Leaving
+`effects` at `NULL` pools the reading the results record and puts that
+same refusal on `alternate` as the reason the other reading has no
+frames, so
+[`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+or
+[`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+on the pooled result afterwards raises an error of class
+`causalgenerics_pool_missing_surface_marginal` or
+`causalgenerics_pool_missing_surface_conditional` carrying it. Every
+result has to support the reading being pooled, since the pooled
+estimate of an effect is an average over all of them, so a set where one
+result alone lacks it is refused for that result. The caller has to go
+back to that one result, so the refusal names its position in `fits` in
+a sentence of its own and carries the position under `position`.
+
 The components describing the analyses rather than a reading of them are
 shared by both readings. The estimand, the standard error method, the
 number of results, the complete-data degrees of freedom, the observation

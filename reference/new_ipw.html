@@ -58,7 +58,8 @@ method, not for end users, and it assumes its arguments are already validated.</
 <span>  <span class="va">estimates</span>,</span>
 <span>  <span class="va">se_method</span>,</span>
 <span>  <span class="va">fit</span>,</span>
-<span>  effects <span class="op">=</span> <span class="st">"marginal"</span></span>
+<span>  effects <span class="op">=</span> <span class="st">"marginal"</span>,</span>
+<span>  readings <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"marginal"</span>, <span class="st">"conditional"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S3 method for class 'ipw'</span></span>
@@ -72,7 +73,8 @@ method, not for end users, and it assumes its arguments are already validated.</
 <span>  <span class="va">...</span>,</span>
 <span>  conf.int <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  conf.level <span class="op">=</span> <span class="fl">0.95</span>,</span>
-<span>  exponentiate <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  exponentiate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  effects <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -96,7 +98,12 @@ weights.</p></dd>
 
 <dt id="arg-estimates">estimates<a class="anchor" aria-label="anchor" href="#arg-estimates"></a></dt>
 <dd><p>A data frame of effect estimates, in the shape the return
-value describes.</p></dd>
+value describes. It has to be a data frame, and it has to name each row's
+effect measure in an <code>effect</code> column of strings or of factor levels, with a
+measure named in every row, since every label the result reports is read
+off that column. Anything else is refused with an error of class
+<code>causalgenerics_invalid_argument_estimates</code>, and of the general class
+<code>causalgenerics_invalid_argument</code>.</p></dd>
 
 
 <dt id="arg-se-method">se_method<a class="anchor" aria-label="anchor" href="#arg-se-method"></a></dt>
@@ -109,9 +116,21 @@ or <code>"linearization"</code>.</p></dd>
 
 
 <dt id="arg-effects">effects<a class="anchor" aria-label="anchor" href="#arg-effects"></a></dt>
-<dd><p>The presentation mode the result reports its effects in,
-either <code>"marginal"</code> or <code>"conditional"</code>. A method that names no mode reports
-marginal effects.</p></dd>
+<dd><p>For <code>new_ipw()</code>, the presentation mode the result reports its
+effects in, either <code>"marginal"</code> or <code>"conditional"</code>; a method that names no
+mode reports marginal effects. For <code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code>, the reading to
+report: <code>NULL</code>, the default, reports the reading the result records, and
+any other value overrides it for the one call and leaves the result as it
+is. A reading the result does not support is refused with an error of class
+<code>causalgenerics_unsupported_reading</code>.</p></dd>
+
+
+<dt id="arg-readings">readings<a class="anchor" aria-label="anchor" href="#arg-readings"></a></dt>
+<dd><p>The readings the result supports, one or both of
+<code>"marginal"</code> and <code>"conditional"</code>. The default is both, which is what every
+result supported before the field existed. A method whose analysis has no
+meaning under one of them names the other, and the mode the result records
+has to be one of the readings named.</p></dd>
 
 
 <dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
@@ -145,18 +164,21 @@ standard error. Default is <code>0.95</code>.</p></dd>
 
 
 <dt id="arg-exponentiate">exponentiate<a class="anchor" aria-label="anchor" href="#arg-exponentiate"></a></dt>
-<dd><p>If <code>TRUE</code>, exponentiate the log risk ratio and log odds
-ratio to produce risk ratios and odds ratios on their natural scale,
-relabeling the two terms <code>"rr"</code> and <code>"or"</code>. The confidence bounds move with
-them. Standard errors, statistics, and p-values remain on the log scale, and
-the <code>ipw_vcov</code> attribute is dropped rather than carried, since it describes
-the estimates on the scale they were estimated on. Default is <code>FALSE</code>.</p></dd>
+<dd><p>If <code>TRUE</code>, move the estimates that are on a log scale to
+their natural scale. In the marginal reading those are the log risk ratio
+and the log odds ratio, and the two terms are relabeled <code>"rr"</code> and <code>"or"</code>;
+in the conditional reading the outcome model's link settles it for the whole
+table, as the section above describes. The confidence bounds move with the
+estimates. Standard errors, statistics, and p-values remain on the log
+scale, and the <code>ipw_vcov</code> attribute is dropped rather than carried, since it
+describes the estimates on the scale they were estimated on. Default is
+<code>FALSE</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p><code>new_ipw()</code> returns an S3 object of class <code>ipw</code>: a list of the
-following seven components, in this order.</p><dl><dt><code>estimand</code></dt>
+following eight components, in this order.</p><dl><dt><code>estimand</code></dt>
 <dd><p>The causal estimand, such as <code>"ate"</code> or <code>"att"</code>.</p></dd>
 
 <dt><code>wt_mod</code></dt>
@@ -168,26 +190,27 @@ weights.</p></dd>
 
 <dt><code>estimates</code></dt>
 <dd><p>A data frame with one row per effect measure and the
-following columns: <code>effect</code> (the measure name), <code>estimate</code> (point
-estimate), <code>std.err</code> (standard error), <code>z</code> (z-statistic), <code>ci.lower</code> and
-<code>ci.upper</code> (confidence interval bounds), <code>conf.level</code>, and <code>p.value</code>. For
-a categorical exposure the data frame also has a <code>contrast</code> column,
-placed after <code>effect</code>, naming the non-reference level and reference level
-of each contrast. A frame stored against an earlier version of this
-contract names that column <code>comparison</code>. The older name is read as an
-alias for the canonical one wherever the column is read, so a result
-holding such a frame labels its rows and reports its table exactly as one
-holding a <code>contrast</code> column does. A method written now writes
-<code>contrast</code>. A result reported once per level of a grouping variable also
-has a <code>group</code> column, placed after the contrast column when one is
-present and after <code>effect</code> when the result names no contrasts, naming the
-subgroup each row was estimated in as a <code>"var = value"</code> string such as
-<code>"sex = 0"</code>. That column has one spelling and no alias. Both optional
-columns are absent rather than constant when the result reports one
-contrast or one group, since a column repeating a single value down the
-table would read as a contrast or a subgroup that was named. <code>group</code> must
-be character and must name a subgroup in every row; the constructor
-refuses anything else with an error of class
+following columns: <code>effect</code> (the measure name, as a character or factor
+column naming a measure in every row, which the constructor requires),
+<code>estimate</code> (point estimate), <code>std.err</code> (standard error), <code>z</code>
+(z-statistic), <code>ci.lower</code> and <code>ci.upper</code> (confidence interval bounds),
+<code>conf.level</code>, and <code>p.value</code>. For a categorical exposure the data frame
+also has a <code>contrast</code> column, placed after <code>effect</code>, naming the
+non-reference level and reference level of each contrast. A frame stored
+against an earlier version of this contract names that column
+<code>comparison</code>. The older name is read as an alias for the canonical one
+wherever the column is read, so a result holding such a frame labels its
+rows and reports its table exactly as one holding a <code>contrast</code> column
+does. A method written now writes <code>contrast</code>. A result reported once per
+level of a grouping variable also has a <code>group</code> column, placed after the
+contrast column when one is present and after <code>effect</code> when the result
+names no contrasts, naming the subgroup each row was estimated in as a
+<code>"var = value"</code> string such as <code>"sex = 0"</code>. That column has one spelling
+and no alias. Both optional columns are absent rather than constant when
+the result reports one contrast or one group, since a column repeating a
+single value down the table would read as a contrast or a subgroup that
+was named. <code>group</code> must be character and must name a subgroup in every
+row; the constructor refuses anything else with an error of class
 <code>causalgenerics_invalid_argument_estimates</code>, and of the general class
 <code>causalgenerics_invalid_argument</code>, since a label pasted from such a column
 would relabel every row it keys without failing anywhere.</p></dd>
@@ -205,13 +228,20 @@ the linearization path has no such object and records <code>NULL</code>.</p></dd
 <dd><p>The presentation mode, either <code>"marginal"</code> or
 <code>"conditional"</code>. The marginal reading shows the causal contrast
 estimates and the conditional reading presents the outcome model's
-coefficient surface; both surfaces exist on every result. See
-<code><a href="ipw-modes.html">as_marginal()</a></code> and <code><a href="ipw-modes.html">as_conditional()</a></code>.</p></dd>
+coefficient surface. See <code><a href="ipw-modes.html">as_marginal()</a></code> and <code><a href="ipw-modes.html">as_conditional()</a></code>.</p></dd>
+
+<dt><code>readings</code></dt>
+<dd><p>The readings the result supports, one or both of
+<code>"marginal"</code> and <code>"conditional"</code>, and always including the mode above. A
+result stored before the field existed carries fewer components and is
+read as supporting both readings.</p></dd>
 
 
 </dl><p><code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> returns its input invisibly. <code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> returns a plain
-data frame of the effect estimates under the tidier column names described
-above, with the confidence bounds appended when they are asked for.</p>
+data frame under the tidier column names described above, with the
+confidence bounds appended when they are asked for: the effect estimates in
+the marginal reading, and the outcome model's coefficients, one row each,
+in the conditional one.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -224,18 +254,34 @@ the situation this package exists to prevent.</p>
 <p>The field names and their order are part of the contract, since callers read
 fields by name and print the object positionally. <code>fit</code> is present on every
 path, including the ones that have no fitted variance object to report, and
-<code>effects</code> is present whether or not the method that built the result named a
-mode.</p>
+<code>effects</code> and <code>readings</code> are present whether or not the method that built the
+result named a mode or a set of readings.</p>
 <p><code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> writes the estimand and the call of each component model, then the
 table of the surface the result's presentation mode names. The section below
 describes the two modes and what each one tabulates.</p>
-<p><code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> reports the effect estimates as a tidier-shaped table
-rather than as a copy of the <code>estimates</code> component. Its columns are <code>term</code>,
-then <code>contrast</code> when the result names contrasts, then <code>group</code> when it names
-subgroups, then <code>estimate</code>, <code>std.error</code>, <code>statistic</code>, and <code>p.value</code>. Those
-are the names the tidier convention uses, so a fitting package's <code>tidy()</code>
-method is this table read as a tibble and nothing more. The <code>estimates</code>
-component itself is unchanged by any of what follows.</p>
+<p><code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> reports the result as a tidier-shaped table rather than as
+a copy of the <code>estimates</code> component. In the marginal reading its columns are
+<code>term</code>, then <code>contrast</code> when the result names contrasts, then <code>group</code> when it
+names subgroups, then <code>estimate</code>, <code>std.error</code>, <code>statistic</code>, and <code>p.value</code>.
+Those are the names the tidier convention uses, so a fitting package's
+<code>tidy()</code> method is this table read as a tibble and nothing more. The
+<code>estimates</code> component itself is unchanged by any of what follows.</p>
+<p>The conditional reading reports the outcome model's coefficients under those
+same headings, one row per coefficient, with <code>term</code> naming the coefficient
+and <code>std.error</code> the standard error the corrected covariance implies. It names
+no contrasts and no subgroups: those key the rows of the effects table, and a
+coefficient is named by itself. It is the table
+<code><a href="ipw-pooled-methods.html">as.data.frame()</a></code> reports for a pooled result in the
+same reading, without the <code>df</code> column a pooled result has and an unpooled one
+does not.</p>
+<p>A result whose outcome model carries no corrected block has no such standard
+error to report, and the reading is refused with an error of class
+<code>causalgenerics_no_conditional_vcov</code> rather than reported from the standard
+errors the model computed for itself. That is where the table parts company
+with <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code>, which writes those coefficients under a note saying that no
+covariance from the joint estimation is recorded: a printed table is read by
+someone who reads the note with it, and a data frame is read by code that
+would take the column for the corrected one.</p>
 <p><code>conf.int = TRUE</code> appends <code>conf.low</code> and <code>conf.high</code> after the other columns,
 and <code>conf.level</code> names the level they report. The level is an argument rather
 than a column, since a column would repeat one number down every row and be
@@ -246,17 +292,32 @@ bootstrap or profile interval is asymmetric about the estimate, and even a
 normal one rounded on its way into the frame is not the number recomputing
 gives. At any other level, and for a frame whose rows disagree about the
 level or record none, the bounds are the normal approximation built from the
-estimate and its standard error.</p>
-<p>With <code>exponentiate = TRUE</code> the <code>log(rr)</code> and <code>log(or)</code> rows move to their
-natural scale, exponentiating the point estimate and the confidence bounds and
-relabeling the two terms <code>"rr"</code> and <code>"or"</code>. Standard errors, statistics, and
-p-values stay on the log scale, where the inference is done, and the interval
-is settled before the scale is: bounds recomputed at another level are built
-on the log scale and exponentiated afterwards. The covariance described below
-travels on the returned table under the same <code>ipw_vcov</code> attribute while the
-rows are on the scale they were estimated on, and is dropped when
-<code>exponentiate = TRUE</code>, since a matrix left attached there would describe
-neither the table it sits on nor anything else.</p>
+estimate and its standard error. The conditional reading has no stored pair
+to prefer, since the bounds the frame holds belong to the effects the other
+reading reports, so its bounds are the normal approximation at every level.</p>
+<p>With <code>exponentiate = TRUE</code> the <code>log(rr)</code> and <code>log(or)</code> rows of the marginal
+table move to their natural scale, exponentiating the point estimate and the
+confidence bounds and relabeling the two terms <code>"rr"</code> and <code>"or"</code>. Standard
+errors, statistics, and p-values stay on the log scale, where the inference is
+done, and the interval is settled before the scale is: bounds recomputed at
+another level are built on the log scale and exponentiated afterwards. The
+covariance described below travels on the returned table under the same
+<code>ipw_vcov</code> attribute while the rows are on the scale they were estimated on,
+and is dropped when <code>exponentiate = TRUE</code>, since a matrix left attached there
+would describe neither the table it sits on nor anything else.</p>
+<p>A conditional table has no rows labeled as ratios to pick out, so the link the
+outcome model was fitted with settles the question for the whole table: a
+<code>logit</code> link puts every coefficient on the log odds scale and a <code>log</code> link
+puts every coefficient on the log risk scale, and both are scales an
+exponential undoes. Every estimate moves and no term is relabeled, since a
+coefficient name names the term rather than the scale its estimate is
+reported on. Every other link raises an error of class
+<code>causalgenerics_exponentiate_link</code>, and of the classes
+<code>causalgenerics_invalid_argument_exponentiate</code> and
+<code>causalgenerics_invalid_argument</code>, rather than exponentiating coefficients
+that describe nothing once exponentiated. That is the rule
+<code><a href="ipw-pooled-methods.html">as.data.frame()</a></code> keeps for a pooled result, in the same
+words.</p>
     </div>
     <div class="section level2">
     <h2 id="the-effect-labels">The effect labels<a class="anchor" aria-label="anchor" href="#the-effect-labels"></a></h2>
@@ -278,10 +339,22 @@ thing.</p>
     <p>A result reports its effects in one of two readings, recorded in the
 <code>effects</code> field. The <code>"marginal"</code> reading shows the causal contrast
 estimates the method targeted; the <code>"conditional"</code> reading presents the
-outcome model's coefficient surface. Both surfaces always exist on the
-object, so the field says which one the result presents rather than which
-one it holds. <code><a href="ipw-modes.html">as_marginal()</a></code> and <code><a href="ipw-modes.html">as_conditional()</a></code> are how a caller moves a
+outcome model's coefficient surface. The field says which one the result
+presents, and <code><a href="ipw-modes.html">as_marginal()</a></code> and <code><a href="ipw-modes.html">as_conditional()</a></code> are how a caller moves a
 result between them.</p>
+<p>Which readings a result can present at all is the separate fact the
+<code>readings</code> field records. Both surfaces exist on most results and not on all
+of them: an exposure entering the outcome model through several columns has
+no single coefficient to read as the conditional effect, and a package that
+builds such a result records the reading it can answer for. A result records
+both unless the method that built it said otherwise, and the mode it records
+has to be one of them, so a result never presents a reading it does not
+support. Asking one for the reading it does not support raises an error of
+class <code>causalgenerics_unsupported_reading</code>, whether it is asked through the
+mode generics, through <code><a href="ipw-accessors.html">coef()</a></code>,
+<code><a href="ipw-accessors.html">vcov()</a></code>, or <code><a href="ipw-accessors.html">confint()</a></code>, or through the
+<code>effects</code> argument of <code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code>. A result stored before the field
+existed records no set and is read as supporting both.</p>
 <p>A printed result names its mode twice, since the two readings are different
 tables of different numbers: once on an <code>Effects:</code> line beside the estimand,
 and once in the heading of the table itself. The marginal reading tabulates
@@ -386,6 +459,22 @@ and <code><a href="ipw-modes.html">as_conditional()</a></code> for the presentat
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1   rd 0.199882  0.092425    2.1626 0.03057 0.018732  0.381032</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2   rr 1.751397  0.273519    2.0489 0.04047 1.024624  2.993676</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 3   or 2.406836  0.418661    2.0979 0.03591 1.059453  5.467782</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># A result whose analysis has no conditional reading records the one it</span></span></span>
+<span class="r-in"><span><span class="co"># supports, and the other is refused rather than reported.</span></span></span>
+<span class="r-in"><span><span class="va">marginal_only</span> <span class="op">&lt;-</span> <span class="fu">new_ipw</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  estimand <span class="op">=</span> <span class="st">"ate"</span>,</span></span>
+<span class="r-in"><span>  wt_mod <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/glm.html" class="external-link">glm</a></span><span class="op">(</span><span class="va">z</span> <span class="op">~</span> <span class="va">x</span>, family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  outcome_mod <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/glm.html" class="external-link">glm</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">z</span>, family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">quasibinomial</a></span><span class="op">(</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  estimates <span class="op">=</span> <span class="va">estimates</span>,</span></span>
+<span class="r-in"><span>  se_method <span class="op">=</span> <span class="st">"linearization"</span>,</span></span>
+<span class="r-in"><span>  fit <span class="op">=</span> <span class="cn">NULL</span>,</span></span>
+<span class="r-in"><span>  readings <span class="op">=</span> <span class="st">"marginal"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/try.html" class="external-link">try</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">marginal_only</span>, effects <span class="op">=</span> <span class="st">"conditional"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Error in as.data.frame.ipw(marginal_only, effects = "conditional") : </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

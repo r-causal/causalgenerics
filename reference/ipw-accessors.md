@@ -70,7 +70,13 @@ estimand(x, ...)
 
   The reading to report, either `"marginal"` or `"conditional"`. `NULL`,
   the default, reports the reading the result records; any other value
-  overrides it for the one call and leaves the result as it is.
+  overrides it for the one call and leaves the result as it is. A
+  reading the result does not support is refused with an error of class
+  `causalgenerics_unsupported_reading`, which is where
+  [`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  and
+  [`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+  refuse it too.
 
 - parm:
 
@@ -136,7 +142,11 @@ reading reports.
 [`vcov()`](https://rdrr.io/r/stats/vcov.html), and
 [`confint()`](https://rdrr.io/r/stats/confint.html) raise an error of
 class `causalgenerics_invalid_argument_effects` when `effects` names
-neither reading, and when the result's own field does.
+neither reading, and when the result's own field does. They raise an
+error of class `causalgenerics_unsupported_reading_marginal` or
+`causalgenerics_unsupported_reading_conditional`, and of the general
+class `causalgenerics_unsupported_reading`, when `effects` names a
+reading the result records that it does not support.
 
 [`nobs()`](https://rdrr.io/r/stats/nobs.html) returns a single integer,
 the number of observations the outcome model was fitted on, which is the
@@ -247,6 +257,17 @@ coefficients carry no names are the three ways the pairing fails.
 Reading such a block by position instead would report the covariance of
 other parameters under this model's coefficient names.
 
+A result records which of the two readings it supports, and naming the
+other one is refused rather than answered with a surface whose numbers
+are not the quantities the reading names. The refusal is the one
+[`as_marginal()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+and
+[`as_conditional()`](https://r-causal.github.io/causalgenerics/reference/ipw-modes.md)
+raise, of class `causalgenerics_unsupported_reading`, since a caller
+cares that the reading is not there rather than which surface asked for
+it. A result that supports one reading answers for that one exactly as a
+result supporting both does.
+
 [`nobs()`](https://rdrr.io/r/stats/nobs.html),
 [`df.residual()`](https://rdrr.io/r/stats/df.residual.html),
 [`weights()`](https://rdrr.io/r/stats/weights.html),
@@ -349,7 +370,7 @@ estimand(res)
 # rather than the effects.
 coef(res, effects = "conditional")
 #>  (Intercept)            z 
-#> 3.919028e-01 1.012353e-15 
+#> 3.919028e-01 6.859992e-16 
 
 # Its covariance is the corrected block a fitting package attaches to the
 # outcome model. This one carries none, and the covariance the model computed
@@ -377,7 +398,7 @@ conditional <- as_conditional(new_ipw(
 # named at the call site.
 coef(conditional)
 #>  (Intercept)            z 
-#> 3.919028e-01 1.012353e-15 
+#> 3.919028e-01 6.859992e-16 
 vcov(conditional)
 #>             (Intercept)         z
 #> (Intercept)    0.646421 -0.646421

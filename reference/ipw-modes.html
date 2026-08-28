@@ -82,7 +82,9 @@ argument.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p><code>x</code> presenting the reading asked for. The methods on <code>ipw</code> change the
 <code>effects</code> field and nothing else, so every other field comes back as it
-went in, the covariance attached to <code>estimates</code> included. The methods on
+went in, the covariance attached to <code>estimates</code> and the set of readings the
+result supports included. A result that does not support the reading asked
+for raises an error rather than returning one. The methods on
 <code>ipw_pooled</code> exchange <code>estimates</code>, <code>pooling</code>, and the recorded mode with the
 reading stored under <code>alternate</code>, so the reading that was presented is what
 the returned result stores there, and the components shared by both readings
@@ -91,17 +93,33 @@ asked for raises an error rather than returning one.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Both surfaces exist on every <code>ipw</code> result, so on one of those these generics
-record which one the result presents rather than computing anything. They set
-the <code>effects</code> field of the <code><a href="new_ipw.html">new_ipw()</a></code> contract and read nothing else, which
-makes them the supported way to move a result between the two readings: a
-caller writes <code>as_conditional(res)</code> rather than assigning to the field.</p>
-<p>The methods on <code>ipw</code> are total. Every such result has one of the two modes,
-so asking for either is always answerable: they never error, asking twice
-says what asking once said, and a result that goes out to the other reading
-and back is the result that went in. A result built before the field existed
-carries six fields rather than seven and reads as marginal, which is the mode
-every method produced then.</p>
+    <p>Both surfaces exist on an <code>ipw</code> result that supports both readings, so on one
+of those these generics record which one the result presents rather than
+computing anything. They set the <code>effects</code> field of the <code><a href="new_ipw.html">new_ipw()</a></code> contract
+and read the <code>readings</code> field beside it, which makes them the supported way
+to move a result between the two readings: a caller writes
+<code>as_conditional(res)</code> rather than assigning to the field, and a result that
+does not support the reading asked for is refused rather than left recording
+one it has no surface for.</p>
+<p>The methods on <code>ipw</code> hold for a result that supports both readings, which is
+what a result records unless the package that built it said otherwise. Asking
+such a result for either reading is always answerable: the methods never
+error on one, asking twice says what asking once said, and a result that goes
+out to the other reading and back is the result that went in.</p>
+<p>A result that supports one reading is refused the other rather than moved to
+it. The <code>readings</code> field says which ones a result can present, and a fitting
+package records one of them when the other has no meaning for the analysis it
+ran. Asking for a reading outside that set raises an error of class
+<code>causalgenerics_unsupported_reading_marginal</code> or
+<code>causalgenerics_unsupported_reading_conditional</code>, and of the general class
+<code>causalgenerics_unsupported_reading</code>, which carries the reading asked for
+under <code>effects</code> and the set the result records under <code>readings</code>. The reading
+such a result does support is the no-op it is on a result carrying both.</p>
+<p>A result built before the fields existed carries six or seven fields rather
+than eight, since the two were added one at a time. It reads as marginal
+where it records no mode, which is the mode every method produced then, and
+as supporting both readings where it records no set, which is what every
+result was assumed to support when none of them recorded otherwise.</p>
 <p>The generics live here for the reason <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> does. Two packages each
 registering <code>as_conditional.ipw()</code> would collide in the shared S3 method
 table, and a caller writing against a result would then get whichever package
@@ -183,6 +201,22 @@ one it presents.</p></div>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] TRUE</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="fu">as_marginal</span><span class="op">(</span><span class="fu">as_conditional</span><span class="op">(</span><span class="va">res</span><span class="op">)</span><span class="op">)</span>, <span class="va">res</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] TRUE</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># A result that supports one reading is refused the other rather than moved</span></span></span>
+<span class="r-in"><span><span class="co"># to it.</span></span></span>
+<span class="r-in"><span><span class="va">marginal_only</span> <span class="op">&lt;-</span> <span class="fu"><a href="new_ipw.html">new_ipw</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  estimand <span class="op">=</span> <span class="st">"ate"</span>,</span></span>
+<span class="r-in"><span>  wt_mod <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/glm.html" class="external-link">glm</a></span><span class="op">(</span><span class="va">z</span> <span class="op">~</span> <span class="va">x</span>, family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">binomial</a></span><span class="op">(</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  outcome_mod <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/glm.html" class="external-link">glm</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">z</span>, family <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/family.html" class="external-link">quasibinomial</a></span><span class="op">(</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  estimates <span class="op">=</span> <span class="va">estimates</span>,</span></span>
+<span class="r-in"><span>  se_method <span class="op">=</span> <span class="st">"linearization"</span>,</span></span>
+<span class="r-in"><span>  fit <span class="op">=</span> <span class="cn">NULL</span>,</span></span>
+<span class="r-in"><span>  readings <span class="op">=</span> <span class="st">"marginal"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/try.html" class="external-link">try</a></span><span class="op">(</span><span class="fu">as_conditional</span><span class="op">(</span><span class="va">marginal_only</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Error in as_conditional.ipw(marginal_only) : </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   This result supports the marginal reading only, so there is no conditional reading of it to report; the package that produced it records the readings it supports when it builds the result.</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Neither reading exists for an object that is not an IPW result.</span></span></span>
 <span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/try.html" class="external-link">try</a></span><span class="op">(</span><span class="fu">as_marginal</span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></span>

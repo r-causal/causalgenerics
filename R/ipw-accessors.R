@@ -65,10 +65,15 @@
 #' beside a coefficient is that coefficient's. A block whose labels cannot be
 #' paired with the coefficients raises an error of class
 #' `causalgenerics_conditional_vcov_mismatch`. A block of another size, one
-#' labeled with the parameter names of a stacked system, and a model whose
-#' coefficients carry no names are the three ways the pairing fails. Reading such
-#' a block by position instead would report the covariance of other parameters
-#' under this model's coefficient names.
+#' labeled with the parameter names of a stacked system, a model whose
+#' coefficients carry no names, and a model that reports no coefficients at all
+#' are the ways the pairing fails, and the message says which one it met.
+#' Reading such a block by position instead would report the covariance of other
+#' parameters under this model's coefficient names. A block that has to be
+#' reordered is refused for the same reason when a coefficient name is repeated:
+#' reordering by a name two coefficients share reports the first one's variance
+#' for both. A block already in coefficient order is reported as it was
+#' attached, since nothing is indexed and nothing can be misplaced.
 #'
 #' A result records which of the two readings it supports, and naming the other
 #' one is refused rather than answered with a surface whose numbers are not the
@@ -90,8 +95,9 @@
 #' @param parm The rows to report an interval for, given either as the labels
 #'   of the reported surface or as their positions in it. Missing means all of
 #'   them.
-#' @param level The confidence level. At the level the result stores, its own
-#'   limits are returned; at any other level they are recomputed.
+#' @param level The confidence level. At the level every row of the result
+#'   stores, the stored limits are returned; at any other level, and for a frame
+#'   whose rows do not agree on one, every row is recomputed.
 #' @param effects The reading to report, either `"marginal"` or
 #'   `"conditional"`. `NULL`, the default, reports the reading the result
 #'   records; any other value overrides it for the one call and leaves the
@@ -124,11 +130,23 @@
 #' The rows are named by effect label and the columns by the two tail
 #' probabilities as percentages, the way the `confint()` methods in \pkg{stats}
 #' name theirs. A character `parm` that names an effect the result does not
-#' report raises an error of class `causalgenerics_invalid_argument`. In the
-#' conditional reading the rows are the outcome model's coefficients, which
-#' `parm` names and indexes in the same two ways, and the limits are the normal
-#' ones built from the corrected covariance at every level, since the limits the
-#' result stores belong to the effects the marginal reading reports.
+#' report raises an error of class `causalgenerics_invalid_argument`.
+#'
+#' The limits the `estimates` frame stores are returned rather than rebuilt when
+#' every row of the frame records the level asked for, and every row is rebuilt
+#' from the estimate and its standard error otherwise. That is the rule
+#' `as.data.frame()` reports its bounds by, and it applies to the frame as a
+#' whole rather than to a row: the level names itself in the column headings and
+#' nowhere else, so a matrix holding a stored interval on one row and a rebuilt
+#' one on the next would report two kinds of interval under one heading. A
+#' stored pair need not be the one recomputing gives, since a bootstrap or
+#' profile interval is asymmetric about the estimate and even a normal one that
+#' was rounded on its way into the frame is a different number.
+#'
+#' In the conditional reading the rows are the outcome model's coefficients,
+#' which `parm` names and indexes in the same two ways, and the limits are the
+#' normal ones built from the corrected covariance at every level, since the
+#' limits the result stores belong to the effects the marginal reading reports.
 #'
 #' `coef()`, `vcov()`, and `confint()` raise an error of class
 #' `causalgenerics_invalid_argument_effects` when `effects` names neither
@@ -339,24 +357,16 @@ confint.ipw <- function(object, parm, level = 0.95, ..., effects = NULL) {
     select_effects(parm, labels)
   }
 
-  # One half width, added and subtracted. `qnorm()` is not exactly
-  # antisymmetric, so taking the lower limit from the lower tail instead would
-  # put the two bounds a bit apart from each other.
-  half_width <- stats::qnorm(1 - (1 - level) / 2) * estimates$std.err
-  lower <- estimates$estimate - half_width
-  upper <- estimates$estimate + half_width
+  # The limits the table reports, built by the helper the table is built by, so
+  # that the two readings of the same result at the same level are the same
+  # numbers. The stored pair comes back only when every row of the frame records
+  # the level asked for: the level names itself in the column headings and
+  # nowhere else, so a matrix holding a stored interval on one row and a rebuilt
+  # one on the next would report two kinds of interval under one heading with
+  # nothing in it to say which row is which.
+  bounds <- interval_bounds(estimates, level)
 
-  # At the level a row was reported for, the reported limits are returned rather
-  # than rebuilt. They need not be the normal-based pair at all: a bootstrap or
-  # profile interval is asymmetric about the estimate, and even a normal one
-  # that was rounded on its way into the frame is not the number recomputing
-  # gives. `which()` rather than a logical index so that a missing `conf.level`
-  # selects nothing instead of raising a subscript error.
-  stored <- which(estimates$conf.level == level)
-  lower[stored] <- estimates$ci.lower[stored]
-  upper[stored] <- estimates$ci.upper[stored]
-
-  limits <- cbind(lower[rows], upper[rows])
+  limits <- cbind(bounds$lower[rows], bounds$upper[rows])
   dimnames(limits) <- list(labels[rows], percent_labels(level))
   limits
 }
@@ -437,10 +447,21 @@ estimand.ipw <- function(x, ...) {
 #' block labeled with the same names in another order is reported in
 #' coefficient order, so the variance a caller reads beside a coefficient is that
 #' coefficient's. Anything the labels cannot be paired with is refused: a block
-#' of another size, one naming other parameters, and a model whose coefficients
-#' carry no names at all. Falling back on the positions in any of those cases
-#' would report the covariance of something else under this model's coefficient
-#' names, which is the one answer a caller has no way to check.
+#' of another size, one naming other parameters, a model whose coefficients carry
+#' no names at all, and a model that reports no coefficients for a block to
+#' belong to. Falling back on the positions in any of those cases would report
+#' the covariance of something else under this model's coefficient names, which
+#' is the one answer a caller has no way to check.
+#'
+#' A repeated coefficient name is refused on the reordering branch alone. The
+#' pairing compares the two label sets, and a set says nothing about how often a
+#' name appears in it, so a block whose labels repeat pairs as readily as one
+#' whose labels are distinct. Indexing that block by name then reaches the first
+#' entry each name matches, which reports one coefficient's variance twice and
+#' drops the other's, and the matrix that comes back is the right size under the
+#' right labels while describing something else. A block already in coefficient
+#' order is not indexed at all, so nothing there can be misplaced and the
+#' repetition costs the caller a reading it would otherwise have.
 #'
 #' @param model The result's `outcome_mod`.
 #' @param call The call to report the error against, which is the accessor's
@@ -455,7 +476,12 @@ conditional_vcov <- function(model, call = sys.call(-1)) {
   }
   covariance <- stats::vcov(model)
 
-  labels <- names(stats::coef(model))
+  # The coefficients themselves rather than their names alone: a model with no
+  # coefficients and a model that names none of the ones it has both answer
+  # `NULL` to `names()`, and the refusal describes the two differently, so the
+  # count travels with the labels.
+  coefficients <- stats::coef(model)
+  labels <- names(coefficients)
   block_labels <- rownames(covariance)
 
   # The size is checked alongside the names because a larger block can hold
@@ -468,7 +494,12 @@ conditional_vcov <- function(model, call = sys.call(-1)) {
     setequal(colnames(covariance), labels)
 
   if (!paired) {
-    stop_conditional_vcov_mismatch(block_labels, labels, call = call)
+    stop_conditional_vcov_mismatch(
+      block_labels,
+      labels,
+      length(coefficients),
+      call = call
+    )
   }
 
   # A block already in coefficient order comes back as the fitting package
@@ -478,6 +509,20 @@ conditional_vcov <- function(model, call = sys.call(-1)) {
     identical(block_labels, labels) && identical(colnames(covariance), labels)
   ) {
     return(covariance)
+  }
+
+  # Past here the block is reordered by name, and a name that two coefficients
+  # share picks out one of them twice. The pairing above cannot see that, since
+  # it compares sets; the reordering is where it matters, and it is refused
+  # rather than performed on a key that does not identify a row.
+  if (anyDuplicated(labels) > 0L) {
+    stop_conditional_vcov_mismatch(
+      block_labels,
+      labels,
+      length(coefficients),
+      duplicated_names = TRUE,
+      call = call
+    )
   }
 
   # Both margins, since a matrix reordered down one and not the other is no

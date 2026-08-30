@@ -336,21 +336,53 @@ stop_pool_missing_surface <- function(effects, reason, call = sys.call(-1)) {
 # attached no block and is answered by wrapping the model, and this one is
 # raised for a model that is wrapped already. The label sets are fields as well
 # as parts of the message, so a handler reports them without parsing the
-# sentence for them. A model whose coefficients carry no names is one of the
-# ways the pairing fails, and the clause that would list them says so rather
-# than listing an empty set, which would read as a model reporting no
-# coefficients at all.
+# sentence for them.
+#
+# Three facts about the coefficients are reported in three ways, since a caller
+# told the wrong one goes looking in the wrong place. A model that names its
+# coefficients has them listed. A model that reports coefficients and names none
+# of them is described rather than listed, since naming an empty set would read
+# as a model with nothing to name. A model that reports no coefficients at all
+# has nothing to name either way, and `names()` answers `NULL` for it as it does
+# for the unnamed one, so the count is what separates the two: `n_coefs` carries
+# it from the caller, and a caller that does not know it leaves it `NULL` and
+# gets the unnamed wording.
+#
+# One refusal is not a failure to pair the two sets at all, and it says so
+# instead of asking for a block that is already there. A block in another order
+# whose coefficient names repeat pairs as a set and cannot be reordered, since a
+# name two coefficients share does not say which of them a row belongs to. The
+# caller passes `duplicated_names` for that one, since the labels alone do not
+# distinguish it: a block of the wrong size can have repeated names too, and
+# that one fails to pair for its size.
 stop_conditional_vcov_mismatch <- function(
   block_labels,
   coef_labels,
+  n_coefs = NULL,
+  duplicated_names = FALSE,
   call = sys.call(-1)
 ) {
-  reported <- if (is.null(coef_labels)) {
-    "reports unnamed coefficients"
-  } else {
+  reported <- if (!is.null(coef_labels)) {
     paste0(
       "reports coefficients named ",
       toString(encodeString(coef_labels, quote = '"'))
+    )
+  } else if (isTRUE(n_coefs == 0L)) {
+    "reports no coefficients"
+  } else {
+    "reports unnamed coefficients"
+  }
+  remedy <- if (duplicated_names) {
+    paste0(
+      "; the block is in another order, and a name two coefficients share does ",
+      "not say which of them a row of it belongs to, so the package that ",
+      "produced the result attaches the block in coefficient order with ",
+      "`new_ipw_model()`."
+    )
+  } else {
+    paste0(
+      "; the package that produced the result attaches the block labeled by ",
+      "coefficient name with `new_ipw_model()`."
     )
   }
   message <- paste0(
@@ -358,13 +390,14 @@ stop_conditional_vcov_mismatch <- function(
     toString(encodeString(block_labels, quote = '"')),
     " and the outcome model ",
     reported,
-    "; the package that produced the result attaches the block labeled by ",
-    "coefficient name with `new_ipw_model()`."
+    remedy
   )
   stop(errorCondition(
     message,
     block_labels = block_labels,
     coef_labels = coef_labels,
+    n_coefs = n_coefs,
+    duplicated_names = duplicated_names,
     class = c(
       "causalgenerics_conditional_vcov_mismatch",
       "causalgenerics_no_vcov"

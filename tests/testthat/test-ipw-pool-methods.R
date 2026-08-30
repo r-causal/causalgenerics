@@ -780,17 +780,16 @@ test_that("confint() returns the stored bounds at the stored level", {
   )))
 })
 
-test_that("confint() reads the stored level row by row", {
-  # `confint()` keeps the rule row by row, which is what `confint()` on an
-  # unpooled result does: a matrix of limits is read a row at a time and says
-  # which level it is at in its column names, so a row reported at that level
-  # can answer with what it stored while its neighbors are rebuilt.
+test_that("confint() recomputes every row when the stored levels differ", {
+  # The stored level is a property of the frame rather than of a row, which is
+  # the rule `as.data.frame()` on a pooled result reads it by, and the rule this
+  # method reads it by as well. A matrix built row by row would hold a stored
+  # interval on one row and a rebuilt one on the next, under one pair of column
+  # headings naming the level and with nothing in it to say which row is which.
   #
-  # `as.data.frame()` is deliberately the other way, all or nothing across the
-  # frame, and the test of that is with the rest of the tidier-shaped table
-  # below. A table is read as a table, and the level is an argument to the call
-  # rather than a column of it, so a table whose rows came from two rules would
-  # have nothing on it to say so.
+  # The fixture is the one whose stored bounds are asymmetric about the
+  # estimate: no rebuild produces them for any row, which is what makes the
+  # frame rule separable from a per-row one here.
   res <- pooled_stored_interval()
   res$estimates$conf.level <- c(0.9, 0.95, 0.9)
   estimates <- res$estimates
@@ -798,17 +797,28 @@ test_that("confint() reads the stored level row by row", {
   ci <- confint(res, level = 0.9)
   half_width <- stats::qt(0.95, estimates$df) * estimates$std.err
 
-  # The two rows that record 0.9 come back as stored.
-  expect_identical(unname(ci[c(1, 3), 1]), estimates$ci.lower[c(1, 3)])
-  expect_identical(unname(ci[c(1, 3), 2]), estimates$ci.upper[c(1, 3)])
-  # The row that records 0.95 is rebuilt at the level asked for.
-  expect_equal(ci[2, 1], estimates$estimate[2] - half_width[2])
-  expect_equal(ci[2, 2], estimates$estimate[2] + half_width[2])
-  # The stored bounds are asymmetric about the estimate, so no rebuild produces
-  # them and the first half cannot pass by coincidence.
+  expect_identical(
+    dimnames(ci),
+    list(pool_binary_labels(), c("5 %", "95 %"))
+  )
+  expect_equal(
+    ci[, 1],
+    setNames(estimates$estimate - half_width, pool_binary_labels())
+  )
+  expect_equal(
+    ci[, 2],
+    setNames(estimates$estimate + half_width, pool_binary_labels())
+  )
+
+  # The two rows whose stored level is the one asked for are rebuilt with the
+  # rest, which is what makes this a claim about the frame and not about a row.
   expect_false(isTRUE(all.equal(
     unname(ci[c(1, 3), 1]),
-    (estimates$estimate - half_width)[c(1, 3)]
+    estimates$ci.lower[c(1, 3)]
+  )))
+  expect_false(isTRUE(all.equal(
+    unname(ci[c(1, 3), 2]),
+    estimates$ci.upper[c(1, 3)]
   )))
 })
 
@@ -1204,6 +1214,71 @@ test_that("as.data.frame() refuses arguments that are not what they must be", {
   expect_error(
     as.data.frame(res, conf.int = FALSE, conf.level = 0),
     class = "causalgenerics_invalid_argument_conf.level"
+  )
+})
+
+test_that("as.data.frame() reports its refusals against the call it is given", {
+  # A tidier in a fitting package delegates its pooled table to this method, so
+  # the call a user wrote is the tidier's and the call the refusals name is this
+  # one, which is an internal step the user never typed. The argument is the
+  # one `as.data.frame.ipw()` takes, in the same position and with the same
+  # default, so a tidier that pools and one that does not are written the same
+  # way.
+  res <- pooled_binary()
+  entry <- quote(tidy(pooled, conf.level = 95))
+  refusal_call <- function(expr) {
+    conditionCall(tryCatch(expr, error = identity))
+  }
+
+  expect_identical(
+    refusal_call(as.data.frame(res, conf.level = 95, call = entry)),
+    entry
+  )
+  expect_identical(
+    refusal_call(as.data.frame(res, conf.int = NA, call = entry)),
+    entry
+  )
+  expect_identical(
+    refusal_call(as.data.frame(res, exponentiate = 1, call = entry)),
+    entry
+  )
+  expect_identical(
+    refusal_call(as.data.frame(res, effects = "both", call = entry)),
+    entry
+  )
+  # The reading a pooled result does not carry is refused on the same path, and
+  # names the same call.
+  expect_identical(
+    refusal_call(as.data.frame(res, effects = "conditional", call = entry)),
+    entry
+  )
+
+  # A caller who supplies no call is reported against the method's own, which is
+  # what a direct call has always named.
+  expect_identical(
+    refusal_call(as.data.frame(res, conf.level = 95))[[1L]],
+    quote(as.data.frame.ipw_pooled)
+  )
+})
+
+test_that("as.data.frame() takes its call argument after the named ones", {
+  # The argument order is the contract a positional call is written against.
+  # `call` sits last and past the dots, as it does on `as.data.frame.ipw()`, so
+  # every call written against the earlier signature means here what it meant
+  # there.
+  expect_identical(
+    names(formals(as.data.frame.ipw_pooled)),
+    c(
+      "x",
+      "row.names",
+      "optional",
+      "...",
+      "conf.int",
+      "conf.level",
+      "exponentiate",
+      "effects",
+      "call"
+    )
   )
 })
 

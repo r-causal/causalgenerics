@@ -1631,6 +1631,8 @@ test_that("vcov() says a conditional outcome model reports no coefficients", {
   # and this model has no entries, so the two sentences do not overlap.
   expect_false(grepl("unnamed", bare_message(vcov(bare)), fixed = TRUE))
 
+  expect_snapshot(error = TRUE, vcov(bare))
+
   # A model whose method reports the same fact as an empty numeric vector is the
   # same model as far as the pairing goes, so the fact rather than the shape it
   # arrives in is what the refusal describes.
@@ -1663,6 +1665,10 @@ test_that("vcov() refuses to reorder a conditional block whose labels repeat", {
     confint(res),
     class = "causalgenerics_conditional_vcov_mismatch"
   )
+
+  # The label lists are the same set twice over, in two orders, which is what
+  # the sentence has to show for the refusal to read as anything but arbitrary.
+  expect_snapshot(error = TRUE, vcov(res))
 })
 
 test_that("vcov() returns a block in coefficient order whose labels repeat", {

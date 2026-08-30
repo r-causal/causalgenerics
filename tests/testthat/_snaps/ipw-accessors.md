@@ -46,6 +46,22 @@
       Error in `vcov.ipw()`:
       ! The conditional covariance is labeled "theta1", "theta2" and the outcome model reports coefficients named "(Intercept)", "z"; the package that produced the result attaches the block labeled by coefficient name with `new_ipw_model()`.
 
+# vcov() says a conditional outcome model reports no coefficients
+
+    Code
+      vcov(bare)
+    Condition
+      Error in `vcov.ipw()`:
+      ! The conditional covariance is labeled "(Intercept)", "z" and the outcome model reports no coefficients; the package that produced the result attaches the block labeled by coefficient name with `new_ipw_model()`.
+
+# vcov() refuses to reorder a conditional block whose labels repeat
+
+    Code
+      vcov(res)
+    Condition
+      Error in `vcov.ipw()`:
+      ! The conditional covariance is labeled "ab", "ab", "(Intercept)" and the outcome model reports coefficients named "(Intercept)", "ab", "ab"; the block is in another order, and a name two coefficients share does not say which of them a row of it belongs to, so the package that produced the result attaches the block in coefficient order with `new_ipw_model()`.
+
 # vcov() refuses the conditional mode without a corrected block
 
     Code

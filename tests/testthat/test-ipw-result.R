@@ -2411,8 +2411,10 @@ conditional_with_effects_vcov <- function() {
 
 test_that("as.data.frame() takes an effects argument after its named ones", {
   # The argument order is the contract a positional call is written against.
-  # `effects` sits after the three arguments this method already had, so every
-  # call written against the earlier signature means here what it meant there.
+  # `effects` sits after the three arguments this method already had, and `call`
+  # after that, so every call written against an earlier signature means here
+  # what it meant there. Both are past the dots as well, so neither can be
+  # matched by position at all.
   expect_identical(
     names(formals(as.data.frame.ipw)),
     c(
@@ -2423,7 +2425,8 @@ test_that("as.data.frame() takes an effects argument after its named ones", {
       "conf.int",
       "conf.level",
       "exponentiate",
-      "effects"
+      "effects",
+      "call"
     )
   )
 })

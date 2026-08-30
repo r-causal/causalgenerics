@@ -29,7 +29,8 @@
   conf.int = FALSE,
   conf.level = NULL,
   exponentiate = FALSE,
-  effects = NULL
+  effects = NULL,
+  call = sys.call()
 )
 
 \method{estimand}{ipw_pooled}(x, ...)
@@ -53,9 +54,10 @@ the same classes, having nothing recorded to report.}
 \item{parm}{The rows to report an interval for, given either as the effect
 labels or as their positions. Missing means all of them.}
 
-\item{level}{The confidence level. At the level a row stores, that row's own
-limits are returned; at any other level they are rebuilt from t on the
-row's degrees of freedom.}
+\item{level}{The confidence level. At the level every row of the result
+stores, the stored limits are returned; at any other level, and for a frame
+whose rows do not agree on one, every row is rebuilt from t on its own
+degrees of freedom.}
 
 \item{row.names}{A character vector of row names for the returned table, or
 \code{NULL} for the automatic ones.}
@@ -71,6 +73,11 @@ default, uses the level the result records.}
 
 \item{exponentiate}{If \code{TRUE}, move the estimates that are on a log scale to
 their natural scale, as the section above describes. Default is \code{FALSE}.}
+
+\item{call}{The call to report a refusal against. A tidier that builds its
+table by calling \code{as.data.frame()} passes the call a user wrote, so the
+refusal names the function they typed rather than the delegation behind it.
+The default is the method's own call, which is what a direct call reports.}
 }
 \value{
 \code{print()} returns its input invisibly.
@@ -177,18 +184,18 @@ method and no field and gives \code{NULL}.
 }
 
 \section{The confidence limits}{
-\code{confint()} returns the limits the result stores for any row reported at the
-level asked for, and rebuilds the rest. That is the rule \code{confint()} on an
-unpooled result keeps, row by row: a stored pair need not be the one
-recomputing gives, since it may have been rounded on its way into the frame.
+\code{confint()} and \code{as.data.frame()} return the limits the result stores when
+every row of the frame records the level asked for, and rebuild every row
+otherwise. That is the rule both keep on an unpooled result, and it is a rule
+about the frame rather than about a row: a stored pair need not be the one
+recomputing gives, since it may have been rounded on its way into the frame,
+so a surface mixing stored limits with rebuilt ones would report two kinds of
+interval under one pair of column headings with nothing on it to say which is
+which.
 
-\code{as.data.frame()} applies the same rule to the frame as a whole, which is
-what \code{as.data.frame()} on an unpooled result does. The stored pair comes back
-only when every row records the level asked for, since a table mixing stored
-limits with rebuilt ones would report two intervals under one pair of column
-headings. \code{conf.level = NULL}, its default, names the level the frame records,
-which is the level \code{\link[=pool_ipw]{pool_ipw()}} built its limits at; a frame whose rows
-disagree records none, and the limits are rebuilt at \code{0.95}.
+\code{conf.level = NULL}, the \code{as.data.frame()} default, names the level the frame
+records, which is the level \code{\link[=pool_ipw]{pool_ipw()}} built its limits at; a frame whose
+rows disagree records none, and the limits are rebuilt at \code{0.95}.
 }
 
 \section{Exponentiating}{

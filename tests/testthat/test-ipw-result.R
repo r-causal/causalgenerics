@@ -1545,6 +1545,29 @@ mixed_level_estimates <- function() {
   estimates
 }
 
+# An estimates frame whose `$` refuses to answer for a column it does not
+# carry, which is how a tibble behaves and how a plain data frame does not: that
+# one answers `NULL` and says nothing. A frame of this class is therefore what
+# tells a read by exact name from one that falls back on `$`. A fitting package
+# is free to store its estimates in a tibble, and the optional columns of the
+# contract are optional, so a frame without one of them is a frame to build the
+# bounds for rather than one to warn about.
+strict_estimates <- function(estimates) {
+  structure(estimates, class = c("cg_strict_df", "data.frame"))
+}
+
+# The method that class carries, written the way tibble writes it. It is
+# registered by the test that needs it and taken back out when that test
+# returns, since a `$` method for a class no other test builds would otherwise
+# sit in base's method table for the rest of the session.
+strict_dollar <- function(x, name) {
+  if (!name %in% names(x)) {
+    warning("Unknown or uninitialised column: `", name, "`.")
+    return(NULL)
+  }
+  .subset2(x, name)
+}
+
 # A binary-exposure frame whose ratios are already on the natural scale, which is
 # what separates matching the `log(rr)` and `log(or)` labels exactly from
 # matching every label holding `rr` or `or` somewhere. Only the labels are
@@ -1798,6 +1821,26 @@ test_that("as.data.frame(conf.int = TRUE) recomputes when the frame stores no le
   expect_identical(df$conf.high, expected$upper)
 })
 
+test_that("as.data.frame(conf.int = TRUE) reads the stored level by exact name", {
+  # The `conf.level` column is optional, and a frame without it is read as
+  # saying nothing about what its bounds describe. Reading it with `$` reads it
+  # inexactly: a plain data frame answers `NULL`, but a frame whose `$` is
+  # stricter, as a tibble's is, warns instead, and the caller is warned about a
+  # column the contract never required. An exact read asks the frame for the
+  # column it has rather than for one it might have.
+  local_s3_method("$", "cg_strict_df", strict_dollar)
+
+  estimates <- binary_estimates()
+  estimates$conf.level <- NULL
+  res <- ipw_result(strict_estimates(estimates))
+
+  expect_no_warning(df <- as.data.frame(res, conf.int = TRUE))
+
+  expected <- normal_bounds(estimates, 0.95)
+  expect_identical(df$conf.low, expected$lower)
+  expect_identical(df$conf.high, expected$upper)
+})
+
 test_that("as.data.frame(exponentiate = TRUE) moves only the ratio rows", {
   estimates <- binary_estimates()
   res <- ipw_result(estimates)
@@ -2034,6 +2077,27 @@ test_that("as.data.frame() sets the row names from row.names", {
   )
 })
 
+test_that("as.data.frame() reads a length-one row.names as a row name", {
+  # `row.names` names the rows of the returned table. Handing it to
+  # `data.frame()` gives a length-one value a second meaning: base R reads it as
+  # the name or position of a column to take the row names from, and drops that
+  # column on the way. A caller who names one row of a three-row table has
+  # written a length mismatch, and is told so, rather than getting a table with
+  # a column missing and the terms in the row names.
+  res <- ipw_result(binary_estimates())
+
+  expect_error(as.data.frame(res, row.names = "term"), regexp = "row.names")
+  expect_error(as.data.frame(res, row.names = 1), regexp = "row.names")
+
+  # One name for one row is the case where the two readings differ in what they
+  # produce rather than in whether they refuse: the name belongs to the row, and
+  # the column it happens to spell stays in the table.
+  one <- as.data.frame(ipw_result(continuous_estimates()), row.names = "term")
+
+  expect_identical(rownames(one), "term")
+  expect_identical(one$term, "diff")
+})
+
 test_that("as.data.frame() takes row.names and optional positionally", {
   # The generic in \pkg{base} takes `row.names` and `optional` in that order
   # before its dots, and this method matches it, so a positional call written
@@ -2229,6 +2293,44 @@ test_that("the as.data.frame() argument errors state the contract", {
   expect_snapshot(error = TRUE, as.data.frame(res, conf.level = 95))
   expect_snapshot(error = TRUE, as.data.frame(res, conf.int = NA))
   expect_snapshot(error = TRUE, as.data.frame(res, exponentiate = 1))
+})
+
+test_that("as.data.frame() reports its refusals against the call it is given", {
+  # A tidier in a fitting package delegates its table to this method, so the
+  # call a user wrote is the tidier's and the call the refusals name is this
+  # one, which is an internal step the user never typed. The call travels as an
+  # argument, the way it already does into `conditional_data_frame()`, so a
+  # delegating caller says which call to report against and every validator on
+  # the way reports against that one.
+  res <- ipw_result(binary_estimates())
+  entry <- quote(tidy(result, conf.level = 95))
+  refusal_call <- function(expr) {
+    conditionCall(tryCatch(expr, error = identity))
+  }
+
+  expect_identical(
+    refusal_call(as.data.frame(res, conf.level = 95, call = entry)),
+    entry
+  )
+  expect_identical(
+    refusal_call(as.data.frame(res, conf.int = NA, call = entry)),
+    entry
+  )
+  expect_identical(
+    refusal_call(as.data.frame(res, exponentiate = 1, call = entry)),
+    entry
+  )
+  expect_identical(
+    refusal_call(as.data.frame(res, effects = "both", call = entry)),
+    entry
+  )
+
+  # A caller who supplies no call is reported against the method's own, which is
+  # what a direct call has always named and what the snapshots above record.
+  expect_identical(
+    refusal_call(as.data.frame(res, conf.level = 95))[[1L]],
+    quote(as.data.frame.ipw)
+  )
 })
 
 # ---- as.data.frame.ipw() and the reading it presents -------------------------

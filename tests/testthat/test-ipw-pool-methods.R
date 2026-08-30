@@ -429,6 +429,72 @@ pooled_stored_interval <- function() {
   res
 }
 
+# One imputation's estimates frame for a result reporting a single effect. A
+# `row.names` of length one is a length mismatch for a table of three rows and
+# the name of the only row of a table of one, so a one-row result is what
+# separates refusing the length from naming the row.
+pool_single_estimates <- function(estimate, std.err) {
+  half_width <- stats::qnorm(0.975) * std.err
+  data.frame(
+    effect = "rd",
+    estimate = estimate,
+    std.err = std.err,
+    z = estimate / std.err,
+    ci.lower = estimate - half_width,
+    ci.upper = estimate + half_width,
+    conf.level = 0.95,
+    p.value = 2 * stats::pnorm(-abs(estimate / std.err))
+  )
+}
+
+pooled_single <- function() {
+  estimate <- pool_binary_estimate()
+  std_err <- pool_binary_std_err()
+  fits <- lapply(1:3, function(i) {
+    pool_fit(
+      pool_single_estimates(estimate[i, 1], std_err[i, 1]),
+      vcov = pool_effects_vcov(std_err[i, 1], "rd")
+    )
+  })
+  pool_ipw(fits, dfcom = 17)
+}
+
+# An estimates frame whose `$` refuses to answer for a column it does not carry,
+# which is how a tibble behaves and how a plain data frame does not: that one
+# answers `NULL` and says nothing. A fitting package is free to store its
+# estimates in a tibble, and `conf.level` is one of the optional columns of the
+# contract, so a frame without it is a frame to build the bounds for rather than
+# one to warn about. The class and the method are the ones `test-ipw-result.R`
+# builds for the unpooled surfaces; testthat sources each file in an environment
+# of its own, so each file carries its own copy.
+pool_strict_estimates <- function(estimates) {
+  structure(estimates, class = c("cg_strict_df", "data.frame"))
+}
+
+pool_strict_dollar <- function(x, name) {
+  if (!name %in% names(x)) {
+    warning("Unknown or uninitialised column: `", name, "`.")
+    return(NULL)
+  }
+  .subset2(x, name)
+}
+
+# The binary fits with the optional `conf.level` column left out and the strict
+# frame in its place, which is what a set of results stored in tibbles looks
+# like to `pool_ipw()`.
+pool_strict_fits <- function() {
+  estimate <- pool_binary_estimate()
+  std_err <- pool_binary_std_err()
+  lapply(1:3, function(i) {
+    estimates <- pool_binary_estimates(estimate[i, ], std_err[i, ])
+    estimates$conf.level <- NULL
+    pool_fit(
+      pool_strict_estimates(estimates),
+      vcov = pool_effects_vcov(std_err[i, ], pool_binary_labels())
+    )
+  })
+}
+
 # The pooled degrees of freedom of the binary fixture at a complete-data count
 # of 17, worked out by hand in `test-ipw-pool.R`. Written here rather than read
 # off the result, since the bounds and the p-values below are the claim and
@@ -1022,6 +1088,29 @@ test_that("as.data.frame() sets the row names from row.names", {
   }
 })
 
+test_that("as.data.frame() reads a length-one row.names as a row name", {
+  # `row.names` names the rows of the returned table. Handing it to
+  # `data.frame()` gives a length-one value a second meaning: base R reads it as
+  # the name or position of a column to take the row names from, and drops that
+  # column on the way. A caller who names one row of a three-row table has
+  # written a length mismatch, and is told so, rather than getting a table with
+  # a column missing and the terms in the row names. The pooled table is built
+  # by the helper the unpooled one is built by, so it is read the same way here.
+  res <- pooled_binary()
+
+  expect_error(as.data.frame(res, row.names = "term"), regexp = "row.names")
+  expect_error(as.data.frame(res, row.names = 1), regexp = "row.names")
+
+  # One name for one row is the case where the two readings differ in what they
+  # produce rather than in whether they refuse: the name belongs to the row, and
+  # the column it happens to spell stays in the table.
+  one <- as.data.frame(pooled_single(), row.names = "term")
+
+  expect_identical(rownames(one), "term")
+  expect_identical(one$term, "rd")
+  expect_identical(names(one), names(as.data.frame(pooled_single())))
+})
+
 test_that("as.data.frame() takes row.names and optional positionally", {
   # The generic in \pkg{base} takes `row.names` and `optional` in that order
   # before its dots, and this method matches it, so a positional call written
@@ -1155,6 +1244,42 @@ test_that("as.data.frame() recomputes the bounds at another level", {
     rebuilt$conf.low[c(1, 3)],
     mixed$estimates$ci.lower[c(1, 3)]
   )))
+})
+
+test_that("the pooled surfaces read the stored level by exact name", {
+  # The `conf.level` column is optional, and a frame without it is read as
+  # saying nothing about what its bounds describe. Reading it with `$` reads it
+  # inexactly: a plain data frame answers `NULL`, but a frame whose `$` is
+  # stricter, as a tibble's is, warns instead, and the caller is warned about a
+  # column the contract never required. Every surface that asks a frame what
+  # level it records asks it by exact name.
+  local_s3_method("$", "cg_strict_df", pool_strict_dollar)
+
+  plain <- pooled_binary()
+  estimates <- plain$estimates
+  covariance <- attr(estimates, "ipw_vcov", exact = TRUE)
+  estimates$conf.level <- NULL
+  attr(estimates, "ipw_vcov") <- covariance
+  res <- plain
+  res$estimates <- pool_strict_estimates(estimates)
+
+  expect_no_warning(df <- as.data.frame(res, conf.int = TRUE))
+  expect_no_warning(ci <- confint(res))
+
+  # A frame recording no level has its bounds rebuilt from t on each row's own
+  # pooled degrees of freedom at the default level, which is the pair the
+  # fixture stores: `pool_ipw()` built that pair with the same expression at the
+  # same level.
+  reference <- as.data.frame(plain, conf.int = TRUE)
+  expect_identical(df$conf.low, reference$conf.low)
+  expect_identical(df$conf.high, reference$conf.high)
+  expect_identical(ci, confint(plain))
+
+  # Pooling reads the level the same way, off the frames it is handed rather
+  # than off the one it writes.
+  expect_no_warning(pooled <- pool_ipw(pool_strict_fits(), dfcom = 17))
+  expect_identical(pooled$estimates$estimate, plain$estimates$estimate)
+  expect_identical(pooled$estimates$conf.level, plain$estimates$conf.level)
 })
 
 test_that("as.data.frame() carries the pooled covariance on the plain table", {

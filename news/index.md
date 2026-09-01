@@ -2,6 +2,79 @@
 
 ## causalgenerics (development version)
 
+- [`confint()`](https://rdrr.io/r/stats/confint.html) on an `ipw` and on
+  an `ipw_pooled` result now reads the stored confidence level as a
+  property of the `estimates` frame rather than of a row. The limits the
+  frame stores are returned when every row records the level asked for,
+  and every row is rebuilt from the estimate and its standard error
+  otherwise; a row that records the level asked for while its neighbors
+  record another one is rebuilt with them. That is the rule
+  [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) has
+  always reported its bounds by, and the two now agree: the level names
+  itself in the column headings of a matrix and in the argument that
+  built a table, and neither says which rows were stored and which
+  rebuilt, so a surface built by two rules reported two kinds of
+  interval under one heading with nothing on it to say which was which.
+  Only a frame whose rows disagree about the level is affected, which no
+  [`ipw()`](https://r-causal.github.io/causalgenerics/reference/ipw.md)
+  method in the ecosystem produces; a result built at one level reports
+  the same numbers it did.
+
+- [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) on an
+  `ipw` and on an `ipw_pooled` result now sets the row names of the
+  table it returns from `row.names` itself, rather than handing the
+  argument to [`data.frame()`](https://rdrr.io/r/base/data.frame.html).
+  A length-one value was read there as the name or the position of a
+  column to take the row names from, and that column was dropped on the
+  way, so `as.data.frame(result, row.names = "term")` on a three-row
+  table returned a table with the terms in its row names and no `term`
+  column, or failed with a message about duplicate row names. A caller
+  who names one row of a longer table has written a length mismatch and
+  is now told so.
+
+- [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) and
+  [`pool_ipw()`](https://r-causal.github.io/causalgenerics/reference/pool_ipw.md)
+  now read the optional `conf.level` column of an `estimates` frame by
+  exact name. A frame whose `$` is stricter than a plain data frame’s,
+  as it is for a tibble, warned about a column the contract never
+  required whenever the bounds of a frame that carries no level were
+  reported.
+
+- [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) on an
+  `ipw` and on an `ipw_pooled` result gains a trailing `call` argument,
+  after `effects` and past the dots, naming the call its refusals report
+  against. A tidier in a fitting package builds its table by calling
+  this method, so a bad `conf.level`, `conf.int`, `exponentiate`, or
+  `effects` was reported against
+  [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html), a
+  delegation the user never typed; such a tidier now passes the call it
+  was given and every check on the path names it. The default is the
+  method’s own call, so a direct call reports what it always did.
+
+- [`vcov()`](https://rdrr.io/r/stats/vcov.html) and
+  [`confint()`](https://rdrr.io/r/stats/confint.html) on the conditional
+  reading of a result now say that an outcome model “reports no
+  coefficients” when it has none, rather than that it reports unnamed
+  ones. Both models answer `NULL` to `names(coef())`, and the wording
+  for the unnamed one sent a caller looking for names to put on a
+  surface with no entries to name. The condition is unchanged in class,
+  `causalgenerics_conditional_vcov_mismatch` and the general
+  `causalgenerics_no_vcov`, and carries the coefficient count as a
+  field.
+
+- [`vcov()`](https://rdrr.io/r/stats/vcov.html) and
+  [`confint()`](https://rdrr.io/r/stats/confint.html) on the conditional
+  reading now refuse a corrected covariance that has to be reordered
+  when a coefficient name is repeated, with the same
+  `causalgenerics_conditional_vcov_mismatch` class. The block and the
+  coefficients are paired as sets, and a set says nothing about how
+  often a name appears in it, so a block in another order whose labels
+  repeat was reordered by name and reached the first entry each name
+  matched: it reported one coefficient’s variance twice and dropped the
+  other’s, in a matrix of the right size under the right labels. A block
+  already in coefficient order is still reported as it was attached,
+  since nothing is indexed there and nothing can be misplaced.
+
 - [`new_ipw()`](https://r-causal.github.io/causalgenerics/reference/new_ipw.md)
   now checks the `estimates` component it is handed. It has to be a data
   frame, and it has to name each row’s effect measure in an `effect`

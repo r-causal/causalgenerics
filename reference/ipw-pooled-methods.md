@@ -52,7 +52,8 @@ as.data.frame(
   conf.int = FALSE,
   conf.level = NULL,
   exponentiate = FALSE,
-  effects = NULL
+  effects = NULL,
+  call = sys.call()
 )
 
 # S3 method for class 'ipw_pooled'
@@ -94,8 +95,9 @@ estimand(x, ...)
 
 - level:
 
-  The confidence level. At the level a row stores, that row's own limits
-  are returned; at any other level they are rebuilt from t on the row's
+  The confidence level. At the level every row of the result stores, the
+  stored limits are returned; at any other level, and for a frame whose
+  rows do not agree on one, every row is rebuilt from t on its own
   degrees of freedom.
 
 - row.names:
@@ -124,6 +126,15 @@ estimand(x, ...)
 
   If `TRUE`, move the estimates that are on a log scale to their natural
   scale, as the section above describes. Default is `FALSE`.
+
+- call:
+
+  The call to report a refusal against. A tidier that builds its table
+  by calling
+  [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) passes
+  the call a user wrote, so the refusal names the function they typed
+  rather than the delegation behind it. The default is the method's own
+  call, which is what a direct call reports.
 
 ## Value
 
@@ -245,21 +256,19 @@ result finds no method and no field and gives `NULL`.
 
 ## The confidence limits
 
-[`confint()`](https://rdrr.io/r/stats/confint.html) returns the limits
-the result stores for any row reported at the level asked for, and
-rebuilds the rest. That is the rule
-[`confint()`](https://rdrr.io/r/stats/confint.html) on an unpooled
-result keeps, row by row: a stored pair need not be the one recomputing
-gives, since it may have been rounded on its way into the frame.
+[`confint()`](https://rdrr.io/r/stats/confint.html) and
+[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) return
+the limits the result stores when every row of the frame records the
+level asked for, and rebuild every row otherwise. That is the rule both
+keep on an unpooled result, and it is a rule about the frame rather than
+about a row: a stored pair need not be the one recomputing gives, since
+it may have been rounded on its way into the frame, so a surface mixing
+stored limits with rebuilt ones would report two kinds of interval under
+one pair of column headings with nothing on it to say which is which.
 
-[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) applies
-the same rule to the frame as a whole, which is what
-[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) on an
-unpooled result does. The stored pair comes back only when every row
-records the level asked for, since a table mixing stored limits with
-rebuilt ones would report two intervals under one pair of column
-headings. `conf.level = NULL`, its default, names the level the frame
-records, which is the level
+`conf.level = NULL`, the
+[`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html) default,
+names the level the frame records, which is the level
 [`pool_ipw()`](https://r-causal.github.io/causalgenerics/reference/pool_ipw.md)
 built its limits at; a frame whose rows disagree records none, and the
 limits are rebuilt at `0.95`.

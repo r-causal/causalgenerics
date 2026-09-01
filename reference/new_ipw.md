@@ -33,7 +33,8 @@ as.data.frame(
   conf.int = FALSE,
   conf.level = 0.95,
   exponentiate = FALSE,
-  effects = NULL
+  effects = NULL,
+  call = sys.call()
 )
 ```
 
@@ -132,6 +133,14 @@ as.data.frame(
   remain on the log scale, and the `ipw_vcov` attribute is dropped
   rather than carried, since it describes the estimates on the scale
   they were estimated on. Default is `FALSE`.
+
+- call:
+
+  The call to report a refusal against. A tidier that builds its table
+  by calling this method passes the call a user wrote, so the refusal
+  names the function they typed rather than the delegation behind it.
+  The default is the method's own call, which is what a direct call
+  reports.
 
 ## Value
 

@@ -86,8 +86,9 @@ estimand(x, ...)
 
 - level:
 
-  The confidence level. At the level the result stores, its own limits
-  are returned; at any other level they are recomputed.
+  The confidence level. At the level every row of the result stores, the
+  stored limits are returned; at any other level, and for a frame whose
+  rows do not agree on one, every row is recomputed.
 
 - formula:
 
@@ -131,12 +132,25 @@ effect label and the columns by the two tail probabilities as
 percentages, the way the
 [`confint()`](https://rdrr.io/r/stats/confint.html) methods in stats
 name theirs. A character `parm` that names an effect the result does not
-report raises an error of class `causalgenerics_invalid_argument`. In
-the conditional reading the rows are the outcome model's coefficients,
-which `parm` names and indexes in the same two ways, and the limits are
-the normal ones built from the corrected covariance at every level,
-since the limits the result stores belong to the effects the marginal
-reading reports.
+report raises an error of class `causalgenerics_invalid_argument`.
+
+The limits the `estimates` frame stores are returned rather than rebuilt
+when every row of the frame records the level asked for, and every row
+is rebuilt from the estimate and its standard error otherwise. That is
+the rule [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html)
+reports its bounds by, and it applies to the frame as a whole rather
+than to a row: the level names itself in the column headings and nowhere
+else, so a matrix holding a stored interval on one row and a rebuilt one
+on the next would report two kinds of interval under one heading. A
+stored pair need not be the one recomputing gives, since a bootstrap or
+profile interval is asymmetric about the estimate and even a normal one
+that was rounded on its way into the frame is a different number.
+
+In the conditional reading the rows are the outcome model's
+coefficients, which `parm` names and indexes in the same two ways, and
+the limits are the normal ones built from the corrected covariance at
+every level, since the limits the result stores belong to the effects
+the marginal reading reports.
 
 [`coef()`](https://rdrr.io/r/stats/coef.html),
 [`vcov()`](https://rdrr.io/r/stats/vcov.html), and
@@ -252,10 +266,16 @@ reported in coefficient order whatever order it was attached in, so the
 variance read beside a coefficient is that coefficient's. A block whose
 labels cannot be paired with the coefficients raises an error of class
 `causalgenerics_conditional_vcov_mismatch`. A block of another size, one
-labeled with the parameter names of a stacked system, and a model whose
-coefficients carry no names are the three ways the pairing fails.
-Reading such a block by position instead would report the covariance of
-other parameters under this model's coefficient names.
+labeled with the parameter names of a stacked system, a model whose
+coefficients carry no names, and a model that reports no coefficients at
+all are the ways the pairing fails, and the message says which one it
+met. Reading such a block by position instead would report the
+covariance of other parameters under this model's coefficient names. A
+block that has to be reordered is refused for the same reason when a
+coefficient name is repeated: reordering by a name two coefficients
+share reports the first one's variance for both. A block already in
+coefficient order is reported as it was attached, since nothing is
+indexed and nothing can be misplaced.
 
 A result records which of the two readings it supports, and naming the
 other one is refused rather than answered with a surface whose numbers

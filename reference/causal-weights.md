@@ -59,6 +59,10 @@ signal an error when no method is registered for the object.
 [`new_causal_wts()`](https://r-causal.github.io/causalgenerics/reference/new_causal_wts.md)
 for the class these generics have methods for, and the `propensity`
 package for concrete weight classes.
+[`ipw()`](https://r-causal.github.io/causalgenerics/reference/ipw.md)
+estimates an effect from a set of weights, and the result it returns
+answers `estimand()` with the estimand those weights targeted, so the
+same accessor reads the weights and the estimate made from them.
 
 ## Examples
 

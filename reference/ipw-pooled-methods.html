@@ -96,7 +96,8 @@ was estimated from.</p></li>
 <span>  conf.int <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  conf.level <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  exponentiate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  effects <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  effects <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  call <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sys.parent.html" class="external-link">sys.call</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S3 method for class 'ipw_pooled'</span></span>
@@ -136,9 +137,10 @@ labels or as their positions. Missing means all of them.</p></dd>
 
 
 <dt id="arg-level">level<a class="anchor" aria-label="anchor" href="#arg-level"></a></dt>
-<dd><p>The confidence level. At the level a row stores, that row's own
-limits are returned; at any other level they are rebuilt from t on the
-row's degrees of freedom.</p></dd>
+<dd><p>The confidence level. At the level every row of the result
+stores, the stored limits are returned; at any other level, and for a frame
+whose rows do not agree on one, every row is rebuilt from t on its own
+degrees of freedom.</p></dd>
 
 
 <dt id="arg-row-names">row.names<a class="anchor" aria-label="anchor" href="#arg-row-names"></a></dt>
@@ -164,6 +166,13 @@ default, uses the level the result records.</p></dd>
 <dt id="arg-exponentiate">exponentiate<a class="anchor" aria-label="anchor" href="#arg-exponentiate"></a></dt>
 <dd><p>If <code>TRUE</code>, move the estimates that are on a log scale to
 their natural scale, as the section above describes. Default is <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-call">call<a class="anchor" aria-label="anchor" href="#arg-call"></a></dt>
+<dd><p>The call to report a refusal against. A tidier that builds its
+table by calling <code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> passes the call a user wrote, so the
+refusal names the function they typed rather than the delegation behind it.
+The default is the method's own call, which is what a direct call reports.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -250,17 +259,17 @@ method and no field and gives <code>NULL</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="the-confidence-limits">The confidence limits<a class="anchor" aria-label="anchor" href="#the-confidence-limits"></a></h2>
-    <p><code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> returns the limits the result stores for any row reported at the
-level asked for, and rebuilds the rest. That is the rule <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> on an
-unpooled result keeps, row by row: a stored pair need not be the one
-recomputing gives, since it may have been rounded on its way into the frame.</p>
-<p><code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> applies the same rule to the frame as a whole, which is
-what <code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> on an unpooled result does. The stored pair comes back
-only when every row records the level asked for, since a table mixing stored
-limits with rebuilt ones would report two intervals under one pair of column
-headings. <code>conf.level = NULL</code>, its default, names the level the frame records,
-which is the level <code><a href="pool_ipw.html">pool_ipw()</a></code> built its limits at; a frame whose rows
-disagree records none, and the limits are rebuilt at <code>0.95</code>.</p>
+    <p><code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> and <code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> return the limits the result stores when
+every row of the frame records the level asked for, and rebuild every row
+otherwise. That is the rule both keep on an unpooled result, and it is a rule
+about the frame rather than about a row: a stored pair need not be the one
+recomputing gives, since it may have been rounded on its way into the frame,
+so a surface mixing stored limits with rebuilt ones would report two kinds of
+interval under one pair of column headings with nothing on it to say which is
+which.</p>
+<p><code>conf.level = NULL</code>, the <code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> default, names the level the frame
+records, which is the level <code><a href="pool_ipw.html">pool_ipw()</a></code> built its limits at; a frame whose
+rows disagree records none, and the limits are rebuilt at <code>0.95</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="exponentiating">Exponentiating<a class="anchor" aria-label="anchor" href="#exponentiating"></a></h2>

@@ -83,11 +83,11 @@
 <p>causalgenerics owns the following generics:</p>
 <ul>
 <li>
-<code><a href="reference/ipw.html">ipw()</a></code>: bring-your-own-model inverse probability weighted estimation of causal effects from a weighting model and a weighted outcome model.</li>
+<code><a href="reference/ipw.html">ipw()</a></code>: bring-your-own-model inverse probability weighted estimation of causal effects from a weighting model and a weighted outcome model. The result it returns answers <code><a href="reference/causal-weights.html">estimand()</a></code> with the estimand the weights targeted, alongside the model accessors <code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code>, <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code>, and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code>.</li>
 <li>
 <code><a href="reference/ess.html">ess()</a></code>: the effective sample size of a set of weights or a fitted model.</li>
 <li>
-<code><a href="reference/causal-weights.html">is_causal_wt()</a></code>, <code><a href="reference/causal-weights.html">estimand()</a></code>, and <code>estimand&lt;-()</code>: accessors for the metadata carried by causal weight vectors.</li>
+<code><a href="reference/causal-weights.html">is_causal_wt()</a></code>, <code><a href="reference/causal-weights.html">estimand()</a></code>, and <code>estimand&lt;-()</code>: accessors for the metadata carried by causal weight vectors, and, for <code><a href="reference/causal-weights.html">estimand()</a></code>, for the results <code><a href="reference/ipw.html">ipw()</a></code> builds from them.</li>
 </ul>
 <p>The generics are intentionally minimal. Method-specific arguments are passed through <code>...</code>, and the concrete weight classes live in the packages that own them.</p>
 </div>

@@ -52,13 +52,23 @@ causalgenerics owns the following generics:
 
 - [`ipw()`](https://r-causal.github.io/causalgenerics/reference/ipw.md):
   bring-your-own-model inverse probability weighted estimation of causal
-  effects from a weighting model and a weighted outcome model.
+  effects from a weighting model and a weighted outcome model. The
+  result it returns answers
+  [`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md)
+  with the estimand the weights targeted, alongside the model accessors
+  [`coef()`](https://rdrr.io/r/stats/coef.html),
+  [`vcov()`](https://rdrr.io/r/stats/vcov.html), and
+  [`confint()`](https://rdrr.io/r/stats/confint.html).
 - [`ess()`](https://r-causal.github.io/causalgenerics/reference/ess.md):
   the effective sample size of a set of weights or a fitted model.
 - [`is_causal_wt()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md),
   [`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md),
   and `estimand<-()`: accessors for the metadata carried by causal
-  weight vectors.
+  weight vectors, and, for
+  [`estimand()`](https://r-causal.github.io/causalgenerics/reference/causal-weights.md),
+  for the results
+  [`ipw()`](https://r-causal.github.io/causalgenerics/reference/ipw.md)
+  builds from them.
 
 The generics are intentionally minimal. Method-specific arguments are
 passed through `...`, and the concrete weight classes live in the

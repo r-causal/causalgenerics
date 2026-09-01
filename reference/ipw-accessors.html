@@ -134,8 +134,9 @@ them.</p></dd>
 
 
 <dt id="arg-level">level<a class="anchor" aria-label="anchor" href="#arg-level"></a></dt>
-<dd><p>The confidence level. At the level the result stores, its own
-limits are returned; at any other level they are recomputed.</p></dd>
+<dd><p>The confidence level. At the level every row of the result
+stores, the stored limits are returned; at any other level, and for a frame
+whose rows do not agree on one, every row is recomputed.</p></dd>
 
 
 <dt id="arg-formula">formula<a class="anchor" aria-label="anchor" href="#arg-formula"></a></dt>
@@ -171,11 +172,21 @@ order <code>parm</code> gives them, and two columns holding the lower and upper 
 The rows are named by effect label and the columns by the two tail
 probabilities as percentages, the way the <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> methods in <span class="pkg">stats</span>
 name theirs. A character <code>parm</code> that names an effect the result does not
-report raises an error of class <code>causalgenerics_invalid_argument</code>. In the
-conditional reading the rows are the outcome model's coefficients, which
-<code>parm</code> names and indexes in the same two ways, and the limits are the normal
-ones built from the corrected covariance at every level, since the limits the
-result stores belong to the effects the marginal reading reports.</p>
+report raises an error of class <code>causalgenerics_invalid_argument</code>.</p>
+<p>The limits the <code>estimates</code> frame stores are returned rather than rebuilt when
+every row of the frame records the level asked for, and every row is rebuilt
+from the estimate and its standard error otherwise. That is the rule
+<code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> reports its bounds by, and it applies to the frame as a
+whole rather than to a row: the level names itself in the column headings and
+nowhere else, so a matrix holding a stored interval on one row and a rebuilt
+one on the next would report two kinds of interval under one heading. A
+stored pair need not be the one recomputing gives, since a bootstrap or
+profile interval is asymmetric about the estimate and even a normal one that
+was rounded on its way into the frame is a different number.</p>
+<p>In the conditional reading the rows are the outcome model's coefficients,
+which <code>parm</code> names and indexes in the same two ways, and the limits are the
+normal ones built from the corrected covariance at every level, since the
+limits the result stores belong to the effects the marginal reading reports.</p>
 <p><code><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef()</a></code>, <code><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov()</a></code>, and <code><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint()</a></code> raise an error of class
 <code>causalgenerics_invalid_argument_effects</code> when <code>effects</code> names neither
 reading, and when the result's own field does. They raise an error of class
@@ -256,10 +267,15 @@ in coefficient order whatever order it was attached in, so the variance read
 beside a coefficient is that coefficient's. A block whose labels cannot be
 paired with the coefficients raises an error of class
 <code>causalgenerics_conditional_vcov_mismatch</code>. A block of another size, one
-labeled with the parameter names of a stacked system, and a model whose
-coefficients carry no names are the three ways the pairing fails. Reading such
-a block by position instead would report the covariance of other parameters
-under this model's coefficient names.</p>
+labeled with the parameter names of a stacked system, a model whose
+coefficients carry no names, and a model that reports no coefficients at all
+are the ways the pairing fails, and the message says which one it met.
+Reading such a block by position instead would report the covariance of other
+parameters under this model's coefficient names. A block that has to be
+reordered is refused for the same reason when a coefficient name is repeated:
+reordering by a name two coefficients share reports the first one's variance
+for both. A block already in coefficient order is reported as it was
+attached, since nothing is indexed and nothing can be misplaced.</p>
 <p>A result records which of the two readings it supports, and naming the other
 one is refused rather than answered with a surface whose numbers are not the
 quantities the reading names. The refusal is the one <code><a href="ipw-modes.html">as_marginal()</a></code> and

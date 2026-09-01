@@ -877,7 +877,11 @@ pool_surface <- function(fit, effects, position = NULL, call = sys.call(-1)) {
 #'
 #' @noRd
 pool_stored_level <- function(estimates) {
-  level <- unique(estimates$conf.level)
+  # By exact name rather than with `$`, since a frame with no such column is one
+  # of the two cases this answers `NULL` for. A plain data frame gives `NULL`
+  # either way, but a frame whose `$` is stricter, as a tibble's is, warns about
+  # a column the contract leaves optional.
+  level <- unique(estimates[["conf.level"]])
   if (length(level) == 1L) level else NULL
 }
 

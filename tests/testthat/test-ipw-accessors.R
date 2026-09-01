@@ -220,6 +220,16 @@ stored_interval_estimates <- function() {
   )
 }
 
+# A binary-exposure frame whose rows do not share one confidence level. A frame
+# like this is what tells a rule reading the stored level row by row from one
+# reading it as a property of the frame: the two disagree about the rows whose
+# stored level is the one asked for.
+mixed_level_estimates <- function() {
+  estimates <- binary_estimates()
+  estimates$conf.level <- c(0.95, 0.90, 0.95)
+  estimates
+}
+
 # The effect labels each frame's rows carry, written out rather than pasted
 # together. The label rule is what these tests are for, so restating it with the
 # same `paste()` the implementation uses would assert nothing.
@@ -419,6 +429,82 @@ unnamed_coef_result <- function() {
       structure(list(), class = "cg_unnamed_coef"),
       coefficient_order_vcov()
     ),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "conditional"
+  )
+}
+
+# A conditional result whose outcome model reports no coefficients at all,
+# carrying a block that is labeled. That is a different fact from the fixture
+# above, whose model reports two coefficients and names neither: there is
+# nothing here to name. The class is supplied by the caller, since a model with
+# no `coef()` method of its own reaches `coef.default()` and answers `NULL`,
+# while a model with a method reports the same fact as an empty numeric vector.
+no_coef_result <- function(class) {
+  new_ipw(
+    estimand = "ate",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = new_ipw_model(
+      structure(list(), class = class),
+      coefficient_order_vcov()
+    ),
+    estimates = binary_estimates(),
+    se_method = "mestimation",
+    fit = NULL,
+    effects = "conditional"
+  )
+}
+
+# Data whose outcome model reports two coefficients under one name: the factor's
+# non-reference level `b` and the numeric column `ab` both spell their column
+# `ab`, and `glm()` fits the pair without complaint. A coefficient name is
+# therefore not a key, which is the fact the two fixtures below are about.
+duplicate_name_data <- function() {
+  data.frame(
+    y = rep(c(0, 1), 10),
+    a = factor(rep(c("x", "b"), each = 10), levels = c("x", "b")),
+    ab = rep(c(-1, 0.5, 1, 2), 5)
+  )
+}
+
+duplicate_name_model <- function() {
+  glm(y ~ a + ab, family = quasibinomial(), data = duplicate_name_data())
+}
+
+# The corrected block for that model, labeled in coefficient order. The three
+# diagonal entries are distinct, so an entry read for the wrong coefficient is
+# visible in the variance it reports.
+duplicate_name_vcov <- function() {
+  labels <- c("(Intercept)", "ab", "ab")
+  matrix(
+    c(0.25, 0.03125, 0, 0.03125, 0.0625, 0, 0, 0, 0.5),
+    nrow = 3,
+    dimnames = list(labels, labels)
+  )
+}
+
+# The same block with the intercept last, which is the permuted shape the
+# reorder branch exists for. Indexing it by coefficient name reaches the first
+# `ab` twice, so the second one's variance never appears and the first one's is
+# reported for both, and nothing in the matrix that comes back says so.
+permuted_duplicate_name_vcov <- function() {
+  labels <- c("ab", "ab", "(Intercept)")
+  matrix(
+    c(0.0625, 0, 0.03125, 0, 0.5, 0, 0.03125, 0, 0.25),
+    nrow = 3,
+    dimnames = list(labels, labels)
+  )
+}
+
+# A conditional result built around that model, wrapped with whichever of the
+# two blocks the test is about.
+duplicate_name_result <- function(outcome_vcov) {
+  new_ipw(
+    estimand = "ate",
+    wt_mod = glm(z ~ x, family = binomial(), data = ipw_data()),
+    outcome_mod = new_ipw_model(duplicate_name_model(), outcome_vcov),
     estimates = binary_estimates(),
     se_method = "mestimation",
     fit = NULL,
@@ -796,6 +882,39 @@ test_that("confint() reads the stored level rather than assuming 0.95", {
     default[, 1],
     setNames(estimates$estimate - half_width, binary_labels())
   )
+})
+
+test_that("confint() recomputes every row when the stored levels differ", {
+  # The stored level is a property of the frame rather than of a row, which is
+  # the rule `as.data.frame()` reads it by and the rule this method reads it by
+  # as well. A matrix built row by row would hold a stored interval on one row
+  # and a normal approximation on the next, under one pair of column headings
+  # naming the level and with nothing in it to say which row is which.
+  estimates <- mixed_level_estimates()
+  res <- ipw_result(estimates)
+
+  ci <- confint(res, level = 0.95)
+  half_width <- qnorm(1 - (1 - 0.95) / 2) * estimates$std.err
+
+  expect_identical(
+    dimnames(ci),
+    list(binary_labels(), c("2.5 %", "97.5 %"))
+  )
+  expect_identical(
+    ci[, 1],
+    setNames(estimates$estimate - half_width, binary_labels())
+  )
+  expect_identical(
+    ci[, 2],
+    setNames(estimates$estimate + half_width, binary_labels())
+  )
+
+  # The two rows whose stored level is the one asked for are recomputed with the
+  # rest, which is what makes this a claim about the frame and not about a row.
+  # The frame's stored bounds are rounded to six decimals, so a row that came
+  # back stored would differ from the recomputed one in the sixth.
+  expect_false(any(ci[, 1] == estimates$ci.lower))
+  expect_false(any(ci[, 2] == estimates$ci.upper))
 })
 
 test_that("confint() labels its columns the way stats does", {
@@ -1474,6 +1593,97 @@ test_that("vcov() refuses a conditional block it cannot pair by name", {
     confint(res),
     class = "causalgenerics_conditional_vcov_mismatch"
   )
+})
+
+test_that("vcov() says a conditional outcome model reports no coefficients", {
+  # A model with no coefficients at all is a different fact from a model whose
+  # coefficients carry no names, and the refusal has to say which one it met. A
+  # block pairs with neither, but a caller told that the model "reports unnamed
+  # coefficients" goes looking for names to put on a surface that has no entries
+  # to name. `print()` already reports the empty case in its own words, and the
+  # accessors say the same thing about the same model.
+  bare <- no_coef_result("cg_no_coef")
+
+  bare_message <- function(expr) {
+    conditionMessage(tryCatch(expr, error = identity))
+  }
+
+  expect_null(coef(bare))
+  expect_error(vcov(bare), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_error(vcov(bare), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(bare),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
+
+  expect_match(
+    bare_message(vcov(bare)),
+    "reports no coefficients",
+    fixed = TRUE
+  )
+  expect_match(
+    bare_message(confint(bare)),
+    "reports no coefficients",
+    fixed = TRUE
+  )
+
+  # The other wording describes a surface with entries whose names are missing,
+  # and this model has no entries, so the two sentences do not overlap.
+  expect_false(grepl("unnamed", bare_message(vcov(bare)), fixed = TRUE))
+
+  expect_snapshot(error = TRUE, vcov(bare))
+
+  # A model whose method reports the same fact as an empty numeric vector is the
+  # same model as far as the pairing goes, so the fact rather than the shape it
+  # arrives in is what the refusal describes.
+  local_s3_method("coef", "cg_empty_coef", function(object, ...) numeric())
+  empty <- no_coef_result("cg_empty_coef")
+
+  expect_identical(coef(empty), numeric())
+  expect_error(vcov(empty), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_match(
+    bare_message(vcov(empty)),
+    "reports no coefficients",
+    fixed = TRUE
+  )
+})
+
+test_that("vcov() refuses to reorder a conditional block whose labels repeat", {
+  # Two coefficients under one name. The block's labels and the coefficient
+  # names are the same set, and the set is all the pairing compares, so the
+  # pairing looks made. Reordering by name then reaches the first entry the name
+  # matches for both of them, which reports one coefficient's variance twice and
+  # drops the other's, and the matrix that comes back is the right size with the
+  # right labels while saying something false. A name that does not identify a
+  # row is not a pairing, so the reading is refused rather than answered.
+  res <- duplicate_name_result(permuted_duplicate_name_vcov())
+
+  expect_identical(names(coef(res)), c("(Intercept)", "ab", "ab"))
+  expect_error(vcov(res), class = "causalgenerics_conditional_vcov_mismatch")
+  expect_error(vcov(res), class = "causalgenerics_no_vcov")
+  expect_error(
+    confint(res),
+    class = "causalgenerics_conditional_vcov_mismatch"
+  )
+
+  # The label lists are the same set twice over, in two orders, which is what
+  # the sentence has to show for the refusal to read as anything but arbitrary.
+  expect_snapshot(error = TRUE, vcov(res))
+})
+
+test_that("vcov() returns a block in coefficient order whose labels repeat", {
+  # The refusal above is about the reordering rather than about the repeated
+  # name. A block already in coefficient order is returned as the fitting
+  # package attached it, with no indexing to misplace an entry, so the repeated
+  # name costs nothing here and refusing it would take away a reading the result
+  # has.
+  res <- duplicate_name_result(duplicate_name_vcov())
+
+  expect_identical(vcov(res), duplicate_name_vcov())
+  # Each coefficient keeps its own variance, which is what a block read by
+  # position rather than returned as attached would lose.
+  expect_identical(unname(diag(vcov(res))), c(0.25, 0.0625, 0.5))
+  expect_identical(dim(confint(res)), c(3L, 2L))
 })
 
 test_that("vcov() refuses the conditional mode without a corrected block", {

@@ -71,5 +71,8 @@ try(estimand(1:3))
 }
 \seealso{
 \code{\link[=new_causal_wts]{new_causal_wts()}} for the class these generics have methods for,
-and the \code{propensity} package for concrete weight classes.
+and the \code{propensity} package for concrete weight classes. \code{\link[=ipw]{ipw()}} estimates
+an effect from a set of weights, and the result it returns answers
+\code{estimand()} with the estimand those weights targeted, so the same accessor
+reads the weights and the estimate made from them.
 }

@@ -31,7 +31,10 @@
 #' `estimand<-()` returns `x` with the estimand updated.
 #'
 #' @seealso [new_causal_wts()] for the class these generics have methods for,
-#'   and the `propensity` package for concrete weight classes.
+#'   and the `propensity` package for concrete weight classes. [ipw()] estimates
+#'   an effect from a set of weights, and the result it returns answers
+#'   `estimand()` with the estimand those weights targeted, so the same accessor
+#'   reads the weights and the estimate made from them.
 #'
 #' @examples
 #' wts <- new_causal_wts(

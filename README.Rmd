@@ -55,9 +55,9 @@ Most users will get causalgenerics as a dependency of another r-causal package r
 
 causalgenerics owns the following generics:
 
-- `ipw()`: bring-your-own-model inverse probability weighted estimation of causal effects from a weighting model and a weighted outcome model.
+- `ipw()`: bring-your-own-model inverse probability weighted estimation of causal effects from a weighting model and a weighted outcome model. The result it returns answers `estimand()` with the estimand the weights targeted, alongside the model accessors `coef()`, `vcov()`, and `confint()`.
 - `ess()`: the effective sample size of a set of weights or a fitted model.
-- `is_causal_wt()`, `estimand()`, and `estimand<-()`: accessors for the metadata carried by causal weight vectors.
+- `is_causal_wt()`, `estimand()`, and `estimand<-()`: accessors for the metadata carried by causal weight vectors, and, for `estimand()`, for the results `ipw()` builds from them.
 
 The generics are intentionally minimal. Method-specific arguments are passed through `...`, and the concrete weight classes live in the packages that own them.
 

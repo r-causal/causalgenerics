@@ -27,7 +27,8 @@ new_ipw(
   conf.int = FALSE,
   conf.level = 0.95,
   exponentiate = FALSE,
-  effects = NULL
+  effects = NULL,
+  call = sys.call()
 )
 }
 \arguments{
@@ -93,6 +94,11 @@ estimates. Standard errors, statistics, and p-values remain on the log
 scale, and the \code{ipw_vcov} attribute is dropped rather than carried, since it
 describes the estimates on the scale they were estimated on. Default is
 \code{FALSE}.}
+
+\item{call}{The call to report a refusal against. A tidier that builds its
+table by calling this method passes the call a user wrote, so the refusal
+names the function they typed rather than the delegation behind it. The
+default is the method's own call, which is what a direct call reports.}
 }
 \value{
 \code{new_ipw()} returns an S3 object of class \code{ipw}: a list of the

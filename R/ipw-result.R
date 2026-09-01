@@ -765,6 +765,10 @@ format_model_call <- function(mod) {
 #'   scale, and the `ipw_vcov` attribute is dropped rather than carried, since it
 #'   describes the estimates on the scale they were estimated on. Default is
 #'   `FALSE`.
+#' @param call The call to report a refusal against. A tidier that builds its
+#'   table by calling this method passes the call a user wrote, so the refusal
+#'   names the function they typed rather than the delegation behind it. The
+#'   default is the method's own call, which is what a direct call reports.
 #' @rdname new_ipw
 #' @export
 as.data.frame.ipw <- function(
@@ -775,7 +779,8 @@ as.data.frame.ipw <- function(
   conf.int = FALSE,
   conf.level = 0.95,
   exponentiate = FALSE,
-  effects = NULL
+  effects = NULL,
+  call = sys.call()
 ) {
   # All three are checked on every call rather than on the branch that reads
   # them. `conf.level` means the same thing whether or not the bounds are
@@ -783,21 +788,25 @@ as.data.frame.ipw <- function(
   # something wrong whichever way `conf.int` was set, and checking it only where
   # it is read would accept that call now and refuse the same value the moment
   # the bounds were asked for.
-  check_flag(conf.int, "conf.int")
-  check_conf_level(conf.level)
-  check_flag(exponentiate, "exponentiate")
+  #
+  # Every one of them reports against `call` rather than against the call it was
+  # given from, so that a delegating caller names one entry point and all of the
+  # refusals on the path agree about it.
+  check_flag(conf.int, "conf.int", call = call)
+  check_conf_level(conf.level, call = call)
+  check_flag(exponentiate, "exponentiate", call = call)
 
   # The table is a presentation of the result rather than a copy of one
   # component of it, so the reading is settled before anything is read off the
   # result and everything built after this belongs to the reading asked for.
-  if (resolve_ipw_effects(x, effects) == "conditional") {
+  if (resolve_ipw_effects(x, effects, call = call) == "conditional") {
     return(conditional_data_frame(
       x,
       row.names = row.names,
       conf.int = conf.int,
       conf.level = conf.level,
       exponentiate = exponentiate,
-      call = sys.call()
+      call = call
     ))
   }
 
@@ -1040,20 +1049,36 @@ ipw_tidy_frame <- function(columns, bounds, covariance, row.names = NULL) {
     columns$conf.high <- bounds$upper
   }
 
-  df <- data.frame(columns, row.names = row.names, stringsAsFactors = FALSE)
+  # The frame is built without the row names and given them afterwards, since
+  # `data.frame()` reads its `row.names` argument two ways. A vector as long as
+  # the table names its rows, but a length-one value names a column to take the
+  # row names from, and that column is dropped on the way. A caller naming one
+  # row of a longer table has written a length mismatch and is told so by
+  # `rownames<-`, rather than getting a table with a column missing and the
+  # terms in its row names.
+  df <- data.frame(columns, row.names = NULL, stringsAsFactors = FALSE)
+  if (!is.null(row.names)) {
+    rownames(df) <- row.names
+  }
   attr(df, "ipw_vcov") <- covariance
   df
 }
 
-#' The confidence bounds `as.data.frame()` reports
+#' The confidence bounds a result reports
 #'
 #' The stored level is a property of the frame rather than of a row. The bounds
 #' `estimates` records come back only when every row of it was reported at the
-#' level asked for, since a table mixing stored bounds with recomputed ones
-#' would report two intervals under one pair of column headings. A frame with no
-#' `conf.level` column says nothing about what its bounds describe, so there is
-#' no level for the stored pair to be returned at and the approximation is built
-#' for whatever was asked for.
+#' level asked for, since a surface mixing stored bounds with recomputed ones
+#' would report two kinds of interval under one pair of column headings. A frame
+#' with no `conf.level` column says nothing about what its bounds describe, so
+#' there is no level for the stored pair to be returned at and the approximation
+#' is built for whatever was asked for.
+#'
+#' Both surfaces the result presents read the bounds through this helper.
+#' `confint()` reports them as a matrix and `as.data.frame()` as two columns of
+#' a table, and neither has anywhere to say which of its rows were stored and
+#' which rebuilt, so the two report the same numbers for the same result at the
+#' same level.
 #'
 #' The bounds are one half width added and subtracted, rather than a bound from
 #' each tail: `qnorm()` is not exactly antisymmetric, and taking the lower bound
@@ -1067,7 +1092,12 @@ ipw_tidy_frame <- function(columns, bounds, covariance, row.names = NULL) {
 #' @noRd
 #' @importFrom stats qnorm
 interval_bounds <- function(estimates, conf.level) {
-  stored <- estimates$conf.level
+  # By exact name rather than with `$`. The column is optional, and a frame
+  # without it is read as saying nothing about what its bounds describe; a
+  # plain data frame answers `NULL` to either read, but a frame whose `$` is
+  # stricter, as a tibble's is, warns about a column the contract never
+  # required.
+  stored <- estimates[["conf.level"]]
   if (!is.null(stored) && isTRUE(all(stored == conf.level))) {
     return(list(lower = estimates$ci.lower, upper = estimates$ci.upper))
   }

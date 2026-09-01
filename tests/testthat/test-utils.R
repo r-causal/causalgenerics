@@ -206,6 +206,92 @@ test_that("stop_conditional_vcov_mismatch() names coefficients that have none", 
   )
 })
 
+test_that("stop_conditional_vcov_mismatch() separates none from unnamed", {
+  # A model with no coefficients and a model that names none of the ones it has
+  # both answer `NULL` to `names()`, so the count is what tells them apart. The
+  # two sentences describe different models and do not overlap: one says there
+  # is nothing to name, the other says the names are missing from entries that
+  # are there.
+  refuse_none <- function() {
+    stop_conditional_vcov_mismatch(c("theta1", "theta2"), NULL, 0L)
+  }
+
+  cnd <- tryCatch(refuse_none(), error = identity)
+
+  expect_identical(
+    class(cnd),
+    c(
+      "causalgenerics_conditional_vcov_mismatch",
+      "causalgenerics_no_vcov",
+      "error",
+      "condition"
+    )
+  )
+  expect_identical(cnd$n_coefs, 0L)
+  expect_identical(
+    conditionMessage(cnd),
+    paste0(
+      "The conditional covariance is labeled \"theta1\", \"theta2\" and the ",
+      "outcome model reports no coefficients; the package that produced ",
+      "the result attaches the block labeled by coefficient name with ",
+      "`new_ipw_model()`."
+    )
+  )
+
+  # A count the caller does not know leaves the wording where it was, which is
+  # what keeps a refusal raised from anywhere else saying what it said.
+  unnamed <- tryCatch(
+    stop_conditional_vcov_mismatch(c("theta1", "theta2"), NULL, 2L),
+    error = identity
+  )
+
+  expect_match(
+    conditionMessage(unnamed),
+    "reports unnamed coefficients",
+    fixed = TRUE
+  )
+})
+
+test_that("stop_conditional_vcov_mismatch() says a repeated name is the fault", {
+  # The two label sets are the same set here, so listing them says nothing on
+  # its own about why the block was refused. The clause that would ask for a
+  # block labeled by coefficient name asks for the one that is already there,
+  # and the sentence names the reordering and the repetition instead.
+  refuse_duplicated <- function() {
+    stop_conditional_vcov_mismatch(
+      c("ab", "ab", "(Intercept)"),
+      c("(Intercept)", "ab", "ab"),
+      3L,
+      duplicated_names = TRUE
+    )
+  }
+
+  cnd <- tryCatch(refuse_duplicated(), error = identity)
+
+  expect_identical(
+    class(cnd),
+    c(
+      "causalgenerics_conditional_vcov_mismatch",
+      "causalgenerics_no_vcov",
+      "error",
+      "condition"
+    )
+  )
+  expect_true(cnd$duplicated_names)
+  expect_identical(
+    conditionMessage(cnd),
+    paste0(
+      "The conditional covariance is labeled \"ab\", \"ab\", \"(Intercept)\" ",
+      "and the outcome model reports coefficients named \"(Intercept)\", ",
+      "\"ab\", \"ab\"; the block is in another order, and a name two ",
+      "coefficients share does not say which of them a row of it belongs to, ",
+      "so the package that produced the result attaches the block in ",
+      "coefficient order with `new_ipw_model()`."
+    )
+  )
+  expect_identical(conditionCall(cnd), quote(refuse_duplicated()))
+})
+
 test_that("stop_no_method() builds the documented condition", {
   refuse_method <- function(x) stop_no_method("estimand", x)
 

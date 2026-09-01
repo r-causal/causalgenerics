@@ -74,18 +74,18 @@
 #'
 #' # The confidence limits
 #'
-#' `confint()` returns the limits the result stores for any row reported at the
-#' level asked for, and rebuilds the rest. That is the rule `confint()` on an
-#' unpooled result keeps, row by row: a stored pair need not be the one
-#' recomputing gives, since it may have been rounded on its way into the frame.
+#' `confint()` and `as.data.frame()` return the limits the result stores when
+#' every row of the frame records the level asked for, and rebuild every row
+#' otherwise. That is the rule both keep on an unpooled result, and it is a rule
+#' about the frame rather than about a row: a stored pair need not be the one
+#' recomputing gives, since it may have been rounded on its way into the frame,
+#' so a surface mixing stored limits with rebuilt ones would report two kinds of
+#' interval under one pair of column headings with nothing on it to say which is
+#' which.
 #'
-#' `as.data.frame()` applies the same rule to the frame as a whole, which is
-#' what `as.data.frame()` on an unpooled result does. The stored pair comes back
-#' only when every row records the level asked for, since a table mixing stored
-#' limits with rebuilt ones would report two intervals under one pair of column
-#' headings. `conf.level = NULL`, its default, names the level the frame records,
-#' which is the level [pool_ipw()] built its limits at; a frame whose rows
-#' disagree records none, and the limits are rebuilt at `0.95`.
+#' `conf.level = NULL`, the `as.data.frame()` default, names the level the frame
+#' records, which is the level [pool_ipw()] built its limits at; a frame whose
+#' rows disagree records none, and the limits are rebuilt at `0.95`.
 #'
 #' # Exponentiating
 #'
@@ -115,9 +115,10 @@
 #' @param object An `ipw_pooled` object.
 #' @param parm The rows to report an interval for, given either as the effect
 #'   labels or as their positions. Missing means all of them.
-#' @param level The confidence level. At the level a row stores, that row's own
-#'   limits are returned; at any other level they are rebuilt from t on the
-#'   row's degrees of freedom.
+#' @param level The confidence level. At the level every row of the result
+#'   stores, the stored limits are returned; at any other level, and for a frame
+#'   whose rows do not agree on one, every row is rebuilt from t on its own
+#'   degrees of freedom.
 #' @param row.names A character vector of row names for the returned table, or
 #'   `NULL` for the automatic ones.
 #' @param optional Accepted for the [base::as.data.frame()] generic. Every
@@ -136,6 +137,10 @@
 #'   [as_marginal()] and [as_conditional()] refuse it, and a result pooled
 #'   before both readings were kept refuses a request for the other reading with
 #'   the same classes, having nothing recorded to report.
+#' @param call The call to report a refusal against. A tidier that builds its
+#'   table by calling `as.data.frame()` passes the call a user wrote, so the
+#'   refusal names the function they typed rather than the delegation behind it.
+#'   The default is the method's own call, which is what a direct call reports.
 #' @param ... Further arguments. These methods ignore them.
 #'
 #' @return
@@ -335,26 +340,16 @@ confint.ipw_pooled <- function(
     select_effects(parm, labels)
   }
 
-  # One half width, added and subtracted, taken at each row's own pooled degrees
-  # of freedom. `qt()` is not exactly antisymmetric, so taking the lower limit
-  # from the lower tail instead would put the two bounds a bit apart from each
-  # other, and a single count for the table would be the wrong one for every row
-  # but at most one.
-  half_width <- stats::qt(1 - (1 - level) / 2, estimates$df) * estimates$std.err
-  lower <- estimates$estimate - half_width
-  upper <- estimates$estimate + half_width
+  # The limits the pooled table reports, built by the helper that table is built
+  # by, which is the rule `confint()` on an unpooled result keeps: the stored
+  # pair comes back only when every row of the frame records the level asked
+  # for, and every row is rebuilt from t on its own pooled degrees of freedom
+  # otherwise. The level names itself in the column headings and nowhere else,
+  # so a matrix mixing stored limits with rebuilt ones would report two kinds of
+  # interval under one heading.
+  bounds <- pooled_interval_bounds(estimates, level)
 
-  # At the level a row was reported for, the reported limits are returned rather
-  # than rebuilt, row by row, which is the rule `confint()` on an unpooled
-  # result keeps. A stored pair need not be the one recomputing gives: one
-  # rounded on its way into the frame is not that number. `which()` rather than
-  # a logical index so that a missing `conf.level` selects nothing instead of
-  # raising a subscript error.
-  stored <- which(estimates$conf.level == level)
-  lower[stored] <- estimates$ci.lower[stored]
-  upper[stored] <- estimates$ci.upper[stored]
-
-  limits <- cbind(lower[rows], upper[rows])
+  limits <- cbind(bounds$lower[rows], bounds$upper[rows])
   dimnames(limits) <- list(labels[rows], percent_labels(level))
   limits
 }
@@ -381,29 +376,32 @@ as.data.frame.ipw_pooled <- function(
   conf.int = FALSE,
   conf.level = NULL,
   exponentiate = FALSE,
-  effects = NULL
+  effects = NULL,
+  call = sys.call()
 ) {
   # Checked on every call rather than on the branch that reads them, for the
   # reason `as.data.frame()` on an unpooled result checks them all: a level no
-  # interval can be built at is wrong whichever way `conf.int` was set.
-  check_flag(conf.int, "conf.int")
+  # interval can be built at is wrong whichever way `conf.int` was set. Each of
+  # them reports against `call`, so a tidier that builds its table here names
+  # one entry point across every refusal on the path.
+  check_flag(conf.int, "conf.int", call = call)
   if (!is.null(conf.level)) {
-    check_conf_level(conf.level)
+    check_conf_level(conf.level, call = call)
   }
-  check_flag(exponentiate, "exponentiate")
+  check_flag(exponentiate, "exponentiate", call = call)
 
   # The reading is settled before anything is read off the result, so the gate
   # below and every column built after it belong to the reading that was asked
   # for. Once the result presents that reading, the reading is what it records.
-  x <- pooled_surface(x, effects)
+  x <- pooled_surface(x, effects, call = call)
 
   estimates <- x$estimates
-  effects <- ipw_effects(x)
+  effects <- ipw_effects(x, call = call)
 
   # Before anything is built, so a table that cannot be reported on the scale
   # asked for is refused rather than half-built.
   if (exponentiate && effects == "conditional") {
-    check_exponentiate_link(x$outcome_link)
+    check_exponentiate_link(x$outcome_link, call = call)
   }
 
   # `NULL` names the level the frame records. A fixed default would rebuild the
@@ -527,19 +525,20 @@ pooled_surface <- function(object, effects, call = sys.call(-1)) {
   )
 }
 
-#' The confidence bounds `as.data.frame()` reports for a pooled result
+#' The confidence bounds a pooled result reports
 #'
 #' The frame-level rule `interval_bounds()` keeps for an unpooled one, with the
 #' limits rebuilt from t on each row's own pooled degrees of freedom rather than
 #' from the normal. The stored pair comes back only when every row of the frame
-#' was reported at the level asked for, since a table mixing stored bounds with
-#' rebuilt ones would report two intervals under one pair of column headings.
+#' was reported at the level asked for, since a surface mixing stored bounds
+#' with rebuilt ones would report two kinds of interval under one pair of column
+#' headings.
 #'
-#' This is deliberately not the row-by-row rule `confint()` keeps. A matrix of
-#' limits is read a row at a time and says which level it is at in its column
-#' names; a tidier-shaped table is read as a table, and the level is an argument
-#' to the call rather than a column of it, so a table whose rows came from two
-#' different rules would have nothing on it to say so.
+#' Both surfaces the pooled result presents read the bounds through this helper,
+#' as the unpooled ones read theirs through `interval_bounds()`. The level is
+#' named in the column headings of a matrix and in the argument that built a
+#' table, and neither says which rows were stored and which rebuilt, so the two
+#' report the same numbers for the same result at the same level.
 #'
 #' @param estimates The `estimates` component of an `ipw_pooled` object.
 #' @param conf.level The level the bounds report.
@@ -549,7 +548,10 @@ pooled_surface <- function(object, effects, call = sys.call(-1)) {
 #' @noRd
 #' @importFrom stats qt
 pooled_interval_bounds <- function(estimates, conf.level) {
-  stored <- estimates$conf.level
+  # By exact name, for the reason `interval_bounds()` reads it that way: the
+  # column is optional, and a frame whose `$` is stricter than a plain data
+  # frame's warns about a column the contract never required.
+  stored <- estimates[["conf.level"]]
   if (!is.null(stored) && isTRUE(all(stored == conf.level))) {
     return(list(lower = estimates$ci.lower, upper = estimates$ci.upper))
   }
